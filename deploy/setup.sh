@@ -18,11 +18,13 @@ DOMAIN=""
 DRY_RUN=0
 SERVICE_USER=""
 FORCE_PROXY=""
+ASSUME_YES=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --dry-run) DRY_RUN=1 ;;
     --user)    shift; SERVICE_USER="$1" ;;
+    --yes|-y)  ASSUME_YES=1 ;;
     --nginx)   FORCE_PROXY=nginx ;;
     --caddy)   FORCE_PROXY=caddy ;;
     -h|--help) sed -n '3,11p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
@@ -42,6 +44,18 @@ ok()   { printf '  %s✓%s %s\n' "$green" "$reset" "$*"; }
 warn() { printf '  %s!%s %s\n' "$yellow" "$reset" "$*"; }
 die()  { printf '%serror%s %s\n' "$red$bold" "$reset" "$*" >&2; exit 1; }
 have() { command -v "$1" >/dev/null 2>&1; }
+
+# This was missing, and its absence was invisible: `if confirm ...` with no such
+# command is simply false, so every prompt silently answered "no". The visible
+# result was a site file with no certificate and no 443 block, which looks like
+# certbot failing rather than never being asked to run.
+confirm() {
+  [ "$ASSUME_YES" = "1" ] && return 0
+  [ -t 0 ] || return 1
+  printf '  %s?%s %s [Y/n] ' "$yellow" "$reset" "$1"
+  read -r reply
+  case "$reply" in ''|[Yy]*) return 0 ;; *) return 1 ;; esac
+}
 
 run() {
   if [ "$DRY_RUN" = "1" ]; then
@@ -77,6 +91,17 @@ write_file() {
 
   printf '%s\n' "$content" > "$path"
 }
+
+# Guards against exactly the class of bug that shipped here: a helper called but
+# never defined is false inside an `if`, so the step is skipped in silence.
+for helper in say ok warn die have run write_file confirm set_env; do
+  if ! declare -F "$helper" >/dev/null 2>&1; then
+    case "$helper" in
+      set_env) continue ;;  # defined later, after .env is located
+      *) printf 'internal error: %s() is not defined\n' "$helper" >&2; exit 70 ;;
+    esac
+  fi
+done
 
 [ -n "$DOMAIN" ] || die "Which domain?  sudo ./deploy/setup.sh example.com"
 
