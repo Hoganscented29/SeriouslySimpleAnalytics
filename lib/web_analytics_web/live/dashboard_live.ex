@@ -12,6 +12,7 @@ defmodule WebAnalyticsWeb.DashboardLive do
 
   alias WebAnalytics.Analytics
   alias WebAnalytics.Analytics.Anomaly
+  alias WebAnalytics.Geo
   alias WebAnalytics.Ingest.Crawler
   alias WebAnalytics.Sites
 
@@ -43,6 +44,10 @@ defmodule WebAnalyticsWeb.DashboardLive do
       |> assign(:project, blank_to_nil(params["project"]))
       |> assign(:anomaly_labels, Anomaly.labels())
       |> assign(:crawler_labels, Crawler.labels())
+      # DB-IP's Lite database is CC BY 4.0, which requires attribution wherever
+      # its data is shown. Surfacing it here keeps a default deployment
+      # compliant without the operator having to know that.
+      |> assign(:geoip_loaded?, Geo.Database.loaded?())
       |> assign(:filters, build_filters(site, params))
 
     {:noreply, load(socket)}

@@ -5,6 +5,17 @@ defmodule WebAnalytics.MixProject do
     [
       app: :web_analytics,
       version: "0.1.0",
+      name: "SeriouslySimpleAnalytics",
+      source_url: "https://github.com/lbesecker195/SeriouslySimpleAnalytics",
+      # Source-available, not OSI open source. Declared here so tooling that
+      # audits dependency licences reports it accurately rather than guessing.
+      package: [
+        licenses: ["FSL-1.1-ALv2"],
+        links: %{
+          "GitHub" => "https://github.com/lbesecker195/SeriouslySimpleAnalytics",
+          "License" => "https://fsl.software"
+        }
+      ],
       elixir: "~> 1.17",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,

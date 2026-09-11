@@ -282,3 +282,37 @@ embedded at compile time, not an asset, which keeps its URL stable and free of a
 digest hash — it gets pasted into other people's HTML.
 
 Run `mix precommit` before committing.
+
+## Licensing
+
+[Functional Source License 1.1, Apache 2.0 future licence][fsl] — see
+[LICENSE.md](LICENSE.md).
+
+**Read it, run it, change it, build on it.** Internal use, self-hosting for your
+own sites and tools, non-commercial research and education, and professional
+services around it are all explicitly permitted.
+
+**The one thing you cannot do is compete with it** — offer this software, or
+something substantially similar built from it, as a commercial product or
+service.
+
+**Every version becomes Apache 2.0 two years after its release.** The
+restriction is a two-year head start, not a permanent enclosure.
+
+This is *source-available*, not OSI open source, and the difference is real
+rather than a technicality: no licence can both grant everyone the right to
+compete and withhold it. If OSI approval matters to your organisation more than
+the feature set does, that is a legitimate reason to choose something else.
+
+The name **SeriouslySimpleAnalytics** and the project's branding are not covered
+by the licence — the FSL grants no trademark rights. You may say your fork is
+built on it; you may not call it by this name.
+
+Contributions: see [CONTRIBUTING.md](CONTRIBUTING.md). Third-party data
+attribution — including the DB-IP database's CC BY 4.0 requirement — is in
+[NOTICE.md](NOTICE.md).
+
+*Not legal advice. If you are relying on any of this commercially, have your own
+counsel read it.*
+
+[fsl]: https://fsl.software

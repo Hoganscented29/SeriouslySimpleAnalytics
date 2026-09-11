@@ -428,7 +428,14 @@
         </div>
         <span class="text-xs text-base-content/50 ml-auto">
           Sent by the caller for API traffic; resolved from CDN headers or a local GeoIP
-          database for web traffic. No address is stored either way.
+          database for web traffic. No address is stored either way.<span :if={@geoip_loaded?}>
+            IP geolocation by <a
+              href="https://db-ip.com"
+              class="link"
+              rel="noopener"
+              target="_blank"
+            >DB-IP</a>.
+          </span>
         </span>
       </div>
 
