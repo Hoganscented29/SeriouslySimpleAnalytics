@@ -9,8 +9,7 @@ defmodule WebAnalyticsWeb.LandingControllerTest do
 
       assert html =~ "SeriouslySimpleAnalytics"
       assert html =~ "Website analytics"
-      assert html =~ "/wa.js"
-      assert html =~ "data-site="
+      assert html =~ "script tag"
     end
 
     test "names what the script tag captures", %{conn: conn} do
@@ -48,6 +47,46 @@ defmodule WebAnalyticsWeb.LandingControllerTest do
       assert html =~ ~s|href="/dashboard"|
       assert html =~ ~s|href="/demo"|
       assert html =~ ~s|href="/llms.txt"|
+    end
+  end
+
+  describe "the integration, on both landing pages" do
+    # The hero is the same component on both, because the integration is the
+    # same act: hand one line to an agent.
+    for {label, path} <- [{"website", "/"}, {"AI", "/AI-Analytics-llms-txt"}] do
+      test "the #{label} page shows the prompt as something to hand over", %{conn: conn} do
+        html = conn |> get(unquote(path)) |> html_response(200)
+
+        assert html =~ "Please read"
+        assert html =~ "follow all the instructions exactly"
+        assert html =~ "Update our llms.txt with the instructed changes"
+      end
+
+      test "the #{label} page reads as a conversation, not a snippet", %{conn: conn} do
+        html = conn |> get(unquote(path)) |> html_response(200)
+
+        assert html =~ "Your coding agent"
+        assert html =~ "role=\"img\"", "the window is an illustration and should say so"
+        assert html =~ "aria-label"
+      end
+
+      test "the #{label} page says llms.txt was updated and committed", %{conn: conn} do
+        html = conn |> get(unquote(path)) |> html_response(200)
+
+        # The step every agent so far has skipped, so the page shows it landing.
+        assert html =~ "llms.txt"
+        assert html =~ "Analytics section added · committed"
+        assert html =~ "Updated"
+      end
+    end
+
+    test "the prompt names this deployment, not the canonical host", %{conn: conn} do
+      html = conn |> get(~p"/") |> html_response(200)
+
+      # A self-hosted instance must not point its own readers at our contract,
+      # so the host is this deployment's rather than the canonical one.
+      assert html =~ ~r{Please read https?://[^/\s]+/llms\.txt}
+      refute html =~ "Please read https://seriouslysimpleanalytics.com/llms.txt"
     end
   end
 

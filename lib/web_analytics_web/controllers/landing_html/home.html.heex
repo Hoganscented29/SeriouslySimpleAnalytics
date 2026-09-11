@@ -19,12 +19,12 @@
       <div class="text-xs uppercase tracking-wide text-base-content/60 mb-3">
         This is the entire integration
       </div>
-      <pre class="bg-base-200 rounded p-4 text-xs sm:text-sm overflow-x-auto"><code>{script_tag(@base_url, @site_key)}</code></pre>
+      <.integration_chat base_url={@base_url} />
       <div class="mt-4 flex flex-wrap items-center gap-3">
         <.cta current_scope={@current_scope} class="btn btn-primary btn-sm" />
         <.link href={~p"/demo"} class="btn btn-outline btn-sm">See it capturing, live</.link>
         <span class="text-sm text-base-content/50">
-          Paste it in the <code class="font-mono text-xs">&lt;head&gt;</code>. That's the setup.
+          Hand it to your coding agent. It reads the rest.
         </span>
       </div>
     </div>

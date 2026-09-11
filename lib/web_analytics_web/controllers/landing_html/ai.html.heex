@@ -20,14 +20,14 @@
       <div class="text-xs uppercase tracking-wide text-base-content/60 mb-3">
         This is the entire integration
       </div>
-      <pre class="bg-base-200 rounded p-4 text-xs sm:text-sm overflow-x-auto"><code>{ping_url(@base_url, @site_key)}</code></pre>
+      <.integration_chat base_url={@base_url} />
       <div class="mt-4 flex flex-wrap items-center gap-3">
         <.link navigate={~p"/dashboard"} class="btn btn-primary btn-sm">See it in the dashboard</.link>
         <a href={~p"/llms.txt"} class="btn btn-outline btn-sm font-mono text-xs">
           Read llms.txt
         </a>
         <span class="text-sm text-base-content/50">
-          Returns 204. Fire and forget.
+          Hand it to your coding agent. It reads the rest.
         </span>
       </div>
     </div>
