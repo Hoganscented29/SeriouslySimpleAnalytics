@@ -46,8 +46,39 @@ npm-debug.log
 /priv/geoip/*.mmdb
 /priv/geoip/*.mmdb.gz
 
-# Secrets written by install.sh.
-/.env
+# ---------------------------------------------------------------------------
+# Secrets
+#
+# These patterns are deliberately wider than the files that exist today. Secrets
+# do not leak as `.env` — they leak as `.env.production`, as the `.bak` someone
+# made before editing, as the copy left in the repo root. Matching only the
+# canonical name catches only the case nobody gets wrong.
+# ---------------------------------------------------------------------------
 
-# The licensor private key. Anyone holding it can mint keys this build accepts.
-/priv/licensor_private_key
+# Any environment file, in any form. The example is the one exception.
+.env
+.env.*
+!.env.example
+
+# The licensor private key — and every copy of it. Anyone holding this can mint
+# deployment keys that released builds accept. The README asks you to back it
+# up, and `cp priv/licensor_private_key priv/licensor_private_key.bak` is the
+# obvious way to do that, so the pattern has to cover the copy too.
+*licensor_private_key*
+
+# Keys, certificates and credential stores by extension.
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+id_rsa*
+id_ed25519*
+
+# Database dumps, which carry whatever was in the database.
+*.sql
+*.dump
+!priv/repo/structure.sql
+
+# macOS directory metadata.
+.DS_Store
