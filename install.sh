@@ -61,6 +61,16 @@ confirm() {
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
+random_secret() {
+  if have openssl; then
+    openssl rand -base64 48 | tr -d '\n'
+  elif [ -r /dev/urandom ]; then
+    head -c 48 /dev/urandom | base64 | tr -d '\n'
+  else
+    die "No source of randomness available (needs openssl or /dev/urandom)."
+  fi
+}
+
 # -- 1. prerequisites ------------------------------------------------------
 
 say "Checking prerequisites"
@@ -102,9 +112,6 @@ require() {
 
 require elixir elixir "Elixir"
 require psql postgresql "PostgreSQL client"
-
-mix local.hex --force --if-missing >/dev/null
-mix local.rebar --force --if-missing >/dev/null
 
 # -- 2. database server ----------------------------------------------------
 
@@ -175,21 +182,56 @@ KEYHELP
   ok "Key present"
 fi
 
-# -- 5. secrets ------------------------------------------------------------
+# -- 5. dependencies -------------------------------------------------------
+
+say "Installing dependencies"
+mix local.hex --force --if-missing >/dev/null
+mix local.rebar --force --if-missing >/dev/null
+mix deps.get >/dev/null
+ok "Dependencies installed"
+
+# -- 6. secrets ------------------------------------------------------------
 
 say "Preparing configuration"
 
-DB_USER="${PGUSER:-${USER}}"
 DB_HOST="${PGHOST:-localhost}"
 DB_NAME="seriously_simple_analytics_${MIX_ENV}"
+
+# `$USER` is not always set, and where it is, it is not always a Postgres role:
+# installing as root on a stock Ubuntu box gives a `root` login and a `postgres`
+# superuser, which are not the same thing. So candidates are tried against the
+# server rather than assumed, and the failure names what to do about it.
+db_can_connect() {
+  PGPASSWORD="${PGPASSWORD:-}" psql -h "$DB_HOST" -U "$1" -d postgres -tAc 'select 1' >/dev/null 2>&1
+}
+
+DB_USER=""
+for candidate in "${PGUSER:-}" "${USER:-}" postgres; do
+  [ -z "$candidate" ] && continue
+  if db_can_connect "$candidate"; then DB_USER="$candidate"; break; fi
+done
+
+if [ -z "$DB_USER" ]; then
+  die "Cannot connect to PostgreSQL on $DB_HOST as ${PGUSER:-}, ${USER:-} or postgres.
+
+      Create a role this install can use, then tell the script about it:
+
+          sudo -u postgres createuser --createdb --pwprompt ssa
+          PGUSER=ssa PGPASSWORD=secret ./install.sh"
+fi
+ok "PostgreSQL role: $DB_USER"
 
 if [ -f "$ENV_FILE" ]; then
   ok "Reusing $ENV_FILE"
 else
   # Generated once and kept. Regenerating SECRET_KEY_BASE would invalidate every
   # signed session, and regenerating IP_SALT would orphan every stored IP hash.
-  secret="$(mix phx.gen.secret 2>/dev/null | tail -1)"
-  salt="$(mix phx.gen.secret 2>/dev/null | tail -1)"
+  # Deliberately not `mix phx.gen.secret`: on a fresh clone the dependencies are
+  # not fetched yet, so that task fails — and this step runs before them.
+  # 48 random bytes is 64 base64 characters, the length Phoenix requires of
+  # SECRET_KEY_BASE.
+  secret="$(random_secret)"
+  salt="$(random_secret)"
 
   auth="$DB_USER"
   [ -n "${PGPASSWORD:-}" ] && auth="$DB_USER:$PGPASSWORD"
@@ -225,18 +267,14 @@ set -a
 set +a
 export MIX_ENV PORT
 
-# -- 6. dependencies and database -----------------------------------------
-
-say "Installing dependencies"
-mix deps.get >/dev/null
-ok "Dependencies installed"
+# -- 7. database -----------------------------------------------------------
 
 say "Setting up the database"
 mix ecto.create --quiet
 mix ecto.migrate
 ok "Database ready"
 
-# -- 7. geolocation --------------------------------------------------------
+# -- 8. geolocation --------------------------------------------------------
 
 if [ "$WANT_GEOIP" = "1" ] && [ -z "$(ls priv/geoip/*.mmdb 2>/dev/null)" ]; then
   say "Geolocation"
@@ -249,7 +287,7 @@ if [ "$WANT_GEOIP" = "1" ] && [ -z "$(ls priv/geoip/*.mmdb 2>/dev/null)" ]; then
   fi
 fi
 
-# -- 8. assets -------------------------------------------------------------
+# -- 9. assets -------------------------------------------------------------
 
 if [ "$MIX_ENV" = "prod" ]; then
   say "Building assets"
@@ -257,7 +295,7 @@ if [ "$MIX_ENV" = "prod" ]; then
   ok "Assets built"
 fi
 
-# -- 9. an account to use --------------------------------------------------
+# -- 10. an account to use --------------------------------------------------
 
 say "Account"
 
@@ -274,7 +312,7 @@ else
   ok "Using existing account $ACCOUNT"
 fi
 
-# -- 10. go -----------------------------------------------------------------
+# -- 11. go -----------------------------------------------------------------
 
 BASE="http://localhost:$PORT"
 
