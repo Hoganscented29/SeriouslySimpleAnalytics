@@ -7,6 +7,13 @@
 # General application configuration
 import Config
 
+# Overridden per deployment in runtime.exs from MAIL_FROM. Defined here so dev
+# and test have a real address rather than falling through to a generator
+# placeholder nobody owns.
+config :web_analytics,
+  mail_from: "logan@csuitenecessities.com",
+  mail_from_name: "SeriouslySimpleAnalytics"
+
 config :web_analytics, :scopes,
   user: [
     default: true,

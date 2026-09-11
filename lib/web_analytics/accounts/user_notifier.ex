@@ -9,13 +9,25 @@ defmodule WebAnalytics.Accounts.UserNotifier do
     email =
       new()
       |> to(recipient)
-      |> from({"WebAnalytics", "contact@example.com"})
+      |> from(from_address())
       |> subject(subject)
       |> text_body(body)
 
     with {:ok, _metadata} <- Mailer.deliver(email) do
       {:ok, email}
     end
+  end
+
+  # The generator hardcodes a placeholder here, and a provider will refuse to
+  # send from a domain it does not hold — so this reads the address the
+  # deployment configured rather than one nobody owns. Sign-in mail is the only
+  # way into an account, which makes this the worst place in the application to
+  # leave a default that silently fails.
+  defp from_address do
+    address =
+      Application.get_env(:web_analytics, :mail_from) || "logan@csuitenecessities.com"
+
+    {Application.get_env(:web_analytics, :mail_from_name, "SeriouslySimpleAnalytics"), address}
   end
 
   @doc """

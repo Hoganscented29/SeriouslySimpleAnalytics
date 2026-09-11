@@ -124,9 +124,11 @@ if config_env() == :prod do
         base_url: System.get_env("MAILGUN_BASE_URL") || "https://api.mailgun.net/v3"
   end
 
+  # Must be an address on a domain the mail provider has verified, or it refuses
+  # to send and registration looks broken rather than misconfigured.
   config :web_analytics,
          :mail_from,
-         System.get_env("MAIL_FROM") || "noreply@seriouslysimpleanalytics.com"
+         System.get_env("MAIL_FROM") || "logan@csuitenecessities.com"
 
   # How this deployment is reached from outside, which is not always https on
   # 443. It matters more here than in most apps: /llms.txt is the integration
