@@ -40,8 +40,19 @@ sudo ./deploy/setup.sh your-domain.com
 ```
 
 It reads the machine rather than assuming it: the real path to `mix`, the user
-that owns the checkout, the port from `.env`. It writes the systemd unit and the
-Caddyfile, opens 80 and 443 if `ufw` is running, and starts everything.
+that owns the checkout, the port from `.env`, and **which web server is already
+installed**. It writes the systemd unit and a proxy config, opens 80 and 443 if
+`ufw` is running, and starts everything.
+
+If nginx is present — because something else on the box is already served by it
+— the site is added as its own file in `sites-available` and symlinked in.
+Nothing existing is edited, and `nginx -t` has to pass before anything is
+reloaded. TLS is then via certbot. If only Caddy is present, or neither, Caddy
+is used and handles certificates itself.
+
+Force one with `--nginx` or `--caddy`. Installing a second web server does not
+give you two web servers; it gives you one working and one that cannot bind to
+port 80.
 
 `--dry-run` prints what it would write and changes nothing. Worth doing first.
 
