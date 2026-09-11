@@ -12,6 +12,8 @@ defmodule WebAnalytics.Tracking.Session do
     field :visitor_token, :string
     field :project, :string
     field :channel, :string
+    field :agent_name, :string
+    field :contact_email, :string
 
     field :started_at, :utc_datetime_usec
     field :last_seen_at, :utc_datetime_usec

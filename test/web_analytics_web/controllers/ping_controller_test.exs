@@ -150,6 +150,58 @@ defmodule WebAnalyticsWeb.PingControllerTest do
     assert Repo.aggregate(from(s in Session, where: like(s.token, "auto-%")), :count) == 2
   end
 
+  describe "caller identity" do
+    test "records the reporting tool's name and the contact email", %{conn: conn, site: site} do
+      ping(conn, %{
+        "uid" => site.key,
+        "event" => "run_completed",
+        "sid" => "id-1",
+        "name" => "Claude Code",
+        "email" => "ops@example.com"
+      })
+
+      session = session("id-1")
+      assert session.agent_name == "Claude Code"
+      assert session.contact_email == "ops@example.com"
+      # The event keeps its own name — `name` no longer overwrites it.
+      assert event_for("id-1").name == "run_completed"
+    end
+
+    test "name does not silently rename the event", %{conn: conn, site: site} do
+      # Before `name` identified the tool, this would have recorded an event
+      # called "Claude Code" instead of a ping from Claude Code.
+      ping(conn, %{"uid" => site.key, "sid" => "id-2", "name" => "Claude Code"})
+
+      assert event_for("id-2").name == "ping"
+      assert session("id-2").agent_name == "Claude Code"
+    end
+
+    test "accepts the documented aliases", %{conn: conn, site: site} do
+      ping(conn, %{
+        "uid" => site.key,
+        "sid" => "id-3",
+        "agent" => "Cursor",
+        "contact" => "a@b.com"
+      })
+
+      assert session("id-3").agent_name == "Cursor"
+      assert session("id-3").contact_email == "a@b.com"
+    end
+
+    test "identity fields are not duplicated into event attributes", %{conn: conn, site: site} do
+      ping(conn, %{
+        "uid" => site.key,
+        "event" => "x",
+        "sid" => "id-4",
+        "name" => "Claude Code",
+        "email" => "ops@example.com",
+        "tool" => "search"
+      })
+
+      assert event_for("id-4").data_attrs == %{"tool" => "search"}
+    end
+  end
+
   describe "location" do
     test "records the city, county, state and nation the caller supplies", %{
       conn: conn,
@@ -358,7 +410,7 @@ defmodule WebAnalyticsWeb.PingControllerTest do
   end
 
   test "accepts the documented parameter aliases", %{conn: conn, site: site} do
-    ping(conn, %{"id" => site.key, "name" => "aliased", "app" => "alt", "session" => "run-6"})
+    ping(conn, %{"id" => site.key, "event" => "aliased", "app" => "alt", "session" => "run-6"})
 
     assert event_for("run-6").name == "aliased"
     assert session("run-6").project == "alt"

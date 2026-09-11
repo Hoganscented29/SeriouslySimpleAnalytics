@@ -44,6 +44,8 @@ defmodule WebAnalytics.Ingest.Processor do
       ip_hash: batch.ip_hash,
       project: Map.get(batch, :project),
       channel: Map.get(batch, :channel),
+      agent_name: Map.get(batch, :agent_name),
+      contact_email: Map.get(batch, :contact_email),
       location: Map.get(batch, :location),
       received_at: batch.received_at,
       init: nil,
@@ -305,6 +307,8 @@ defmodule WebAnalytics.Ingest.Processor do
       |> put_unless_nil(:ip_hash, plan.ip_hash)
       |> put_unless_nil(:project, plan.project)
       |> put_unless_nil(:channel, plan.channel)
+      |> put_unless_nil(:agent_name, plan.agent_name)
+      |> put_unless_nil(:contact_email, plan.contact_email)
       |> Map.merge(location_attrs(plan.location))
       |> put_unless_nil(:entry_path, entry && entry.path)
       |> put_unless_nil(:entry_title, entry && entry.title)
@@ -373,6 +377,8 @@ defmodule WebAnalytics.Ingest.Processor do
           ip_hash: fragment("COALESCE(?, EXCLUDED.ip_hash)", s.ip_hash),
           project: fragment("COALESCE(?, EXCLUDED.project)", s.project),
           channel: fragment("COALESCE(?, EXCLUDED.channel)", s.channel),
+          agent_name: fragment("COALESCE(?, EXCLUDED.agent_name)", s.agent_name),
+          contact_email: fragment("COALESCE(?, EXCLUDED.contact_email)", s.contact_email),
           country_code: fragment("COALESCE(?, EXCLUDED.country_code)", s.country_code),
           country: fragment("COALESCE(?, EXCLUDED.country)", s.country),
           region: fragment("COALESCE(?, EXCLUDED.region)", s.region),

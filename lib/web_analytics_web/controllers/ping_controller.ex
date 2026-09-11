@@ -27,7 +27,8 @@ defmodule WebAnalyticsWeb.PingController do
   @pageview_events ~w(page_view pageview pv view screen screen_view)
 
   @reserved ~w(uid id site u type channel project app event name sid session path page
-               title ref referrer visitor v format bot agent tz timezone
+               title ref referrer visitor v format bot agent ai tz timezone
+               email contact
                c city cc county s_p state province region n nation country)
 
   # A 1x1 transparent GIF, for callers that can only embed an image.
@@ -54,7 +55,9 @@ defmodule WebAnalyticsWeb.PingController do
           ip_hash: ip_hash,
           location: location(params, conn, ip),
           project: param(params, ~w(project app)),
-          channel: param(params, ~w(type channel)) || "ai"
+          channel: param(params, ~w(type channel)) || "ai",
+          agent_name: param(params, ~w(name agent ai)),
+          contact_email: param(params, ~w(email contact))
         )
 
         respond(conn, params)
@@ -102,7 +105,11 @@ defmodule WebAnalyticsWeb.PingController do
   # -- payload -------------------------------------------------------------
 
   defp payload(params, received_at, token) do
-    event_name = param(params, ~w(event name)) || "ping"
+    # `name` is deliberately NOT an alias for `event` any more. It now identifies
+    # the AI tool doing the reporting, and one parameter cannot mean two things:
+    # a caller sending name=Claude would otherwise have silently renamed its
+    # event instead of identifying itself.
+    event_name = param(params, ~w(event)) || "ping"
     path = param(params, ~w(path page))
     now = DateTime.to_unix(received_at, :millisecond)
 

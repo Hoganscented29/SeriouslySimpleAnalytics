@@ -26,8 +26,14 @@ defmodule WebAnalyticsWeb.LandingController do
     |> render(:home)
   end
 
+  # The canonical host is written into priv/docs/llms.txt literally, so the file
+  # reads correctly when browsed on GitHub. It is still rewritten per deployment
+  # here: a self-hosted instance serving the canonical URL would be telling its
+  # own integrators to send their events somewhere else entirely.
+  @canonical_url "https://seriouslysimpleanalytics.com"
+
   def llms(conn, _params) do
-    body = String.replace(@llms, "{{BASE_URL}}", base_url(conn))
+    body = String.replace(@llms, @canonical_url, base_url(conn))
 
     conn
     |> put_resp_content_type("text/plain")

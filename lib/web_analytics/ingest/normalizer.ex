@@ -65,6 +65,8 @@ defmodule WebAnalytics.Ingest.Normalizer do
            ip_hash: ip_hash,
            project: string(Keyword.get(opts, :project), @s),
            channel: string(Keyword.get(opts, :channel), @s) || "web",
+           agent_name: string(Keyword.get(opts, :agent_name), @s),
+           contact_email: string(Keyword.get(opts, :contact_email), @s),
            received_at: received_at,
            location: resolve_location(Keyword.get(opts, :location), events),
            events: events

@@ -45,11 +45,25 @@ if config_env() == :dev do
 end
 
 if config_env() == :prod do
+  # These messages name .env deliberately. install.sh writes every one of these
+  # variables there, so by far the likeliest cause of seeing this is a bare
+  # `mix` command in a shell that has not loaded it — and the stock message
+  # sends people off to invent a value that already exists three lines away.
+  env_hint = """
+
+  install.sh writes this to .env. Load it first:
+
+      . ./.env && mix phx.server
+
+  or use ./bin/server, which loads it for you.
+  """
+
   database_url =
     System.get_env("DATABASE_URL") ||
       raise """
       environment variable DATABASE_URL is missing.
       For example: ecto://USER:PASS@HOST/DATABASE
+      #{env_hint}
       """
 
   maybe_ipv6 = if System.get_env("ECTO_IPV6") in ~w(true 1), do: [:inet6], else: []
@@ -72,6 +86,7 @@ if config_env() == :prod do
       raise """
       environment variable SECRET_KEY_BASE is missing.
       You can generate one by calling: mix phx.gen.secret
+      #{env_hint}
       """
 
   # The IP salt's whole job is to make the stored hashes unguessable. Left at the

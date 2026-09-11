@@ -105,9 +105,14 @@ defmodule WebAnalyticsWeb.LandingControllerTest do
     test "requires the caller to supply its user's location", %{conn: conn} do
       body = conn |> get(~p"/llms.txt") |> response(200)
 
-      for param <- ~w(c cc s_p n) do
+      # County is the one location field marked recommended rather than required:
+      # plenty of callers simply do not have it, and demanding it would invite
+      # invented values.
+      for param <- ~w(c s_p n email) do
         assert body =~ "| `#{param}` | yes |", "#{param} should be documented as required"
       end
+
+      assert body =~ "| `cc` | recommended |"
 
       assert body =~ "Location is yours to send, not ours to guess"
       assert body =~ "c=Austin&cc=Travis&s_p=Texas"
