@@ -113,6 +113,24 @@ require() {
 require elixir elixir "Elixir"
 require psql postgresql "PostgreSQL client"
 
+# mix.exs requires ~> 1.17, and mix would refuse eventually anyway — but it does
+# so partway through a compile, after this script has already reported several
+# steps as succeeding. Checking here fails at the top, where it reads as a
+# prerequisite rather than a mystery.
+MIN_ELIXIR="1.17"
+elixir_version="$(elixir --version 2>/dev/null | grep -oE 'Elixir [0-9]+\.[0-9]+(\.[0-9]+)?' | awk '{print $2}' | head -1)"
+
+if [ -n "$elixir_version" ]; then
+  oldest="$(printf '%s\n%s\n' "$MIN_ELIXIR" "$elixir_version" | sort -V | head -1)"
+  if [ "$oldest" != "$MIN_ELIXIR" ]; then
+    die "Elixir $elixir_version is too old; this needs $MIN_ELIXIR or newer.
+
+      Upgrade, e.g.:  asdf install elixir latest && asdf global elixir latest
+                or:   sudo apt-get install elixir"
+  fi
+  ok "Elixir $elixir_version"
+fi
+
 # -- 2. database server ----------------------------------------------------
 
 say "Checking the database"

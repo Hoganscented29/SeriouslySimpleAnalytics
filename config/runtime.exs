@@ -28,12 +28,18 @@ if config_env() == :dev do
   config :web_analytics, WebAnalyticsWeb.Endpoint,
     live_reload: [
       web_console_logger: true,
+      # No `E` modifier on these. The generator emits it, but it only exists in
+      # Elixir 1.19 and later, and a sigil is expanded at compile time — so on
+      # 1.18 this file fails to compile even in production, where the block it
+      # sits in never runs. For patterns matching file paths the modifier
+      # changes nothing anyway: it only affects whether `$` matches before a
+      # trailing newline, and paths do not contain newlines.
       patterns: [
         # Static assets, except user uploads
-        ~r"priv/static/(?!uploads/).*\.(js|css|png|jpeg|jpg|gif|svg)$"E,
+        ~r"priv/static/(?!uploads/).*\.(js|css|png|jpeg|jpg|gif|svg)$",
         # Router, Controllers, LiveViews and LiveComponents
-        ~r"lib/web_analytics_web/router\.ex$"E,
-        ~r"lib/web_analytics_web/(controllers|live|components)/.*\.(ex|heex)$"E
+        ~r"lib/web_analytics_web/router\.ex$",
+        ~r"lib/web_analytics_web/(controllers|live|components)/.*\.(ex|heex)$"
       ]
     ]
 end
