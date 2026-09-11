@@ -394,4 +394,41 @@ defmodule WebAnalytics.AccountsTest do
       refute inspect(%User{password: "123456"}) =~ "password: \"123456\""
     end
   end
+
+  describe "create_login_token/1" do
+    test "mints a token that signs the user in, without sending anything" do
+      # Unconfirmed, because user_fixture/0 gets its user confirmed by sending
+      # mail — which would leave an email in the mailbox and make the refute
+      # below assert the opposite of what it means to.
+      user = unconfirmed_user_fixture()
+
+      token = WebAnalytics.Accounts.create_login_token(user)
+
+      # The point of it: no notifier, no mail provider, no endpoint. Mail is
+      # usually the reason someone needs this.
+      refute_receive {:email, _}
+
+      assert {:ok, {signed_in, _expired}} = Accounts.login_user_by_magic_link(token)
+      assert signed_in.id == user.id
+    end
+
+    test "the token is single use, which is why a spent link needs a new one" do
+      user = user_fixture()
+      token = WebAnalytics.Accounts.create_login_token(user)
+
+      assert {:ok, _} = Accounts.login_user_by_magic_link(token)
+      assert {:error, _} = Accounts.login_user_by_magic_link(token)
+    end
+
+    test "a fresh token works after an earlier one was spent" do
+      user = user_fixture()
+
+      spent = WebAnalytics.Accounts.create_login_token(user)
+      assert {:ok, _} = Accounts.login_user_by_magic_link(spent)
+
+      fresh = WebAnalytics.Accounts.create_login_token(user)
+      assert {:ok, {signed_in, _}} = Accounts.login_user_by_magic_link(fresh)
+      assert signed_in.id == user.id
+    end
+  end
 end

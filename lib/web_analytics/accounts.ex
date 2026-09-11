@@ -327,9 +327,22 @@ defmodule WebAnalytics.Accounts do
   """
   def deliver_login_instructions(%User{} = user, magic_link_url_fun)
       when is_function(magic_link_url_fun, 1) do
+    token = create_login_token(user)
+    UserNotifier.deliver_login_instructions(user, magic_link_url_fun.(token))
+  end
+
+  @doc """
+  Mints a sign-in token and sends nothing.
+
+  This exists for the shell. When mail is not configured — or is itself the
+  thing that is broken — an operator still needs a way into an account, and
+  going through the notifier to get one means depending on the part that does
+  not work.
+  """
+  def create_login_token(%User{} = user) do
     {encoded_token, user_token} = UserToken.build_email_token(user, "login")
     Repo.insert!(user_token)
-    UserNotifier.deliver_login_instructions(user, magic_link_url_fun.(encoded_token))
+    encoded_token
   end
 
   @doc """
