@@ -13,10 +13,25 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# Anything set explicitly on the command line wins over .env, so
+# `PORT=4005 bin/server` still does what it says.
+_port_override="${PORT:-}"
+_mix_env_override="${MIX_ENV:-}"
+
+# install.sh writes .env with the database URL, the secrets and the deployment
+# key. Without loading it, this script only ever worked in development — a
+# production start died on the first variable it needed.
+if [ -f .env ]; then
+  set -a
+  # shellcheck source=/dev/null
+  . ./.env
+  set +a
+fi
+
 # This box already runs another Phoenix app, so nothing here may assume the
 # usual 4000.
-PORT="${PORT:-4001}"
-MIX_ENV="${MIX_ENV:-dev}"
+PORT="${_port_override:-${PORT:-4001}}"
+MIX_ENV="${_mix_env_override:-${MIX_ENV:-dev}}"
 export PORT MIX_ENV
 
 say() { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
@@ -34,6 +49,14 @@ if lsof -ti tcp:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
   name="$(ps -p "$holder" -o comm= 2>/dev/null || echo 'unknown')"
   die "Port $PORT is already in use by pid $holder ($name).
       Stop it, or start this one elsewhere:  PORT=4005 bin/server"
+fi
+
+# -- deployment key --------------------------------------------------------
+
+if [ "$MIX_ENV" = "prod" ] && [ -z "${SSA_LICENSE_KEY:-}" ]; then
+  die "Production needs a deployment key, and SSA_LICENSE_KEY is not set.
+      Add it to .env, or run in development:  MIX_ENV=dev bin/server
+      No key? me@LoganBesecker.com"
 fi
 
 # -- database --------------------------------------------------------------
