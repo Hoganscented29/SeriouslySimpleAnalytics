@@ -1,8 +1,99 @@
+<div align="center">
+
 # SeriouslySimpleAnalytics
 
-Analytics for AI tools and websites. An AI tool reports usage by fetching one
-URL; a website drops in one script tag. Self-hosted, no cookies, no raw IP
-addresses stored, no dependency to add on the client side.
+### Free analytics for the AI tool you're building. One URL.
+
+**[Get your free account ID → SeriouslySimpleAnalytics.com](https://SeriouslySimpleAnalytics.com/)**
+
+*Free. No credit card. No SDK. No cookie banner.*
+
+</div>
+
+---
+
+You shipped an agent, an MCP server, a CLI, a VS Code extension. You have no idea
+whether anyone ran it twice.
+
+Fetch one URL and you have analytics:
+
+```
+https://SeriouslySimpleAnalytics.com/api/ping?uid=YOUR_ID&type=ai&project=my-agent&event=run_completed
+```
+
+That's the whole integration. No SDK to install, no API key to exchange, no JSON
+to assemble, nothing added to your dependency tree. It returns `204` — fire and
+forget, and never block your tool's work on it.
+
+**[Grab a free account ID →](https://SeriouslySimpleAnalytics.com/)**
+
+## Why it's different
+
+**It's free.** Not a trial, not 10,000 events then a paywall. The hosted service
+at [SeriouslySimpleAnalytics.com](https://SeriouslySimpleAnalytics.com/) is free
+to use, and this repository is the whole thing if you'd rather run it yourself.
+
+**Your AI can integrate it without you.** The complete contract lives at
+[SeriouslySimpleAnalytics.com/llms.txt](https://SeriouslySimpleAnalytics.com/llms.txt)
+— every parameter, the event conventions, the rate guidance. Point a coding
+agent at that URL and it wires this up unattended. Try it:
+
+> *"Add analytics to this project using https://SeriouslySimpleAnalytics.com/llms.txt"*
+
+**Works from anything.** Python, Go, Rust, bash, a Lambda, a GitHub Action, a
+cron job. If it can make an HTTP request, it can report.
+
+**One account, every project.** Pass `project=` and each tool you ship reports
+separately. No new key, no new setup.
+
+**Got a website too?** One script tag covers it, into the same dashboard.
+
+```html
+<script src="https://SeriouslySimpleAnalytics.com/wa.js" data-site="YOUR_ID" defer></script>
+```
+
+Pageviews, engaged time, scroll depth, clicks, outbound clicks, forms and
+page-to-page flow — captured automatically, nothing to tag.
+
+## What you'll see
+
+| | |
+|---|---|
+| **Runs and events** | `run_completed`, `tool_called`, `install` — your names, grouped and counted |
+| **Flow** | Which paths lead where, and where runs stop. Click any page to re-centre the graph on it |
+| **Attention** | Dwell time and *engaged* time counted separately, plus max scroll depth |
+| **Location** | City, county, state/province and country |
+| **AI crawlers** | GPTBot, ClaudeBot, PerplexityBot and the rest — named, and held out of your human numbers |
+| **Clean numbers** | Impossible dwell times filtered by default, with the reason shown and a toggle to see them |
+
+## Privacy without the banner
+
+No cookies, so no consent banner. No IP addresses stored — resolved in-request
+to a city, then salted and hashed with a daily rotation. Passwords masked in the
+browser and dropped again server-side. Nothing touches the browser Geolocation
+API, so your visitors are never prompted.
+
+<div align="center">
+
+## Start in under a minute
+
+**[SeriouslySimpleAnalytics.com](https://SeriouslySimpleAnalytics.com/)**
+
+Free account ID · one URL · no card
+
+</div>
+
+---
+
+# Running it yourself
+
+Everything above is hosted free at
+[SeriouslySimpleAnalytics.com](https://SeriouslySimpleAnalytics.com/) — most
+people should just use that. The rest of this file is for self-hosting.
+
+Self-hosting in production requires a deployment key (see
+[Running it requires a key](#running-it-requires-a-key)); development needs
+nothing.
 
 ```bash
 ./install.sh
@@ -26,39 +117,7 @@ Already set up? `bin/server` just launches. For demo traffic to look at,
 `mix run priv/repo/seeds.exs`.
 
 Landing page at <http://localhost:4001>, dashboard at `/dashboard`, a tracked
-demo site at `/demo`, and the machine-readable integration guide at `/llms.txt`.
-
-**Deploying somewhere public:** set `PHX_HOST`, `PHX_SCHEME` and `PHX_PORT` in
-`.env` to the address people will actually reach. `/llms.txt` publishes absolute
-URLs built from those, so left at the defaults it would hand integrating agents
-a link to the wrong host.
-
-## Two ways in
-
-**An AI tool, agent, CLI or job** reports by fetching one URL:
-
-```
-GET /api/ping?uid=ACCOUNT_ID&type=ai&project=my-agent&event=run_completed
-```
-
-No SDK, no API key exchange, no JSON body. Returns `204` — fire and forget.
-Undocumented query parameters are kept as event attributes, so
-`&tool=search&latency_ms=420&outcome=success` needs no schema change. Pass
-`sid=` to group pings into one run or conversation; `event=page_view` with a
-`path` is recorded as a real pageview so it lands in the pages and flow reports.
-
-The complete contract lives at `/llms.txt`, written for an AI to read and
-integrate from unattended — including the rules about what must never be sent
-(no prompts, no completions, no credentials, no personal data). Parameters go in
-a URL, and URLs end up in proxy logs.
-
-**A website** drops in one tag:
-
-```html
-<script src="https://analytics.example.com/wa.js" data-site="ACCOUNT_ID" defer></script>
-```
-
-That is the whole integration. Nothing else needs tagging.
+demo site at `/demo`, and the integration guide at `/llms.txt`.
 
 ## What it captures
 
