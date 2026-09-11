@@ -364,6 +364,19 @@ NGINX
 
   # nginx does not obtain certificates by itself.
   say "TLS"
+
+  # certbot --nginx edits the server block it manages, adding the 443 listener
+  # and the redirect. Worth knowing which file ends up owning 443 for this
+  # domain, because if another block already claims it as default_server, the
+  # certificate can be issued and the site still serve something else.
+  if [ "$DRY_RUN" = "0" ] && have nginx; then
+    other_default="$(nginx -T 2>/dev/null | grep -E 'listen .*443.*default_server' | head -1 || true)"
+    if [ -n "$other_default" ]; then
+      warn "Another server block claims 443 as default_server:"
+      warn "  $(printf '%s' "$other_default" | sed 's/^[[:space:]]*//')"
+      warn "If this domain ends up serving the wrong application, that is why."
+    fi
+  fi
   if have certbot; then
     ok "certbot is installed"
   else
@@ -460,8 +473,21 @@ else
   warn "$PROXY is running but not listening on 80/443. Check: journalctl -u $PROXY -n 50"
 fi
 
-if curl -sfI --max-time 15 "https://${DOMAIN}/" >/dev/null 2>&1; then
-  ok "https://${DOMAIN}/ is answering"
+# "Something answers" is not the same as "this answers". On a box with more than
+# one application behind one proxy, a server_name that fails to match sends the
+# request to whichever block is the default — so the domain comes up, serves
+# someone else's site, and every check short of reading the body passes.
+if reply="$(curl -sf --max-time 15 "https://${DOMAIN}/llms.txt" 2>/dev/null)"; then
+  if printf '%s' "$reply" | head -1 | grep -q "SeriouslySimpleAnalytics"; then
+    ok "https://${DOMAIN}/ is serving this application"
+  else
+    warn "https://${DOMAIN}/ answers, but not with this application."
+    warn "Another server block is matching the domain first. Find which:"
+    warn "  nginx -T | grep -nE 'server_name|listen|proxy_pass'"
+    warn "Look for a block with 'default_server' or a wider server_name."
+  fi
+elif curl -sfI --max-time 15 "https://${DOMAIN}/" >/dev/null 2>&1; then
+  warn "https://${DOMAIN}/ answers but /llms.txt does not — likely another application."
 else
   warn "https://${DOMAIN}/ is not answering yet."
   warn "If DNS only just changed, give it time. Otherwise check $PROXY's logs."
