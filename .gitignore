@@ -48,3 +48,6 @@ npm-debug.log
 
 # Secrets written by install.sh.
 /.env
+
+# The licensor private key. Anyone holding it can mint keys this build accepts.
+/priv/licensor_private_key

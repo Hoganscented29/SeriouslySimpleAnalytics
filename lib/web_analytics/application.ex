@@ -7,6 +7,11 @@ defmodule WebAnalytics.Application do
 
   @impl true
   def start(_type, _args) do
+    # Before anything else. A half-started application that then refuses to
+    # serve is worse than one that never started: it holds the port, opens
+    # database connections, and buries the reason in a log.
+    WebAnalytics.License.enforce!()
+
     children = [
       WebAnalyticsWeb.Telemetry,
       WebAnalytics.Repo,

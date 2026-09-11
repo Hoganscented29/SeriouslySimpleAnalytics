@@ -86,6 +86,19 @@ config :web_analytics, :anomaly,
   max_dwell_ms: 43_200_000,
   stale_tick_count: 60
 
+# Deployment keys. `config/license.exs` carries the licensor public key and is
+# written by `mix ssa.license keygen`; it is imported below if present so that a
+# checkout without it still compiles.
+#
+# Enforcement is per-environment: production requires a key, development and
+# test do not. Gating development would lock out contributors and anyone
+# evaluating the software, and a development server binds to localhost only, so
+# it is a poor way to run a service anyway.
+config :web_analytics, :license, enforce: false
+
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 import_config "#{config_env()}.exs"
+
+# Written by `mix ssa.license keygen`. Absent in a fresh checkout.
+if File.exists?(Path.join(__DIR__, "license.exs")), do: import_config("license.exs")

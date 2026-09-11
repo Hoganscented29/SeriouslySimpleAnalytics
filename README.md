@@ -275,6 +275,7 @@ priv/geoip/          GeoIP database (gitignored; mix geoip.download)
 priv/docs/llms.txt   the integration guide, rendered with real URLs at /llms.txt
 install.sh           first-time setup and launch
 bin/server           launch, once set up
+config/license.exs   licensor public key (generated, committed)
 ```
 
 `priv/tracker/wa.js` is deliberately outside `priv/static`: it is a source file
@@ -282,6 +283,45 @@ embedded at compile time, not an asset, which keeps its URL stable and free of a
 digest hash — it gets pasted into other people's HTML.
 
 Run `mix precommit` before committing.
+
+## Running it requires a key
+
+Production will not start without `SSA_LICENSE_KEY`:
+
+```bash
+SSA_LICENSE_KEY="SSA1.…" ./install.sh
+```
+
+Development does not need one, and binds to localhost only — so the code can be
+read, run, tested and contributed to without asking anyone's permission:
+
+```bash
+./install.sh --dev
+```
+
+Keys are Ed25519 signatures. The repository carries only the public half, which
+verifies signatures but cannot create them, so reading this source tells you the
+format without letting you mint a key. Expiry is supported, so trials work.
+
+**This is a lock, not a wall.** The source is public; anyone can delete the check
+and recompile, and the module that implements it says so in its own
+documentation. What it buys is that the easy path requires a key, and getting
+past it is a deliberate act against terms stated in the file being edited —
+which is the difference between an oversight and a wilful licence breach.
+
+No key? <me@LoganBesecker.com>.
+
+### Issuing keys (licensor only)
+
+```bash
+mix ssa.license keygen                  # once — writes config/license.exs + private key
+mix ssa.license issue "Acme Ltd"        # mint a key
+mix ssa.license issue "Trial" --days 30 # ...that expires
+mix ssa.license check SSA1.…            # verify one
+```
+
+`priv/licensor_private_key` is gitignored and unrecoverable. Back it up. Losing
+it means never issuing another key that already-released builds accept.
 
 ## Licensing
 

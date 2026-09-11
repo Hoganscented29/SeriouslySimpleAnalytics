@@ -25,3 +25,6 @@ config :logger, level: :info
 
 # Runtime production configuration, including reading
 # of environment variables, is done on config/runtime.exs.
+
+# Production requires a deployment key. See LICENSE.md and `mix ssa.license`.
+config :web_analytics, :license, enforce: true

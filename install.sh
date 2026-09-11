@@ -141,7 +141,41 @@ if have lsof && lsof -ti tcp:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
 fi
 ok "Port $PORT is free"
 
-# -- 4. secrets ------------------------------------------------------------
+# -- 4. deployment key -----------------------------------------------------
+
+# Checked here rather than left to fail at boot, so nobody sits through a
+# database setup and a 120MB download to be told at the end that they cannot
+# run it.
+if [ "$MIX_ENV" = "prod" ]; then
+  say "Deployment key"
+
+  KEY="${SSA_LICENSE_KEY:-}"
+  [ -z "$KEY" ] && [ -f "$ENV_FILE" ] && KEY="$(. "./$ENV_FILE" >/dev/null 2>&1; printf '%s' "${SSA_LICENSE_KEY:-}")"
+
+  if [ -z "$KEY" ]; then
+    printf '\n%serror%s A deployment key is required to run in production.\n\n' "$red$bold" "$reset" >&2
+    cat >&2 <<'KEYHELP'
+  Set it before running this script:
+
+      SSA_LICENSE_KEY="SSA1.…" ./install.sh
+
+  ...or put it in .env and re-run.
+
+  No key? Contact me@LoganBesecker.com.
+
+  Evaluating, or working on the code? Development mode needs no key and binds
+  to localhost only:
+
+      ./install.sh --dev
+
+  The licence terms are in LICENSE.md.
+KEYHELP
+    exit 1
+  fi
+  ok "Key present"
+fi
+
+# -- 5. secrets ------------------------------------------------------------
 
 say "Preparing configuration"
 
@@ -172,6 +206,7 @@ export PHX_HOST=localhost
 # from these, so set them to the public address before pointing anyone at it.
 export PHX_SCHEME=http
 export PHX_PORT=$PORT
+export SSA_LICENSE_KEY=${SSA_LICENSE_KEY:-}
 ENV
   chmod 600 "$ENV_FILE"
   ok "Wrote $ENV_FILE (secrets generated, mode 600)"
@@ -181,7 +216,7 @@ fi
 . "./$ENV_FILE"
 export MIX_ENV PORT
 
-# -- 5. dependencies and database -----------------------------------------
+# -- 6. dependencies and database -----------------------------------------
 
 say "Installing dependencies"
 mix deps.get >/dev/null
@@ -192,7 +227,7 @@ mix ecto.create --quiet
 mix ecto.migrate
 ok "Database ready"
 
-# -- 6. geolocation --------------------------------------------------------
+# -- 7. geolocation --------------------------------------------------------
 
 if [ "$WANT_GEOIP" = "1" ] && [ -z "$(ls priv/geoip/*.mmdb 2>/dev/null)" ]; then
   say "Geolocation"
@@ -205,7 +240,7 @@ if [ "$WANT_GEOIP" = "1" ] && [ -z "$(ls priv/geoip/*.mmdb 2>/dev/null)" ]; then
   fi
 fi
 
-# -- 7. assets -------------------------------------------------------------
+# -- 8. assets -------------------------------------------------------------
 
 if [ "$MIX_ENV" = "prod" ]; then
   say "Building assets"
@@ -213,7 +248,7 @@ if [ "$MIX_ENV" = "prod" ]; then
   ok "Assets built"
 fi
 
-# -- 8. an account to use --------------------------------------------------
+# -- 9. an account to use --------------------------------------------------
 
 say "Account"
 
@@ -230,7 +265,7 @@ else
   ok "Using existing account $ACCOUNT"
 fi
 
-# -- 9. go -----------------------------------------------------------------
+# -- 10. go -----------------------------------------------------------------
 
 BASE="http://localhost:$PORT"
 

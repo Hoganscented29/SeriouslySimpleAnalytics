@@ -15,6 +15,10 @@ the project's direction is better discussed before you spend a weekend on it.
 mix run priv/repo/seeds.exs   # demo traffic to look at
 ```
 
+Development mode needs no deployment key, and `mix test` does not either. Only
+production is gated, so nothing here stops you reading, running or changing the
+code.
+
 `mix precommit` must pass before you open a pull request — it compiles with
 warnings as errors, checks formatting, and runs the tests.
 
