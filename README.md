@@ -5,14 +5,33 @@ URL; a website drops in one script tag. Self-hosted, no cookies, no raw IP
 addresses stored, no dependency to add on the client side.
 
 ```bash
-mix setup
-mix geoip.download            # optional: city-level location data
-mix run priv/repo/seeds.exs   # optional: demo traffic
-mix phx.server
+./install.sh
 ```
+
+Checks prerequisites, generates secrets into a gitignored `.env`, creates and
+migrates the database, offers the GeoIP download, builds assets, creates an
+account, prints its ID with a ready-to-run ping URL, and starts on port 4001.
+Safe to re-run — it reuses secrets rather than regenerating them, which would
+invalidate every signed session and orphan every stored IP hash.
+
+```bash
+./install.sh --dev          # development mode, with code reloading
+./install.sh --no-start     # set up without launching
+./install.sh --no-geoip     # skip the ~120MB city database
+./install.sh --port 4005    # somewhere other than 4001
+./install.sh --yes          # never prompt (installing packages is opt-in otherwise)
+```
+
+Already set up? `bin/server` just launches. For demo traffic to look at,
+`mix run priv/repo/seeds.exs`.
 
 Landing page at <http://localhost:4001>, dashboard at `/dashboard`, a tracked
 demo site at `/demo`, and the machine-readable integration guide at `/llms.txt`.
+
+**Deploying somewhere public:** set `PHX_HOST`, `PHX_SCHEME` and `PHX_PORT` in
+`.env` to the address people will actually reach. `/llms.txt` publishes absolute
+URLs built from those, so left at the defaults it would hand integrating agents
+a link to the wrong host.
 
 ## Two ways in
 
@@ -254,6 +273,8 @@ lib/web_analytics_web/
 priv/tracker/wa.js   the tracker (compiled into TrackerController)
 priv/geoip/          GeoIP database (gitignored; mix geoip.download)
 priv/docs/llms.txt   the integration guide, rendered with real URLs at /llms.txt
+install.sh           first-time setup and launch
+bin/server           launch, once set up
 ```
 
 `priv/tracker/wa.js` is deliberately outside `priv/static`: it is a source file

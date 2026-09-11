@@ -77,10 +77,23 @@ if config_env() == :prod do
 
   host = System.get_env("PHX_HOST") || "example.com"
 
+  # How this deployment is reached from outside, which is not always https on
+  # 443. It matters more here than in most apps: /llms.txt is the integration
+  # contract and every endpoint in it is an absolute URL built from these
+  # values, so a self-hosted box left on the defaults would hand integrating
+  # agents a link to somebody else's domain.
+  scheme = System.get_env("PHX_SCHEME") || "https"
+
+  url_port =
+    case System.get_env("PHX_PORT") do
+      nil -> if scheme == "https", do: 443, else: 80
+      value -> String.to_integer(value)
+    end
+
   config :web_analytics, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
 
   config :web_analytics, WebAnalyticsWeb.Endpoint,
-    url: [host: host, port: 443, scheme: "https"],
+    url: [host: host, port: url_port, scheme: scheme],
     http: [
       # Enable IPv6 and bind on all interfaces.
       # Set it to  {0, 0, 0, 0, 0, 0, 0, 1} for local network only access.

@@ -31,6 +31,12 @@ web_analytics-*.tar
 # Ignore digested assets cache.
 /priv/static/cache_manifest.json
 
+# Digested copies and gzipped variants written by `mix phx.digest`, which
+# `mix assets.deploy` runs. They are build output of a deploy, not source: the
+# 32 question marks match the content hash Phoenix appends to each filename.
+/priv/static/**/*-????????????????????????????????.*
+/priv/static/**/*.gz
+
 # In case you use Node.js/npm, you want to ignore these.
 npm-debug.log
 /assets/node_modules/
@@ -39,3 +45,6 @@ npm-debug.log
 # GeoIP databases are large, reissued monthly, and fetched with `mix geoip.download`.
 /priv/geoip/*.mmdb
 /priv/geoip/*.mmdb.gz
+
+# Secrets written by install.sh.
+/.env
