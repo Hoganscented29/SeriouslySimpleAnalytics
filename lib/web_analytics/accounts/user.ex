@@ -7,6 +7,8 @@ defmodule WebAnalytics.Accounts.User do
     field :password, :string, virtual: true, redact: true
     field :hashed_password, :string, redact: true
     field :confirmed_at, :utc_datetime
+    # Never cast from user input. See the migration and Accounts.set_admin/2.
+    field :admin, :boolean, default: false
     field :authenticated_at, :utc_datetime, virtual: true
 
     timestamps(type: :utc_datetime)

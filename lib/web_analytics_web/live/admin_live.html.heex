@@ -1,0 +1,500 @@
+<Layouts.app flash={@flash} current_scope={@current_scope}>
+  <div class="space-y-8 pb-16">
+    <!-- header -->
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <h1 class="text-2xl font-semibold tracking-tight">Everything</h1>
+        <p class="text-sm text-base-content/60 mt-1">
+          Every account on this deployment. Counters refresh every {@counter_seconds}s;
+          tables every minute.
+        </p>
+      </div>
+      <div class="flex items-center gap-3">
+        <span class="text-xs text-base-content/50">
+          counters {ago(@counters_at)} · tables {ago(@detail_at)}
+        </span>
+        <button phx-click="refresh" class="btn btn-sm btn-outline">Refresh now</button>
+      </div>
+    </div>
+
+    <!-- live counters -->
+    <section>
+      <h2 class="text-xs uppercase tracking-wide text-base-content/50 mb-3">Right now</h2>
+      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div
+          :for={
+            stat <- [
+              {"Active sessions", @counters.active_now, "seen in the last 5 minutes"},
+              {"Events / min", @counters.events_1m, "last 60 seconds"},
+              {"Events / hour", @counters.events_1h, "last 60 minutes"},
+              {"Sessions / hour", @counters.sessions_1h, "started in the last hour"},
+              {"Events today", @counters.events_24h, "last 24 hours"},
+              {"Sessions today", @counters.sessions_24h, "last 24 hours"}
+            ]
+          }
+          class="rounded-box bg-base-100 border border-base-300 p-4"
+        >
+          <div class="text-xs text-base-content/60">{elem(stat, 0)}</div>
+          <div class="text-2xl font-semibold tabular-nums mt-1">{num(elem(stat, 1))}</div>
+          <div class="text-[11px] text-base-content/40 mt-0.5">{elem(stat, 2)}</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- host -->
+    <section>
+      <h2 class="text-xs uppercase tracking-wide text-base-content/50 mb-3">
+        This server
+      </h2>
+      <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <!-- cpu -->
+        <div class="rounded-box bg-base-100 border border-base-300 p-4">
+          <div class="flex items-baseline justify-between">
+            <span class="text-xs text-base-content/60">CPU</span>
+            <span class="text-[11px] text-base-content/40">
+              {@cpu_count} {if @cpu_count == 1, do: "core", else: "cores"}
+            </span>
+          </div>
+          <div
+            :if={@cpu_util}
+            class={["text-2xl font-semibold tabular-nums mt-1", level(@cpu_util)]}
+          >
+            {@cpu_util}%
+          </div>
+          <div :if={is_nil(@cpu_util)} class="text-2xl font-semibold text-base-content/30 mt-1">
+            —
+          </div>
+          <div :if={@cpu_util} class="w-full bg-base-200 rounded-full h-1.5 mt-2 overflow-hidden">
+            <div
+              class={["h-full rounded-full", bar_colour(@cpu_util)]}
+              style={"width: #{@cpu_util}%"}
+            >
+            </div>
+          </div>
+          <div class="text-[11px] text-base-content/40 mt-1">
+            {cond do
+              @cpu_window -> "average over #{@cpu_window}s"
+              @cpu_sample == :unavailable -> "needs /proc — Linux only"
+              true -> "measuring…"
+            end}
+          </div>
+        </div>
+
+        <!-- memory -->
+        <div class="rounded-box bg-base-100 border border-base-300 p-4">
+          <div class="flex items-baseline justify-between">
+            <span class="text-xs text-base-content/60">Memory</span>
+            <span :if={@memory != :unavailable} class="text-[11px] text-base-content/40">
+              {bytes(@memory.total)} total
+            </span>
+          </div>
+          <div :if={@memory != :unavailable}>
+            <div class={["text-2xl font-semibold tabular-nums mt-1", level(@memory.used_pct)]}>
+              {@memory.used_pct}%
+            </div>
+            <div class="w-full bg-base-200 rounded-full h-1.5 mt-2 overflow-hidden">
+              <div
+                class={["h-full rounded-full", bar_colour(@memory.used_pct)]}
+                style={"width: #{@memory.used_pct}%"}
+              >
+              </div>
+            </div>
+            <div class="text-[11px] text-base-content/40 mt-1">
+              {bytes(@memory.used)} used · {bytes(@memory.available)} available
+            </div>
+          </div>
+          <div :if={@memory == :unavailable}>
+            <div class="text-2xl font-semibold text-base-content/30 mt-1">—</div>
+            <div class="text-[11px] text-base-content/40 mt-1">needs /proc — Linux only</div>
+          </div>
+        </div>
+
+        <!-- swap -->
+        <div class="rounded-box bg-base-100 border border-base-300 p-4">
+          <span class="text-xs text-base-content/60">Swap</span>
+          <div :if={@memory != :unavailable and @memory.swap_total > 0}>
+            <div class={["text-2xl font-semibold tabular-nums mt-1", level(@memory.swap_used_pct)]}>
+              {@memory.swap_used_pct}%
+            </div>
+            <div class="text-[11px] text-base-content/40 mt-3">
+              {bytes(@memory.swap_used)} of {bytes(@memory.swap_total)}
+            </div>
+          </div>
+          <div :if={@memory != :unavailable and @memory.swap_total == 0}>
+            <div class="text-2xl font-semibold text-base-content/30 mt-1">none</div>
+            <div class="text-[11px] text-base-content/40 mt-3">no swap configured</div>
+          </div>
+          <div :if={@memory == :unavailable}>
+            <div class="text-2xl font-semibold text-base-content/30 mt-1">—</div>
+            <div class="text-[11px] text-base-content/40 mt-3">needs /proc — Linux only</div>
+          </div>
+        </div>
+
+        <!-- load -->
+        <div class="rounded-box bg-base-100 border border-base-300 p-4">
+          <span class="text-xs text-base-content/60">Load average</span>
+          <div :if={@load != :unavailable}>
+            <% saturated = @load.one / @cpu_count * 100 %>
+            <div class={["text-2xl font-semibold tabular-nums mt-1", level(saturated)]}>
+              {@load.one}
+            </div>
+            <div class="text-[11px] text-base-content/40 mt-3">
+              {@load.five} over 5m · {@load.fifteen} over 15m
+            </div>
+            <div class="text-[11px] text-base-content/40">
+              {round(saturated)}% of {@cpu_count} {if @cpu_count == 1, do: "core", else: "cores"}
+            </div>
+          </div>
+          <div :if={@load == :unavailable}>
+            <div class="text-2xl font-semibold text-base-content/30 mt-1">—</div>
+            <div class="text-[11px] text-base-content/40 mt-3">needs /proc — Linux only</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- totals -->
+    <section>
+      <h2 class="text-xs uppercase tracking-wide text-base-content/50 mb-3">All time</h2>
+      <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+        <div
+          :for={
+            stat <- [
+              {"Users", @counters.users, "#{num(@counters.users_confirmed)} confirmed"},
+              {"Sites", @counters.sites, "#{num(@counters.sites_claimed)} claimed"},
+              {"Sessions", @counters.sessions, nil},
+              {"Pageviews", @counters.pageviews, nil},
+              {"Events", @counters.events, nil},
+              {"Forms", @counters.forms, nil},
+              {"Crawler sessions", @counters.crawler_sessions,
+               "#{num(@counters.crawler_sessions_24h)} today"},
+              {"Filtered as odd", @counters.anomalous_sessions, "dwell anomalies"}
+            ]
+          }
+          class="rounded-box bg-base-100 border border-base-300 p-4"
+        >
+          <div class="text-xs text-base-content/60">{elem(stat, 0)}</div>
+          <div class="text-xl font-semibold tabular-nums mt-1">{num(elem(stat, 1))}</div>
+          <div :if={elem(stat, 2)} class="text-[11px] text-base-content/40 mt-0.5">
+            {elem(stat, 2)}
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ingest over 24h -->
+    <section class="rounded-box bg-base-100 border border-base-300 p-5">
+      <div class="flex items-baseline justify-between gap-4 mb-4">
+        <h2 class="text-sm font-medium">Events, last 24 hours</h2>
+        <span class="text-xs text-base-content/50">
+          ingest queue {if @counters.queue_depth == :unavailable,
+            do: "unavailable",
+            else: num(@counters.queue_depth)}
+        </span>
+      </div>
+      <% peak = @detail.hourly |> Enum.map(& &1.count) |> Enum.max(fn -> 0 end) %>
+      <div class="flex items-end gap-1 h-32">
+        <div
+          :for={hour <- @detail.hourly}
+          class="flex-1 flex flex-col justify-end h-full group relative"
+          title={"#{Calendar.strftime(hour.at, "%H:%M")} — #{num(hour.count)} events"}
+        >
+          <div
+            class="bg-primary/70 rounded-t group-hover:bg-primary transition-colors"
+            style={"height: #{bar_pct(hour.count, peak)}%"}
+          >
+          </div>
+        </div>
+      </div>
+      <div class="flex justify-between text-[11px] text-base-content/40 mt-2">
+        <span>{Calendar.strftime(List.first(@detail.hourly).at, "%H:%M UTC")}</span>
+        <span>peak {num(peak)}/hour</span>
+        <span>{Calendar.strftime(List.last(@detail.hourly).at, "%H:%M UTC")}</span>
+      </div>
+    </section>
+
+    <div class="grid lg:grid-cols-2 gap-6">
+      <!-- sites -->
+      <section class="rounded-box bg-base-100 border border-base-300 p-5">
+        <h2 class="text-sm font-medium mb-3">Sites ({num(length(@detail.sites))})</h2>
+        <div class="overflow-x-auto max-h-96 overflow-y-auto">
+          <table class="table table-xs table-pin-rows">
+            <thead>
+              <tr>
+                <th>Account ID</th>
+                <th>Name</th>
+                <th>Owner</th>
+                <th class="text-right">Sessions</th>
+                <th>Last seen</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr :for={site <- @detail.sites}>
+                <td class="font-mono text-[11px] whitespace-nowrap">{site.key}</td>
+                <td class="max-w-[10rem] truncate" title={site.name}>{site.name}</td>
+                <td class="max-w-[12rem] truncate text-base-content/60" title={site.owner}>
+                  {site.owner || "unclaimed"}
+                </td>
+                <td class="text-right tabular-nums">{num(site.sessions)}</td>
+                <td class="whitespace-nowrap text-base-content/60">{ago(site.last_seen)}</td>
+              </tr>
+              <tr :if={@detail.sites == []}>
+                <td colspan="5" class="text-center text-base-content/50 py-6">No sites yet.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- users -->
+      <section class="rounded-box bg-base-100 border border-base-300 p-5">
+        <h2 class="text-sm font-medium mb-3">Users ({num(length(@detail.users))})</h2>
+        <div class="overflow-x-auto max-h-96 overflow-y-auto">
+          <table class="table table-xs table-pin-rows">
+            <thead>
+              <tr>
+                <th>Email</th>
+                <th class="text-right">Sites</th>
+                <th>Confirmed</th>
+                <th>Registered</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr :for={user <- @detail.users}>
+                <td class="max-w-[16rem] truncate" title={user.email}>
+                  {user.email}
+                  <span :if={user.admin} class="badge badge-xs badge-primary ml-1">admin</span>
+                </td>
+                <td class="text-right tabular-nums">{num(user.sites)}</td>
+                <td class="text-base-content/60">
+                  {if user.confirmed_at, do: "yes", else: "no"}
+                </td>
+                <td class="whitespace-nowrap text-base-content/60">{ago(user.inserted_at)}</td>
+              </tr>
+              <tr :if={@detail.users == []}>
+                <td colspan="4" class="text-center text-base-content/50 py-6">No users yet.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <div class="grid lg:grid-cols-3 gap-6">
+      <!-- channels -->
+      <section class="rounded-box bg-base-100 border border-base-300 p-5">
+        <h2 class="text-sm font-medium mb-3">By channel, 30 days</h2>
+        <table class="table table-xs">
+          <tbody>
+            <tr :for={row <- @detail.channels}>
+              <td>{channel_label(row.channel)}</td>
+              <td class="text-right tabular-nums">{num(row.sessions)}</td>
+            </tr>
+            <tr :if={@detail.channels == []}>
+              <td class="text-base-content/50 py-4">Nothing yet.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- countries -->
+      <section class="rounded-box bg-base-100 border border-base-300 p-5">
+        <h2 class="text-sm font-medium mb-3">Countries, 30 days</h2>
+        <div class="max-h-64 overflow-y-auto">
+          <table class="table table-xs">
+            <tbody>
+              <tr :for={row <- @detail.countries}>
+                <td class="max-w-[12rem] truncate">{row.country}</td>
+                <td class="text-right tabular-nums">{num(row.sessions)}</td>
+              </tr>
+              <tr :if={@detail.countries == []}>
+                <td class="text-base-content/50 py-4">No located sessions yet.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- projects -->
+      <section class="rounded-box bg-base-100 border border-base-300 p-5">
+        <h2 class="text-sm font-medium mb-3">AI projects, 30 days</h2>
+        <div class="max-h-64 overflow-y-auto">
+          <table class="table table-xs">
+            <tbody>
+              <tr :for={row <- @detail.projects}>
+                <td class="max-w-[10rem] truncate" title={row.project}>{row.project}</td>
+                <td class="text-base-content/50 text-[11px]">{channel_label(row.channel)}</td>
+                <td class="text-right tabular-nums">{num(row.sessions)}</td>
+              </tr>
+              <tr :if={@detail.projects == []}>
+                <td class="text-base-content/50 py-4">No projects reporting yet.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <div class="grid lg:grid-cols-2 gap-6">
+      <!-- crawlers -->
+      <section class="rounded-box bg-base-100 border border-base-300 p-5">
+        <h2 class="text-sm font-medium mb-3">Crawlers, 30 days</h2>
+        <div class="overflow-x-auto max-h-80 overflow-y-auto">
+          <table class="table table-xs table-pin-rows">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Kind</th>
+                <th class="text-right">Sessions</th>
+                <th>Last seen</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr :for={row <- @detail.crawlers}>
+                <td class="font-mono text-[11px]">{row.name}</td>
+                <td class="text-base-content/60">{row.kind}</td>
+                <td class="text-right tabular-nums">{num(row.sessions)}</td>
+                <td class="whitespace-nowrap text-base-content/60">{ago(row.last_seen)}</td>
+              </tr>
+              <tr :if={@detail.crawlers == []}>
+                <td colspan="4" class="text-center text-base-content/50 py-6">
+                  No crawler traffic yet.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- top paths -->
+      <section class="rounded-box bg-base-100 border border-base-300 p-5">
+        <h2 class="text-sm font-medium mb-3">Pages, 7 days</h2>
+        <div class="overflow-x-auto max-h-80 overflow-y-auto">
+          <table class="table table-xs table-pin-rows">
+            <thead>
+              <tr>
+                <th>Path</th>
+                <th>Site</th>
+                <th class="text-right">Views</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr :for={row <- @detail.top_paths}>
+                <td class="font-mono text-[11px] max-w-[16rem] truncate" title={row.path}>
+                  {row.path}
+                </td>
+                <td class="text-base-content/60 max-w-[8rem] truncate">{row.site}</td>
+                <td class="text-right tabular-nums">{num(row.views)}</td>
+              </tr>
+              <tr :if={@detail.top_paths == []}>
+                <td colspan="3" class="text-center text-base-content/50 py-6">
+                  No pageviews yet.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- recent sessions -->
+    <section class="rounded-box bg-base-100 border border-base-300 p-5">
+      <h2 class="text-sm font-medium mb-3">Most recent sessions</h2>
+      <div class="overflow-x-auto max-h-96 overflow-y-auto">
+        <table class="table table-xs table-pin-rows">
+          <thead>
+            <tr>
+              <th>Last seen</th>
+              <th>Site</th>
+              <th>Channel</th>
+              <th>Entry</th>
+              <th>Where</th>
+              <th class="text-right">Views</th>
+              <th class="text-right">Dwell</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr :for={row <- @detail.recent_sessions}>
+              <td class="whitespace-nowrap text-base-content/60">{ago(row.last_seen_at)}</td>
+              <td class="max-w-[10rem] truncate">{row.site}</td>
+              <td>
+                <span class="text-[11px]">{row.project || channel_label(row.channel)}</span>
+                <span :if={row.crawler_name} class="badge badge-xs badge-outline ml-1">
+                  {row.crawler_name}
+                </span>
+                <span :if={row.anomalous} class="badge badge-xs badge-warning ml-1">odd</span>
+              </td>
+              <td class="font-mono text-[11px] max-w-[14rem] truncate" title={row.entry_path}>
+                {row.entry_path}
+              </td>
+              <td class="text-base-content/60 max-w-[12rem] truncate">
+                {[row.city, row.country] |> Enum.reject(&is_nil/1) |> Enum.join(", ")}
+              </td>
+              <td class="text-right tabular-nums">{num(row.pageviews)}</td>
+              <td class="text-right tabular-nums">{duration(row.dwell_ms)}</td>
+            </tr>
+            <tr :if={@detail.recent_sessions == []}>
+              <td colspan="7" class="text-center text-base-content/50 py-6">
+                Nothing has reported yet.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- system -->
+    <section class="rounded-box bg-base-100 border border-base-300 p-5">
+      <h2 class="text-sm font-medium mb-4">This deployment</h2>
+      <dl class="grid sm:grid-cols-2 lg:grid-cols-4 gap-x-8 gap-y-2 text-sm">
+        <div
+          :for={
+            row <- [
+              {"Version", @system.version},
+              {"Elixir", @system.elixir},
+              {"OTP", @system.otp},
+              {"Uptime", duration(@system.uptime_ms)},
+              {"Node", @system.node},
+              {"Schedulers", to_string(@system.schedulers)},
+              {"BEAM memory", "#{@system.memory_mb} MB"},
+              {"Database", @system.database_size},
+              {"GeoIP", if(@system.geoip, do: "loaded", else: "not loaded")},
+              {"Mailer", @system.mailer}
+            ]
+          }
+          class="flex justify-between gap-4 py-1 border-b border-base-200"
+        >
+          <dt class="text-base-content/60">{elem(row, 0)}</dt>
+          <dd class="font-medium text-right truncate">{elem(row, 1)}</dd>
+        </div>
+      </dl>
+
+      <div :if={@system.table_sizes != []} class="mt-6">
+        <h3 class="text-xs uppercase tracking-wide text-base-content/50 mb-2">Tables</h3>
+        <div class="overflow-x-auto">
+          <table class="table table-xs">
+            <thead>
+              <tr>
+                <th>Table</th>
+                <th class="text-right">Rows (est.)</th>
+                <th class="text-right">Size</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr :for={row <- @system.table_sizes}>
+                <td class="font-mono text-[11px]">{row.name}</td>
+                <td class="text-right tabular-nums text-base-content/60">{num(row.rows)}</td>
+                <td class="text-right tabular-nums">{row.size}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="mt-6 text-xs text-base-content/50">
+        Admins: {@admins |> Enum.map(& &1.email) |> Enum.join(", ")}.
+        Grant with <code class="font-mono">mix ssa.admin EMAIL</code>, revoke with <code class="font-mono">--revoke</code>.
+      </div>
+    </section>
+  </div>
+</Layouts.app>

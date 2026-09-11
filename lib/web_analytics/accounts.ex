@@ -109,6 +109,36 @@ defmodule WebAnalytics.Accounts do
     end
   end
 
+  ## Administration
+
+  @doc """
+  Whether this user may see every account's data.
+
+  Granted only by `mix ssa.admin`, which needs shell access to the box. There is
+  deliberately no HTTP path to it: the admin view crosses account boundaries, so
+  the thing that grants it should be outside the thing it grants access to.
+  """
+  def admin?(%User{admin: true}), do: true
+  def admin?(_), do: false
+
+  @doc "Grants or revokes admin. Returns `{:ok, user}` or `{:error, :not_found}`."
+  def set_admin(email, admin?) when is_binary(email) and is_boolean(admin?) do
+    case get_user_by_email(email) do
+      nil ->
+        {:error, :not_found}
+
+      user ->
+        user
+        |> Ecto.Changeset.change(admin: admin?)
+        |> Repo.update()
+    end
+  end
+
+  @doc "Every admin, for the \"who can see this\" panel on the admin dashboard."
+  def list_admins do
+    Repo.all(from u in User, where: u.admin, order_by: [asc: u.email])
+  end
+
   ## Settings
 
   @doc """

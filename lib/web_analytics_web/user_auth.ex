@@ -231,6 +231,35 @@ defmodule WebAnalyticsWeb.UserAuth do
     end
   end
 
+  def on_mount(:require_admin, _params, session, socket) do
+    socket = mount_current_scope(socket, session)
+    user = socket.assigns.current_scope && socket.assigns.current_scope.user
+
+    cond do
+      user && Accounts.admin?(user) ->
+        {:cont, socket}
+
+      user ->
+        # Deliberately the same destination and wording a non-admin would get
+        # from any other page they cannot see. Telling someone that /admin
+        # exists and they are not on the list is information they did not have.
+        socket =
+          socket
+          |> Phoenix.LiveView.put_flash(:error, "Not found.")
+          |> Phoenix.LiveView.redirect(to: ~p"/dashboard")
+
+        {:halt, socket}
+
+      true ->
+        socket =
+          socket
+          |> Phoenix.LiveView.put_flash(:error, "You must log in to access this page.")
+          |> Phoenix.LiveView.redirect(to: ~p"/users/log-in")
+
+        {:halt, socket}
+    end
+  end
+
   def on_mount(:require_sudo_mode, _params, session, socket) do
     socket = mount_current_scope(socket, session)
 

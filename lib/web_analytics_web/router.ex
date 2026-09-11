@@ -106,6 +106,17 @@ defmodule WebAnalyticsWeb.Router do
     post "/users/update-password", UserSessionController, :update_password
   end
 
+  # Every account's data in one place, so the gate is its own live_session
+  # rather than a check inside a shared one.
+  scope "/", WebAnalyticsWeb do
+    pipe_through [:browser, :require_authenticated_user]
+
+    live_session :require_admin,
+      on_mount: [{WebAnalyticsWeb.UserAuth, :require_admin}] do
+      live "/admin", AdminLive, :index
+    end
+  end
+
   scope "/", WebAnalyticsWeb do
     pipe_through [:browser]
 

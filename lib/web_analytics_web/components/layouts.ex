@@ -44,6 +44,13 @@ defmodule WebAnalyticsWeb.Layouts do
           <.link navigate={~p"/dashboard"} class="hover:text-primary">Dashboard</.link>
           <.link href={~p"/demo"} class="hover:text-primary">Demo site</.link>
           <.link href={~p"/"} class="hover:text-primary">Home</.link>
+          <.link
+            :if={@current_scope && WebAnalytics.Accounts.admin?(@current_scope.user)}
+            navigate={~p"/admin"}
+            class="hover:text-primary font-medium"
+          >
+            Admin
+          </.link>
         </nav>
         <div class="flex-1" />
         <div :if={@current_scope} class="hidden sm:flex items-center gap-3 text-sm">

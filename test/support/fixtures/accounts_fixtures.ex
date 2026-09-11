@@ -27,6 +27,13 @@ defmodule WebAnalytics.AccountsFixtures do
     user
   end
 
+  @doc "A user with the admin flag, which no changeset will ever set."
+  def admin_fixture(attrs \\ %{}) do
+    user = user_fixture(attrs)
+    {:ok, admin} = WebAnalytics.Accounts.set_admin(user.email, true)
+    admin
+  end
+
   def user_fixture(attrs \\ %{}) do
     user = unconfirmed_user_fixture(attrs)
 

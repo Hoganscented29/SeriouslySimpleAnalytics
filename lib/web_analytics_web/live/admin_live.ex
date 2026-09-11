@@ -1,0 +1,188 @@
+defmodule WebAnalyticsWeb.AdminLive do
+  @moduledoc """
+  The operator's view of the whole deployment.
+
+  Counters refresh every ten seconds. The tables and breakdowns underneath them
+  refresh every sixth tick, because they walk the tables properly and running
+  them every ten seconds would make this page the heaviest thing on the box —
+  on a box that is also serving the application it is reporting on.
+
+  The sections it shows are whatever the deployment actually has: a box with no
+  crawler traffic does not get an empty crawler table.
+  """
+  use WebAnalyticsWeb, :live_view
+
+  alias WebAnalytics.Admin
+  alias WebAnalytics.Admin.Host
+
+  @counter_ms 10_000
+
+  # Detail is refreshed every sixth counter tick, i.e. once a minute.
+  @detail_every 6
+
+  @impl true
+  def mount(_params, _session, socket) do
+    if connected?(socket) do
+      :timer.send_interval(@counter_ms, self(), :tick)
+      # CPU is a rate, so the first reading needs a second sample. Taking it a
+      # second from now rather than waiting for the first tick means the number
+      # appears almost immediately instead of after a blank ten seconds.
+      Process.send_after(self(), :prime_cpu, 1_000)
+    end
+
+    {:ok,
+     socket
+     |> assign(:page_title, "Admin")
+     |> assign(:tick, 0)
+     |> assign(:counter_seconds, div(@counter_ms, 1000))
+     |> assign(:system, Admin.system())
+     |> assign(:admins, WebAnalytics.Accounts.list_admins())
+     |> assign(:cpu_sample, Host.cpu_sample())
+     |> assign(:cpu_util, nil)
+     |> assign(:cpu_window, nil)
+     |> load_host()
+     |> load_counters()
+     |> load_detail()}
+  end
+
+  @impl true
+  def handle_info(:tick, socket) do
+    tick = socket.assigns.tick + 1
+
+    socket =
+      socket
+      |> assign(:tick, tick)
+      |> sample_cpu(@counter_ms)
+      |> load_host()
+      |> load_counters()
+
+    {:noreply,
+     if rem(tick, @detail_every) == 0 do
+       socket |> load_detail() |> assign(:system, Admin.system())
+     else
+       socket
+     end}
+  end
+
+  def handle_info(:prime_cpu, socket) do
+    {:noreply, sample_cpu(socket, 1_000)}
+  end
+
+  @impl true
+  def handle_event("refresh", _params, socket) do
+    {:noreply,
+     socket
+     |> load_host()
+     |> load_counters()
+     |> load_detail()
+     |> assign(:system, Admin.system())
+     |> put_flash(:info, "Refreshed.")}
+  end
+
+  # Utilisation over the interval since the last sample, which is exactly the
+  # window the reader is looking at rather than an average since boot.
+  defp sample_cpu(socket, window_ms) do
+    current = Host.cpu_sample()
+
+    case Host.cpu_util(socket.assigns.cpu_sample, current) do
+      nil ->
+        assign(socket, :cpu_sample, current)
+
+      util ->
+        socket
+        |> assign(:cpu_sample, current)
+        |> assign(:cpu_util, util)
+        |> assign(:cpu_window, div(window_ms, 1000))
+    end
+  end
+
+  defp load_host(socket) do
+    socket
+    |> assign(:memory, Host.memory())
+    |> assign(:load, Host.load_average())
+    |> assign(:cpu_count, Host.cpu_count())
+  end
+
+  defp load_counters(socket) do
+    now = DateTime.utc_now()
+
+    socket
+    |> assign(:counters, Admin.counters(now))
+    |> assign(:counters_at, now)
+  end
+
+  defp load_detail(socket) do
+    now = DateTime.utc_now()
+
+    socket
+    |> assign(:detail, Admin.detail(now))
+    |> assign(:detail_at, now)
+  end
+
+  # -- template helpers -----------------------------------------------------
+
+  @doc "Thousands separators, because six-figure counts are unreadable without."
+  def num(value) when is_integer(value) do
+    value
+    |> Integer.to_string()
+    |> String.reverse()
+    |> String.replace(~r/(\d{3})(?=\d)/, "\\1,")
+    |> String.reverse()
+  end
+
+  def num(nil), do: "0"
+  def num(value), do: to_string(value)
+
+  @doc "A duration a person can read at a glance, not a millisecond count."
+  def duration(nil), do: "—"
+  def duration(ms) when ms < 1_000, do: "#{ms}ms"
+  def duration(ms) when ms < 60_000, do: "#{Float.round(ms / 1_000, 1)}s"
+  def duration(ms) when ms < 3_600_000, do: "#{div(ms, 60_000)}m"
+  def duration(ms) when ms < 86_400_000, do: "#{div(ms, 3_600_000)}h"
+  def duration(ms), do: "#{div(ms, 86_400_000)}d"
+
+  @doc "Relative time, which is what \"is this thing still alive\" needs."
+  def ago(nil), do: "never"
+
+  def ago(%DateTime{} = at) do
+    case DateTime.diff(DateTime.utc_now(), at) do
+      s when s < 10 -> "just now"
+      s when s < 60 -> "#{s}s ago"
+      s when s < 3_600 -> "#{div(s, 60)}m ago"
+      s when s < 86_400 -> "#{div(s, 3_600)}h ago"
+      s -> "#{div(s, 86_400)}d ago"
+    end
+  end
+
+  def ago(%NaiveDateTime{} = at), do: at |> DateTime.from_naive!("Etc/UTC") |> ago()
+
+  @doc "Bytes as something a person reads, not a digit count."
+  def bytes(nil), do: "—"
+  def bytes(n) when n < 1024, do: "#{n} B"
+  def bytes(n) when n < 1_048_576, do: "#{Float.round(n / 1024, 1)} KB"
+  def bytes(n) when n < 1_073_741_824, do: "#{Float.round(n / 1_048_576, 1)} MB"
+  def bytes(n), do: "#{Float.round(n / 1_073_741_824, 2)} GB"
+
+  @doc """
+  Green, amber or red for a percentage.
+
+  A dashboard that colours everything the same makes the reader do the
+  comparing, which is the one job the colour was there to do.
+  """
+  def level(nil), do: "text-base-content/40"
+  def level(pct) when pct >= 90, do: "text-error"
+  def level(pct) when pct >= 75, do: "text-warning"
+  def level(_pct), do: "text-success"
+
+  def bar_colour(nil), do: "bg-base-300"
+  def bar_colour(pct) when pct >= 90, do: "bg-error"
+  def bar_colour(pct) when pct >= 75, do: "bg-warning"
+  def bar_colour(_pct), do: "bg-success"
+
+  @doc "Bar height as a percentage of the tallest bar in the series."
+  def bar_pct(_count, 0), do: 0
+  def bar_pct(count, max), do: round(count / max * 100)
+
+  def channel_label(nil), do: "web"
+  def channel_label(channel), do: channel
+end
