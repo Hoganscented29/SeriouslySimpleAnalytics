@@ -346,10 +346,16 @@ Run `mix precommit` before committing.
 
 ## Putting it on the internet
 
-`./install.sh` gets it running on port 4001. That is not the same as a domain
-resolving to it — see [deploy/README.md](deploy/README.md), which covers DNS,
-the reverse proxy ([deploy/Caddyfile](deploy/Caddyfile)) and keeping it running
-([deploy/seriouslysimpleanalytics.service](deploy/seriouslysimpleanalytics.service)).
+`./install.sh` gets it running on port 4001, in the foreground. Point DNS at the
+box, then:
+
+```bash
+sudo ./deploy/setup.sh your-domain.com
+```
+
+That installs a systemd unit so it survives logout and reboots, sets up Caddy
+for TLS on 80/443, and tells the application its public address. `--dry-run`
+shows what it would do first. See [deploy/README.md](deploy/README.md).
 
 The step that fails quietly is telling the app its own address. Set these in
 `.env` on the server and restart:

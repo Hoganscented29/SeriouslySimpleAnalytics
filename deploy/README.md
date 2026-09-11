@@ -11,7 +11,7 @@ on port 80, so it cannot get one before the name resolves here.
 
 ## 2. Tell the app its own address
 
-Edit `.env` on the server:
+`deploy/setup.sh` below does this for you. By hand, edit `.env` on the server:
 
 ```
 PHX_HOST=seriouslysimpleanalytics.com
@@ -33,24 +33,27 @@ on it:
 `PORT` stays 4001 — that is the port the app listens on locally, behind the
 proxy. `PHX_PORT` is the port the *public* reaches, which is 443.
 
-## 3. A proxy for TLS, and something to keep it running
+## 2 and 3, in one command
 
 ```bash
-sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
-sudo systemctl reload caddy
-
-sudo cp deploy/seriouslysimpleanalytics.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now seriouslysimpleanalytics
+sudo ./deploy/setup.sh your-domain.com
 ```
 
-Edit the domain in the Caddyfile, and check `ExecStart` in the unit matches
-`command -v mix` on the box — systemd runs with a minimal `PATH` and will not
-find a version-manager shim.
+It reads the machine rather than assuming it: the real path to `mix`, the user
+that owns the checkout, the port from `.env`. It writes the systemd unit and the
+Caddyfile, opens 80 and 443 if `ufw` is running, and starts everything.
 
-Open 80 and 443 in the firewall. Leave 4001 closed: the proxy reaches it over
-loopback, and exposing it would serve the site over plain HTTP, bypassing both
-TLS and the redirect.
+`--dry-run` prints what it would write and changes nothing. Worth doing first.
+
+It also strips any `export ` prefixes from `.env`. Earlier versions of
+install.sh wrote them, a shell sources them happily, and systemd's
+`EnvironmentFile=` does not understand them — a service reading that file would
+have started with none of its configuration.
+
+`deploy/Caddyfile` and `deploy/seriouslysimpleanalytics.service` are reference
+copies of what it generates. Do not install them as-is: `User=` and `ExecStart=`
+have no correct general value, and the ones that were there originally were
+wrong on the first server they met.
 
 ## Checking it worked
 

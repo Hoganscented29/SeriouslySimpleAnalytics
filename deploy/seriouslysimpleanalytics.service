@@ -1,13 +1,15 @@
-# systemd unit for SeriouslySimpleAnalytics.
+# Reference copy. Do not install this file as-is.
 #
-#   sudo cp deploy/seriouslysimpleanalytics.service /etc/systemd/system/
-#   sudo systemctl daemon-reload
-#   sudo systemctl enable --now seriouslysimpleanalytics
-#   sudo systemctl status seriouslysimpleanalytics
-#   journalctl -u seriouslysimpleanalytics -f
+#   sudo ./deploy/setup.sh your-domain.com
 #
-# Without this the server dies when you close the terminal, and does not come
-# back after a reboot.
+# That generates this unit with values read off the machine it runs on. Two of
+# the lines below cannot be right in general and were wrong on the first server
+# they met: `User=` must be an OS account that exists and owns the checkout —
+# the `ssa` Postgres role is not one — and `ExecStart=` must be the real path to
+# mix, which apt puts in /usr/bin and Homebrew elsewhere.
+#
+# Without a unit like this the server dies when you close the terminal and does
+# not come back after a reboot.
 
 [Unit]
 Description=SeriouslySimpleAnalytics
@@ -19,8 +21,8 @@ Wants=network-online.target
 
 [Service]
 Type=exec
-User=ssa
-Group=ssa
+User=CHANGE_ME
+Group=CHANGE_ME
 WorkingDirectory=/opt/seriouslysimpleanalytics
 
 # Plain KEY=value — systemd does not understand a leading `export`, which is why
@@ -29,7 +31,7 @@ EnvironmentFile=/opt/seriouslysimpleanalytics/.env
 
 # Full path: systemd runs with a minimal PATH that will not find asdf or a
 # Homebrew mix. `command -v mix` on the box tells you what to put here.
-ExecStart=/usr/local/bin/mix phx.server
+ExecStart=CHANGE_ME/mix phx.server
 
 Restart=always
 RestartSec=5

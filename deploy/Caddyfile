@@ -1,7 +1,5 @@
-# Caddy in front of SeriouslySimpleAnalytics.
-#
-#   sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
-#   sudo systemctl reload caddy
+# Reference copy. `sudo ./deploy/setup.sh your-domain.com` generates this with
+# your domain and port filled in.
 #
 # Caddy obtains and renews a Let's Encrypt certificate on its own, so there is
 # nothing to configure for TLS and nothing to remember to renew. Point the
