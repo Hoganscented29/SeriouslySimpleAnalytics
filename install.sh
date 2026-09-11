@@ -194,31 +194,82 @@ ok "Dependencies installed"
 
 say "Preparing configuration"
 
-DB_HOST="${PGHOST:-localhost}"
 DB_NAME="seriously_simple_analytics_${MIX_ENV}"
+DB_HOST="${PGHOST:-localhost}"
 
-# `$USER` is not always set, and where it is, it is not always a Postgres role:
-# installing as root on a stock Ubuntu box gives a `root` login and a `postgres`
-# superuser, which are not the same thing. So candidates are tried against the
-# server rather than assumed, and the failure names what to do about it.
-db_can_connect() {
-  PGPASSWORD="${PGPASSWORD:-}" psql -h "$DB_HOST" -U "$1" -d postgres -tAc 'select 1' >/dev/null 2>&1
+# The application connects over TCP, so that is what gets tested here — a login
+# that works over the Unix socket but not over TCP would pass a check and then
+# fail at boot.
+#
+# `-w` matters: without it psql prompts for a password, which on a server with
+# no trusted local login turns a scripted install into one that sits waiting for
+# input nobody is there to give.
+db_works() {
+  PGPASSWORD="${2:-}" psql -w -h "$DB_HOST" -U "$1" -d postgres -tAc 'select 1' >/dev/null 2>&1
 }
 
 DB_USER=""
-for candidate in "${PGUSER:-}" "${USER:-}" postgres; do
-  [ -z "$candidate" ] && continue
-  if db_can_connect "$candidate"; then DB_USER="$candidate"; break; fi
-done
+DB_PASSWORD=""
+
+if [ -n "${PGUSER:-}" ]; then
+  if db_works "$PGUSER" "${PGPASSWORD:-}"; then
+    DB_USER="$PGUSER"
+    DB_PASSWORD="${PGPASSWORD:-}"
+  else
+    die "PGUSER=$PGUSER cannot connect to PostgreSQL at $DB_HOST."
+  fi
+else
+  for candidate in "${USER:-}" postgres; do
+    [ -z "$candidate" ] && continue
+    if db_works "$candidate" ""; then DB_USER="$candidate"; break; fi
+  done
+fi
+
+# Nothing connects. On a stock Debian/Ubuntu box that is expected rather than
+# broken: only the `postgres` OS user is trusted, and only over the socket, so
+# there is no TCP login to find. But that same trust is enough to make one.
+if [ -z "$DB_USER" ] && have sudo && sudo -n -u postgres psql -w -tAc 'select 1' >/dev/null 2>&1; then
+  warn "No TCP login found — normal on a fresh Debian/Ubuntu server."
+
+  if confirm "Create a dedicated 'ssa' database role for this install?"; then
+    DB_PASSWORD="$(random_secret | tr -dc 'A-Za-z0-9' | cut -c1-32)"
+
+    # Idempotent, because install.sh is meant to be safe to re-run: an existing
+    # role has its password reset to the one written into .env in this same run,
+    # so the two cannot drift apart.
+    sudo -u postgres psql -w -v ON_ERROR_STOP=1 -q <<SQL
+DO \$do\$
+BEGIN
+  IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'ssa') THEN
+    ALTER ROLE ssa WITH LOGIN CREATEDB PASSWORD '$DB_PASSWORD';
+  ELSE
+    CREATE ROLE ssa WITH LOGIN CREATEDB PASSWORD '$DB_PASSWORD';
+  END IF;
+END
+\$do\$;
+SQL
+
+    if db_works "ssa" "$DB_PASSWORD"; then
+      DB_USER="ssa"
+      ok "Created role 'ssa'"
+    else
+      die "Created the 'ssa' role, but it still cannot connect over TCP.
+
+      Check that pg_hba.conf allows md5 or scram-sha-256 for host connections
+      from 127.0.0.1, then re-run."
+    fi
+  fi
+fi
 
 if [ -z "$DB_USER" ]; then
-  die "Cannot connect to PostgreSQL on $DB_HOST as ${PGUSER:-}, ${USER:-} or postgres.
+  die "Cannot connect to PostgreSQL at $DB_HOST as ${PGUSER:-}, ${USER:-} or postgres.
 
-      Create a role this install can use, then tell the script about it:
+      Create a role and pass it in:
 
           sudo -u postgres createuser --createdb --pwprompt ssa
-          PGUSER=ssa PGPASSWORD=secret ./install.sh"
+          PGUSER=ssa PGPASSWORD=thepassword ./install.sh"
 fi
+
 ok "PostgreSQL role: $DB_USER"
 
 if [ -f "$ENV_FILE" ]; then
@@ -234,7 +285,7 @@ else
   salt="$(random_secret)"
 
   auth="$DB_USER"
-  [ -n "${PGPASSWORD:-}" ] && auth="$DB_USER:$PGPASSWORD"
+  [ -n "$DB_PASSWORD" ] && auth="$DB_USER:$DB_PASSWORD"
 
   # No `export` prefixes: systemd's EnvironmentFile= cannot parse them, and
   # sourcing under `set -a` exports everything anyway. One file, both uses.
