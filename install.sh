@@ -208,54 +208,79 @@ mix local.rebar --force --if-missing >/dev/null
 mix deps.get >/dev/null
 ok "Dependencies installed"
 
-# -- 6. secrets ------------------------------------------------------------
+# -- 6. configuration ------------------------------------------------------
 
 say "Preparing configuration"
 
 DB_NAME="seriously_simple_analytics_${MIX_ENV}"
 DB_HOST="${PGHOST:-localhost}"
 
-# The application connects over TCP, so that is what gets tested here — a login
-# that works over the Unix socket but not over TCP would pass a check and then
-# fail at boot.
-#
-# `-w` matters: without it psql prompts for a password, which on a server with
-# no trusted local login turns a scripted install into one that sits waiting for
-# input nobody is there to give.
+# The application connects over TCP, so that is what gets tested — a login that
+# works over the Unix socket but not over TCP would pass a check here and fail
+# at boot. `-w` stops psql prompting, which would hang a scripted install.
 db_works() {
   PGPASSWORD="${2:-}" psql -w -h "$DB_HOST" -U "$1" -d postgres -tAc 'select 1' >/dev/null 2>&1
 }
 
-DB_USER=""
-DB_PASSWORD=""
+# psql speaks postgresql://; Ecto writes ecto://. Same URL otherwise.
+db_url_works() {
+  psql -w "$(printf '%s' "$1" | sed 's|^ecto://|postgresql://|')" -tAc 'select 1' >/dev/null 2>&1
+}
 
-if [ -n "${PGUSER:-}" ]; then
-  if db_works "$PGUSER" "${PGPASSWORD:-}"; then
-    DB_USER="$PGUSER"
-    DB_PASSWORD="${PGPASSWORD:-}"
+# An existing .env is checked FIRST, and its verdict decides whether any role
+# work happens at all.
+#
+# Getting this order wrong is not hypothetical. Creating the role generates a
+# fresh password; if .env is then merely "reused", it still holds the old one,
+# and every connection fails password authentication — with the script having
+# reported both "Created role" and "Reusing .env" as successes moments earlier.
+NEED_DATABASE=1
+
+if [ -f "$ENV_FILE" ]; then
+  set -a
+  # shellcheck source=/dev/null
+  . "./$ENV_FILE"
+  set +a
+
+  if [ -n "${DATABASE_URL:-}" ] && db_url_works "$DATABASE_URL"; then
+    ok "Reusing $ENV_FILE"
+    NEED_DATABASE=0
   else
-    die "PGUSER=$PGUSER cannot connect to PostgreSQL at $DB_HOST."
+    warn "$ENV_FILE has no working DATABASE_URL — sorting the database out and rewriting that one line."
   fi
-else
-  for candidate in "${USER:-}" postgres; do
-    [ -z "$candidate" ] && continue
-    if db_works "$candidate" ""; then DB_USER="$candidate"; break; fi
-  done
 fi
 
-# Nothing connects. On a stock Debian/Ubuntu box that is expected rather than
-# broken: only the `postgres` OS user is trusted, and only over the socket, so
-# there is no TCP login to find. But that same trust is enough to make one.
-if [ -z "$DB_USER" ] && have sudo && sudo -n -u postgres psql -w -tAc 'select 1' >/dev/null 2>&1; then
-  warn "No TCP login found — normal on a fresh Debian/Ubuntu server."
+if [ "$NEED_DATABASE" = "1" ]; then
+  DB_USER=""
+  DB_PASSWORD=""
 
-  if confirm "Create a dedicated 'ssa' database role for this install?"; then
-    DB_PASSWORD="$(random_secret | tr -dc 'A-Za-z0-9' | cut -c1-32)"
+  if [ -n "${PGUSER:-}" ]; then
+    if db_works "$PGUSER" "${PGPASSWORD:-}"; then
+      DB_USER="$PGUSER"
+      DB_PASSWORD="${PGPASSWORD:-}"
+    else
+      die "PGUSER=$PGUSER cannot connect to PostgreSQL at $DB_HOST."
+    fi
+  else
+    for candidate in "${USER:-}" postgres; do
+      [ -z "$candidate" ] && continue
+      if db_works "$candidate" ""; then DB_USER="$candidate"; break; fi
+    done
+  fi
 
-    # Idempotent, because install.sh is meant to be safe to re-run: an existing
-    # role has its password reset to the one written into .env in this same run,
-    # so the two cannot drift apart.
-    sudo -u postgres psql -w -v ON_ERROR_STOP=1 -q <<SQL
+  # Nothing connects. On a stock Debian/Ubuntu box that is expected rather than
+  # broken: only the `postgres` OS user is trusted, and only over the socket, so
+  # there is no TCP login to find. That same trust is enough to make one.
+  if [ -z "$DB_USER" ] && have sudo && sudo -n -u postgres psql -w -tAc 'select 1' >/dev/null 2>&1; then
+    warn "No TCP login found — normal on a fresh Debian/Ubuntu server."
+
+    if confirm "Create a dedicated 'ssa' database role for this install?"; then
+      # Alphanumeric only: this password is interpolated into SQL, into a URL
+      # and into a sed replacement, and the quoting rules of those three do not
+      # agree.
+      DB_PASSWORD="$(random_secret | tr -dc 'A-Za-z0-9' | cut -c1-32)"
+
+      sudo -u postgres psql -w -v ON_ERROR_STOP=1 -q <<SQL
 DO \$do\$
 BEGIN
   IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'ssa') THEN
@@ -267,53 +292,66 @@ END
 \$do\$;
 SQL
 
-    if db_works "ssa" "$DB_PASSWORD"; then
-      DB_USER="ssa"
-      ok "Created role 'ssa'"
-    else
-      die "Created the 'ssa' role, but it still cannot connect over TCP.
+      if db_works "ssa" "$DB_PASSWORD"; then
+        DB_USER="ssa"
+        ok "Created role 'ssa'"
+      else
+        die "Created the 'ssa' role, but it still cannot connect over TCP.
 
       Check that pg_hba.conf allows md5 or scram-sha-256 for host connections
       from 127.0.0.1, then re-run."
+      fi
     fi
   fi
-fi
 
-if [ -z "$DB_USER" ]; then
-  die "Cannot connect to PostgreSQL at $DB_HOST as ${PGUSER:-}, ${USER:-} or postgres.
+  if [ -z "$DB_USER" ]; then
+    die "Cannot connect to PostgreSQL at $DB_HOST as ${PGUSER:-}, ${USER:-} or postgres.
 
       Create a role and pass it in:
 
           sudo -u postgres createuser --createdb --pwprompt ssa
           PGUSER=ssa PGPASSWORD=thepassword ./install.sh"
-fi
-
-ok "PostgreSQL role: $DB_USER"
-
-if [ -f "$ENV_FILE" ]; then
-  ok "Reusing $ENV_FILE"
-else
-  # Generated once and kept. Regenerating SECRET_KEY_BASE would invalidate every
-  # signed session, and regenerating IP_SALT would orphan every stored IP hash.
-  # Deliberately not `mix phx.gen.secret`: on a fresh clone the dependencies are
-  # not fetched yet, so that task fails — and this step runs before them.
-  # 48 random bytes is 64 base64 characters, the length Phoenix requires of
-  # SECRET_KEY_BASE.
-  secret="$(random_secret)"
-  salt="$(random_secret)"
+  fi
 
   auth="$DB_USER"
   [ -n "$DB_PASSWORD" ] && auth="$DB_USER:$DB_PASSWORD"
+  DATABASE_URL="ecto://$auth@$DB_HOST/$DB_NAME"
+  export DATABASE_URL
 
-  # No `export` prefixes: systemd's EnvironmentFile= cannot parse them, and
-  # sourcing under `set -a` exports everything anyway. One file, both uses.
-  cat > "$ENV_FILE" <<ENV
+  if [ -f "$ENV_FILE" ]; then
+    # Only the one line. The file already holds the secret key base, the IP salt
+    # and the deployment key, and rewriting it wholesale would throw away all
+    # three — invalidating every session and orphaning every stored IP hash to
+    # fix a password.
+    if grep -q '^DATABASE_URL=' "$ENV_FILE"; then
+      tmp="$(mktemp)"
+      sed "s|^DATABASE_URL=.*|DATABASE_URL=$DATABASE_URL|" "$ENV_FILE" > "$tmp"
+      mv "$tmp" "$ENV_FILE"
+    else
+      printf 'DATABASE_URL=%s\n' "$DATABASE_URL" >> "$ENV_FILE"
+    fi
+    chmod 600 "$ENV_FILE"
+    ok "Updated DATABASE_URL in $ENV_FILE"
+  else
+    # Generated once and kept. Regenerating SECRET_KEY_BASE would invalidate
+    # every signed session, and regenerating IP_SALT would orphan every stored
+    # IP hash.
+    #
+    # Deliberately not `mix phx.gen.secret`: on a fresh clone the dependencies
+    # are not fetched yet. 48 random bytes is 64 base64 characters, the length
+    # Phoenix requires of SECRET_KEY_BASE.
+    secret="$(random_secret)"
+    salt="$(random_secret)"
+
+    # No `export` prefixes: systemd's EnvironmentFile= cannot parse them, and
+    # sourcing under `set -a` exports everything anyway. One file, both uses.
+    cat > "$ENV_FILE" <<ENV
 # Written by install.sh. Secrets — never commit this file.
 MIX_ENV=$MIX_ENV
 PORT=$PORT
 SECRET_KEY_BASE=$secret
 IP_SALT=$salt
-DATABASE_URL=ecto://$auth@$DB_HOST/$DB_NAME
+DATABASE_URL=$DATABASE_URL
 SSA_LICENSE_KEY=${SSA_LICENSE_KEY:-}
 
 # How this box is reached from outside.
@@ -326,14 +364,16 @@ PHX_HOST=localhost
 PHX_SCHEME=http
 PHX_PORT=$PORT
 ENV
-  chmod 600 "$ENV_FILE"
-  ok "Wrote $ENV_FILE (secrets generated, mode 600)"
+    chmod 600 "$ENV_FILE"
+    ok "Wrote $ENV_FILE (secrets generated, mode 600)"
+  fi
+
+  set -a
+  # shellcheck source=/dev/null
+  . "./$ENV_FILE"
+  set +a
 fi
 
-set -a
-# shellcheck source=/dev/null
-. "./$ENV_FILE"
-set +a
 export MIX_ENV PORT
 
 # -- 7. database -----------------------------------------------------------
