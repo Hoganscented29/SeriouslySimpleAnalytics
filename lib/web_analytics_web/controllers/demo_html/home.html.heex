@@ -1,0 +1,48 @@
+<.page site_key={@site_key} title="Acme — Home" active="home">
+  <h1>Acme</h1>
+  <p>
+    Every interaction on this page is captured automatically: no tagging, no manual
+    events. Open the console to watch the beacons, then check the dashboard.
+  </p>
+
+  <div class="row">
+    <button id="cta-primary" class="btn btn-primary" data-testid="hero-cta">Get started</button>
+    <button id="cta-secondary" class="btn">Watch demo</button>
+    <a href={~p"/demo/pricing"} id="nav-pricing" class="btn">See pricing</a>
+  </div>
+
+  <h2>Off-site links</h2>
+  <p class="muted">
+    These are recorded on <code>mousedown</code> and sent immediately, so the beacon
+    is away before the browser starts tearing this page down.
+  </p>
+  <div class="row">
+    <a href="https://elixir-lang.org" id="link-elixir" class="btn out-link" target="_blank">
+      elixir-lang.org
+    </a>
+    <a href="https://www.phoenixframework.org" id="link-phoenix" class="btn out-link">
+      phoenixframework.org
+    </a>
+    <a href="mailto:hello@example.com" id="link-email" class="btn">Email us</a>
+    <a href="/wa.js" id="link-download" class="btn" download>Download tracker</a>
+    <button id="btn-window-open" class="btn" onclick="window.open('https://hexdocs.pm','_blank')">
+      window.open()
+    </button>
+  </div>
+
+  <h2>Scroll depth</h2>
+  <p class="muted">Keep scrolling — max depth is tracked per pageview.</p>
+  <div :for={n <- 1..6} class="filler">
+    <strong>Section {n}</strong>
+    <p>
+      Filler content so the page is tall enough for scroll depth to be meaningful.
+      The tracker records the furthest point reached, not the current position.
+    </p>
+  </div>
+
+  <div class="card">
+    <strong>Made it to the bottom.</strong>
+    <p class="muted">This pageview should report close to 100% max scroll.</p>
+    <a href={~p"/demo/pricing"} class="btn btn-primary">Continue to pricing</a>
+  </div>
+</.page>

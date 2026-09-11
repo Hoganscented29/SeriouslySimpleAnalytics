@@ -1,0 +1,20 @@
+<.page site_key={@site_key} title="Acme — Docs" active="docs">
+  <h1>Documentation</h1>
+  <p>A long page, useful for comparing scroll depth against the shorter ones.</p>
+
+  <div :for={n <- 1..12} class="filler">
+    <h2>Chapter {n}</h2>
+    <p>
+      Dwell time on this page accrues every second while the tab is visible and the
+      visitor has interacted recently. Switch to another tab and the seconds keep
+      counting as dwell but stop counting as active — which is exactly the gap the
+      idle-tab anomaly rule looks for.
+    </p>
+    <a href={"#chapter-#{n}"} class="btn">Anchor link {n}</a>
+  </div>
+
+  <div class="row">
+    <a href={~p"/demo"} class="btn">Back to home</a>
+    <a href={~p"/demo/pricing"} class="btn btn-primary">See pricing</a>
+  </div>
+</.page>

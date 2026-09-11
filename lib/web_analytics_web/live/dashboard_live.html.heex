@@ -1,0 +1,862 @@
+<Layouts.app flash={@flash}>
+  <div :if={@sites == []} class="max-w-2xl mx-auto py-16 text-center">
+    <h1 class="text-2xl font-semibold">No sites yet</h1>
+    <p class="mt-2 text-base-content/70">
+      Create a site to get a tracking key and a snippet to paste into your pages.
+    </p>
+    <button phx-click="create_demo_site" class="btn btn-primary mt-6">
+      Create demo site
+    </button>
+  </div>
+
+  <div :if={@site} class="space-y-6 pb-16">
+    <!-- controls -->
+    <div class="flex flex-wrap items-center gap-3 justify-between">
+      <div class="flex items-center gap-3">
+        <h1 class="text-xl font-semibold">{@site.name}</h1>
+        <form :if={length(@sites) > 1} phx-change="navigate">
+          <select name="site" class="select select-sm select-bordered">
+            <option :for={site <- @sites} value={site.key} selected={site.id == @site.id}>
+              {site.name}
+            </option>
+          </select>
+        </form>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2">
+        <% projects = @data[:projects] || [] %>
+        <form :if={projects != []} phx-change="navigate">
+          <select name="project" class="select select-sm select-bordered">
+            <option value="">All projects</option>
+            <option
+              :for={project <- projects}
+              value={project.name}
+              selected={@filters.project == project.name}
+            >
+              {project.name} ({project.channel || "web"})
+            </option>
+          </select>
+        </form>
+
+        <div class="join">
+          <button
+            :for={range <- Analytics.ranges()}
+            phx-click="navigate"
+            phx-value-range={range}
+            class={[
+              "btn btn-xs join-item",
+              @filters.range == range && "btn-active btn-primary"
+            ]}
+          >
+            {range}
+          </button>
+        </div>
+
+        <div class="join" title="Group pages and flow by URL path or by page title">
+          <button
+            phx-click="navigate"
+            phx-value-group="path"
+            class={[
+              "btn btn-xs join-item",
+              @filters.group_by == :path && "btn-active btn-primary"
+            ]}
+          >
+            Path
+          </button>
+          <button
+            phx-click="navigate"
+            phx-value-group="title"
+            class={[
+              "btn btn-xs join-item",
+              @filters.group_by == :title && "btn-active btn-primary"
+            ]}
+          >
+            Title
+          </button>
+        </div>
+
+        <button
+          phx-click="toggle_crawlers"
+          class={[
+            "btn btn-xs gap-2",
+            @filters.exclude_crawlers && "btn-info btn-outline",
+            !@filters.exclude_crawlers && "btn-ghost"
+          ]}
+          title="Filter out crawlers, AI agents and other automated traffic"
+        >
+          <.icon name="hero-cpu-chip" class="w-3 h-3" />
+          {if @filters.exclude_crawlers, do: "Crawlers filtered", else: "Crawlers shown"}
+          <span class="badge badge-xs">
+            {number(Map.get(@data[:overview] || %{}, :crawler_sessions, 0))}
+          </span>
+        </button>
+
+        <button
+          phx-click="toggle_anomalies"
+          class={[
+            "btn btn-xs gap-2",
+            @filters.exclude_anomalies && "btn-warning btn-outline",
+            !@filters.exclude_anomalies && "btn-ghost"
+          ]}
+          title="Filter out sessions whose dwell time makes them unusable"
+        >
+          <span class={[
+            "w-2 h-2 rounded-full",
+            @filters.exclude_anomalies && "bg-warning",
+            !@filters.exclude_anomalies && "bg-base-content/30"
+          ]} />
+          {if @filters.exclude_anomalies, do: "Anomalies filtered", else: "Anomalies shown"}
+          <span class="badge badge-xs">
+            {number(Map.get(@data[:overview] || %{}, :excluded_sessions, 0))}
+          </span>
+        </button>
+      </div>
+    </div>
+    <!-- tabs -->
+    <div role="tablist" class="tabs tabs-bordered">
+      <button
+        :for={name <- tabs()}
+        role="tab"
+        phx-click="navigate"
+        phx-value-tab={name}
+        class={["tab capitalize", @tab == name && "tab-active font-medium"]}
+      >
+        {name}
+      </button>
+    </div>
+
+    <% overview = @data[:overview] || %{} %>
+    <!-- ============================= OVERVIEW ============================ -->
+    <div :if={@tab == "overview"} class="space-y-6">
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <.stat label="Sessions" value={number(overview[:sessions])} />
+        <.stat label="Visitors" value={number(overview[:visitors])} />
+        <.stat label="Pageviews" value={number(overview[:pageviews])} />
+        <.stat
+          label="Avg dwell"
+          value={duration(overview[:dwell_ms])}
+          hint={"#{duration(overview[:active_ms])} active"}
+        />
+        <.stat label="Bounce rate" value={percent(overview[:bounce_rate])} />
+        <.stat label="Avg max scroll" value={percent(overview[:max_scroll])} />
+        <.stat label="Clicks" value={number(overview[:clicks])} />
+        <.stat
+          label="Outbound"
+          value={number(overview[:outbound])}
+          hint="caught on mousedown"
+        />
+      </div>
+
+      <div
+        :if={@filters.exclude_anomalies && Map.get(overview, :excluded_sessions, 0) > 0}
+        class="alert alert-warning alert-soft text-sm"
+      >
+        <.icon name="hero-funnel" class="w-4 h-4" />
+        <span>
+          {number(overview[:excluded_sessions])} session(s) filtered out as dwell-time anomalies.
+          <button phx-click="toggle_anomalies" class="link font-medium">Show them</button>
+        </span>
+      </div>
+
+      <div
+        :if={@filters.exclude_crawlers && Map.get(overview, :crawler_sessions, 0) > 0}
+        class="alert alert-info alert-soft text-sm"
+      >
+        <.icon name="hero-cpu-chip" class="w-4 h-4" />
+        <span>
+          {number(overview[:crawler_sessions])} crawler session(s) held out of these numbers.
+          <button phx-click="navigate" phx-value-tab="crawlers" class="link font-medium">
+            See the crawler report
+          </button>
+        </span>
+      </div>
+
+      <div class="rounded-box bg-base-100 border border-base-300">
+        <div class="px-4 py-3 border-b border-base-300 font-medium text-sm">
+          Sessions over time
+        </div>
+        <div class="px-4 py-4 flex items-end gap-1 h-32">
+          <% series = @data[:timeseries] || [] %>
+          <% peak = series |> Enum.map(& &1.sessions) |> Enum.max(fn -> 0 end) %>
+          <div
+            :for={point <- series}
+            class="flex-1 bg-primary rounded-sm min-h-[2px]"
+            style={"height: #{if peak > 0, do: point.sessions * 100 / peak, else: 0}%"}
+            title={"#{Calendar.strftime(point.at, "%b %d %H:%M")} — #{point.sessions} sessions"}
+          />
+          <div
+            :if={series == []}
+            class="w-full text-center text-sm text-base-content/50 self-center"
+          >
+            No sessions in this range
+          </div>
+        </div>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-4">
+        <.bar_list title="Top pages" rows={@data[:pages] || []} value_key={:views} />
+        <.bar_list title="Referrers" rows={@data[:referrers] || []} empty="All direct traffic" />
+        <.bar_list title="Browsers" rows={@data[:browsers] || []} />
+        <.bar_list title="Devices" rows={@data[:devices] || []} />
+      </div>
+
+      <.histogram
+        title="Dwell time distribution"
+        buckets={@data[:dwell] || []}
+        primary_key={:kept}
+        secondary_key={:filtered}
+      />
+    </div>
+    <!-- =============================== PAGES ============================= -->
+    <div :if={@tab == "pages"} class="space-y-6">
+      <.histogram title="Max scroll depth reached" buckets={@data[:scroll] || []} />
+
+      <div class="rounded-box bg-base-100 border border-base-300 overflow-x-auto">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>{if @filters.group_by == :title, do: "Title", else: "Path"}</th>
+              <th class="text-right">Views</th>
+              <th class="text-right">Sessions</th>
+              <th class="text-right">Avg dwell</th>
+              <th class="text-right">Avg active</th>
+              <th class="text-right">Avg scroll</th>
+              <th class="text-right">Clicks</th>
+              <th class="text-right">Entries</th>
+              <th class="text-right">Exit rate</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr :for={page <- @data[:pages] || []} class="hover">
+              <td class="max-w-xs truncate" title={page.name}>{display_name(page.name)}</td>
+              <td class="text-right tabular-nums">{number(page.views)}</td>
+              <td class="text-right tabular-nums">{number(page.sessions)}</td>
+              <td class="text-right tabular-nums">{duration(page.dwell_ms)}</td>
+              <td class="text-right tabular-nums">{duration(page.active_ms)}</td>
+              <td class="text-right tabular-nums">{percent(page.max_scroll)}</td>
+              <td class="text-right tabular-nums">{number(page.clicks)}</td>
+              <td class="text-right tabular-nums">{number(page.entrances)}</td>
+              <td class="text-right tabular-nums">{percent(page.exit_rate)}</td>
+              <td>
+                <button
+                  phx-click="select_page"
+                  phx-value-page={page.name}
+                  class="btn btn-ghost btn-xs"
+                  title="Show navigation flow for this page"
+                >
+                  Flow
+                </button>
+              </td>
+            </tr>
+            <tr :if={(@data[:pages] || []) == []}>
+              <td colspan="10" class="text-center py-8 text-base-content/50">No pageviews yet</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-4">
+        <.bar_list title="Entry pages" rows={@data[:entries] || []} click="select_page" />
+        <.bar_list title="Exit pages" rows={@data[:exits] || []} click="select_page" />
+      </div>
+    </div>
+    <!-- ================================ FLOW ============================= -->
+    <div :if={@tab == "flow"} class="space-y-6">
+      <% nav = @data[:navigation] %>
+
+      <div class="text-sm text-base-content/60">
+        Grouped by <span class="font-medium">{@filters.group_by}</span>. Transitions are recorded on
+        each pageview, so they follow real navigation rather than inferred ordering. {if nav,
+          do: "Click any page in the diagram to re-centre the flow on it.",
+          else: "Click any page to follow its traffic."}
+      </div>
+
+      <div id="flow-diagram">
+        <.flow_diagram
+          transitions={@data[:flow] || []}
+          focus={nav}
+          click="select_page"
+          title={
+            if nav,
+              do: "Flow through #{display_name(nav.page)}",
+              else: "Busiest transitions by #{@filters.group_by}"
+          }
+          subtitle={
+            if nav,
+              do:
+                "#{number(nav.totals.views)} views · #{number(nav.totals.entrances)} entrances · #{number(nav.totals.exits)} exits",
+              else: "every #{@filters.group_by} pair, ranked"
+          }
+        >
+          <:actions>
+            <button :if={nav} phx-click="clear_page" class="btn btn-ghost btn-xs">
+              Show all transitions
+            </button>
+          </:actions>
+        </.flow_diagram>
+      </div>
+
+      <div :if={nav} id="flow-navigation" class="grid md:grid-cols-2 gap-4">
+        <div>
+          <div class="text-xs uppercase tracking-wide text-base-content/60 mb-2">
+            Came from — {number(nav.totals.views - nav.totals.entrances)} views
+          </div>
+          <.bar_list
+            rows={nav.before}
+            empty="Every visit entered directly here"
+            click="select_page"
+          />
+        </div>
+        <div>
+          <div class="text-xs uppercase tracking-wide text-base-content/60 mb-2">
+            Went to — {number(nav.totals.views - nav.totals.exits)} views
+          </div>
+          <.bar_list rows={nav.next} empty="Every visit ended here" click="select_page" />
+        </div>
+      </div>
+
+      <div
+        id="flow-transitions"
+        class="rounded-box bg-base-100 border border-base-300 overflow-x-auto"
+      >
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>From</th>
+              <th>To</th>
+              <th class="text-right">Transitions</th>
+              <th class="text-right">Sessions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr :for={hop <- @data[:flow] || []} class="hover">
+              <td class="max-w-xs truncate" title={"Drill into #{display_name(hop.from)}"}>
+                <button phx-click="select_page" phx-value-page={hop.from} class="link link-hover">
+                  {display_name(hop.from)}
+                </button>
+              </td>
+              <td class="max-w-xs truncate" title={"Drill into #{display_name(hop.to)}"}>
+                <button phx-click="select_page" phx-value-page={hop.to} class="link link-hover">
+                  {display_name(hop.to)}
+                </button>
+              </td>
+              <td class="text-right tabular-nums">{number(hop.count)}</td>
+              <td class="text-right tabular-nums">{number(hop.sessions)}</td>
+            </tr>
+            <tr :if={(@data[:flow] || []) == []}>
+              <td colspan="4" class="text-center py-8 text-base-content/50">
+                No transitions yet — they appear once a session visits a second page
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-4">
+        <.bar_list title="Entry pages" rows={@data[:entries] || []} click="select_page" />
+        <.bar_list title="Exit pages" rows={@data[:exits] || []} click="select_page" />
+      </div>
+    </div>
+    <!-- ============================ LOCATIONS ============================ -->
+    <div :if={@tab == "locations"} class="space-y-6">
+      <% coverage = @data[:coverage] || %{} %>
+
+      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+        <.stat
+          label="Placed to a country"
+          value={percent(Map.get(coverage, :country_rate, 0))}
+          hint={"#{number(Map.get(coverage, :located, 0))} of #{number(Map.get(coverage, :sessions, 0))} sessions"}
+        />
+        <.stat
+          label="Placed to a region"
+          value={percent(Map.get(coverage, :region_rate, 0))}
+          hint="state / province"
+        />
+        <.stat
+          label="Placed to a county"
+          value={percent(Map.get(coverage, :county_rate, 0))}
+          hint="only ever caller-supplied"
+        />
+        <.stat
+          label="Placed to a city"
+          value={percent(Map.get(coverage, :city_rate, 0))}
+          hint={"#{number(Map.get(coverage, :with_city, 0))} sessions"}
+        />
+        <div class="rounded-box bg-base-100 border border-base-300 px-4 py-3">
+          <div class="text-xs uppercase tracking-wide text-base-content/60">Resolved by</div>
+          <div class="mt-1 flex flex-wrap gap-1">
+            <span
+              :for={source <- Map.get(coverage, :sources, [])}
+              class={[
+                "badge badge-sm",
+                source.name == "timezone" && "badge-ghost",
+                source.name != "timezone" && "badge-primary badge-outline"
+              ]}
+              title={
+                if source.name == "timezone",
+                  do: "Country-level guess from the browser time zone",
+                  else: "City-level fix"
+              }
+            >
+              {source.name} {number(source.count)}
+            </span>
+            <span
+              :if={Map.get(coverage, :sources, []) == []}
+              class="text-sm text-base-content/50"
+            >
+              nothing resolved yet
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3 flex-wrap">
+        <span class="text-sm text-base-content/60">Group by</span>
+        <div class="join">
+          <button
+            :for={level <- location_levels()}
+            phx-click="navigate"
+            phx-value-loc={level}
+            class={[
+              "btn btn-xs join-item capitalize",
+              to_string(@location_level) == level && "btn-active btn-primary"
+            ]}
+          >
+            {if level == "region", do: "State / Province", else: level}
+          </button>
+        </div>
+        <span class="text-xs text-base-content/50 ml-auto">
+          Sent by the caller for API traffic; resolved from CDN headers or a local GeoIP
+          database for web traffic. No address is stored either way.
+        </span>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-4">
+        <.bar_list
+          title="Top countries"
+          rows={@data[:countries] || []}
+          name_key={:label}
+          empty="Nothing placed yet"
+        />
+        <.bar_list
+          title="Top cities"
+          rows={@data[:cities] || []}
+          name_key={:label}
+          empty="No city-level data — add a GeoIP database or put the app behind a CDN"
+        />
+      </div>
+
+      <div class="rounded-box bg-base-100 border border-base-300 overflow-x-auto">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>
+                {if @location_level == :region,
+                  do: "State / Province",
+                  else: String.capitalize(to_string(@location_level))}
+              </th>
+              <th class="text-right">Sessions</th>
+              <th class="text-right">Visitors</th>
+              <th class="text-right">Pageviews</th>
+              <th class="text-right">Avg dwell</th>
+              <th class="text-right">Bounce</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr :for={place <- @data[:locations] || []} class="hover">
+              <td class="max-w-sm truncate" title={place.label}>
+                <span :if={place.country_code} class="text-base-content/50 font-mono text-xs mr-2">
+                  {place.country_code}
+                </span>
+                {place.label}
+              </td>
+              <td class="text-right tabular-nums">{number(place.count)}</td>
+              <td class="text-right tabular-nums">{number(place.visitors)}</td>
+              <td class="text-right tabular-nums">{number(place.pageviews)}</td>
+              <td class="text-right tabular-nums">{duration(place.dwell_ms)}</td>
+              <td class="text-right tabular-nums">{percent(place.bounce_rate)}</td>
+            </tr>
+            <tr :if={(@data[:locations] || []) == []}>
+              <td colspan="6" class="text-center py-8 text-base-content/50">
+                Nothing placed at this level yet
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <!-- ============================== CLICKS ============================= -->
+    <div :if={@tab == "clicks"} class="space-y-6">
+      <div class="flex items-center gap-3 flex-wrap">
+        <span class="text-sm text-base-content/60">Segregate by</span>
+        <div class="join">
+          <button
+            :for={group <- click_groups()}
+            phx-click="navigate"
+            phx-value-clicks={group}
+            class={[
+              "btn btn-xs join-item capitalize",
+              to_string(@click_group) == group && "btn-active btn-primary"
+            ]}
+          >
+            {group}
+          </button>
+        </div>
+        <div class="flex gap-2 ml-auto">
+          <span :for={type <- @data[:click_types] || []} class="badge badge-sm badge-ghost">
+            {type.name}: {number(type.count)}
+          </span>
+        </div>
+      </div>
+
+      <.bar_list
+        title={"Clicks by #{@click_group}"}
+        rows={@data[:clicks] || []}
+        empty="No clicks captured yet"
+      />
+
+      <div class="rounded-box bg-base-100 border border-base-300 overflow-x-auto">
+        <div class="px-4 py-3 border-b border-base-300 font-medium text-sm">
+          Outbound destinations
+          <span class="font-normal text-base-content/60">
+            — recorded on mousedown, before the browser leaves the page
+          </span>
+        </div>
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>Host</th>
+              <th>Destination</th>
+              <th class="text-right">Clicks</th>
+              <th class="text-right">Sessions</th>
+              <th class="text-right">On mousedown</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr :for={link <- @data[:outbound] || []} class="hover">
+              <td class="font-medium">{display_name(link.host)}</td>
+              <td class="max-w-md truncate" title={link.href}>{truncate(link.href, 70)}</td>
+              <td class="text-right tabular-nums">{number(link.count)}</td>
+              <td class="text-right tabular-nums">{number(link.sessions)}</td>
+              <td class="text-right tabular-nums">{number(link.mousedown)}</td>
+            </tr>
+            <tr :if={(@data[:outbound] || []) == []}>
+              <td colspan="5" class="text-center py-8 text-base-content/50">
+                No outbound clicks recorded yet
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <!-- =============================== FORMS ============================= -->
+    <div :if={@tab == "forms"} class="space-y-6">
+      <div class="rounded-box bg-base-100 border border-base-300 overflow-x-auto">
+        <div class="px-4 py-3 border-b border-base-300 font-medium text-sm">Forms</div>
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>Form</th>
+              <th>Page</th>
+              <th class="text-right">Submitted</th>
+              <th class="text-right">Abandoned</th>
+              <th class="text-right">Completion</th>
+              <th class="text-right">Avg filled</th>
+              <th class="text-right">Avg time</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr :for={form <- @data[:form_summary] || []} class="hover">
+              <td class="font-medium">{display_name(form.form_id || form.selector)}</td>
+              <td class="max-w-xs truncate">{display_name(form.path)}</td>
+              <td class="text-right tabular-nums">{number(form.submitted)}</td>
+              <td class="text-right tabular-nums text-warning">{number(form.abandoned)}</td>
+              <td class="text-right tabular-nums">{percent(form.completion_rate)}</td>
+              <td class="text-right tabular-nums">
+                {number(form.avg_fill)} / {number(form.avg_fields)}
+              </td>
+              <td class="text-right tabular-nums">{duration(form.avg_duration)}</td>
+            </tr>
+            <tr :if={(@data[:form_summary] || []) == []}>
+              <td colspan="7" class="text-center py-8 text-base-content/50">
+                No form interactions captured yet
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="rounded-box bg-base-100 border border-base-300">
+        <div class="px-4 py-3 border-b border-base-300 font-medium text-sm">
+          Recent submissions
+          <span class="font-normal text-base-content/60">
+            — password and payment fields are masked in the browser before sending
+          </span>
+        </div>
+        <div
+          :if={(@data[:recent_forms] || []) == []}
+          class="px-4 py-8 text-center text-sm text-base-content/50"
+        >
+          Nothing captured yet
+        </div>
+        <div class="divide-y divide-base-300/60">
+          <details :for={capture <- @data[:recent_forms] || []} class="group">
+            <summary class="px-4 py-3 cursor-pointer flex items-center gap-3 hover:bg-base-200/50">
+              <span class={[
+                "badge badge-sm",
+                capture.status == "submitted" && "badge-success",
+                capture.status == "abandoned" && "badge-warning"
+              ]}>
+                {capture.status}
+              </span>
+              <span class="font-medium text-sm">
+                {display_name(capture.form_id || capture.form_selector)}
+              </span>
+              <span class="text-xs text-base-content/60">{display_name(capture.path)}</span>
+              <span class="text-xs text-base-content/50 ml-auto">
+                {capture.filled_count}/{capture.field_count} fields · {relative(
+                  capture.occurred_at
+                )}
+              </span>
+            </summary>
+            <div class="px-4 pb-4 overflow-x-auto">
+              <table class="table table-xs">
+                <thead>
+                  <tr>
+                    <th>Field</th>
+                    <th>Label</th>
+                    <th>Type</th>
+                    <th>Value</th>
+                    <th class="text-right">Edits</th>
+                    <th class="text-right">Focus</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr :for={field <- capture.fields}>
+                    <td class="font-mono text-xs">
+                      {display_name(field["name"] || field["id"])}
+                    </td>
+                    <td>{display_name(field["label"])}</td>
+                    <td class="text-base-content/60">{field["type"]}</td>
+                    <td class="max-w-md truncate">
+                      <span :if={field["masked"]} class="badge badge-xs badge-ghost">masked</span>
+                      <span :if={!field["masked"] && field["value"]} class="font-mono text-xs">
+                        {truncate(field["value"], 90)}
+                      </span>
+                      <span :if={!field["masked"] && !field["value"]} class="text-base-content/40">
+                        empty
+                      </span>
+                    </td>
+                    <td class="text-right tabular-nums">{field["changes"]}</td>
+                    <td class="text-right tabular-nums">{duration(field["focus_ms"])}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </details>
+        </div>
+      </div>
+    </div>
+    <!-- ============================= SESSIONS ============================ -->
+    <div :if={@tab == "sessions"} class="space-y-6">
+      <div class="grid md:grid-cols-2 gap-4">
+        <.bar_list
+          title="Why sessions were filtered"
+          rows={
+            Enum.map(@data[:anomalies] || [], fn row ->
+              %{name: Map.get(@anomaly_labels, row.reason, row.reason), count: row.count}
+            end)
+          }
+          empty="No anomalies detected"
+        />
+        <.histogram
+          title="Dwell distribution"
+          buckets={@data[:dwell] || []}
+          primary_key={:kept}
+          secondary_key={:filtered}
+        />
+      </div>
+
+      <div class="rounded-box bg-base-100 border border-base-300 overflow-x-auto">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>Started</th>
+              <th>Entry</th>
+              <th>Exit</th>
+              <th class="text-right">Pages</th>
+              <th class="text-right">Dwell</th>
+              <th class="text-right">Active</th>
+              <th class="text-right">Scroll</th>
+              <th class="text-right">Clicks</th>
+              <th>Device</th>
+              <th>Anomaly</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              :for={session <- @data[:sessions] || []}
+              class={["hover", session.anomalous && "opacity-60"]}
+            >
+              <td class="whitespace-nowrap text-xs">{relative(session.started_at)}</td>
+              <td class="max-w-[10rem] truncate" title={session.entry_path}>
+                {display_name(session.entry_path)}
+              </td>
+              <td class="max-w-[10rem] truncate" title={session.exit_path}>
+                {display_name(session.exit_path)}
+              </td>
+              <td class="text-right tabular-nums">{number(session.pageview_count)}</td>
+              <td class="text-right tabular-nums">{duration(session.dwell_ms)}</td>
+              <td class="text-right tabular-nums">{duration(session.active_ms)}</td>
+              <td class="text-right tabular-nums">{percent(session.max_scroll_pct)}</td>
+              <td class="text-right tabular-nums">{number(session.click_count)}</td>
+              <td class="text-xs whitespace-nowrap">
+                {display_name(session.browser)} · {display_name(session.device_type)}
+              </td>
+              <td>
+                <.anomaly_badges reasons={session.anomaly_reasons} score={session.anomaly_score} />
+              </td>
+            </tr>
+            <tr :if={(@data[:sessions] || []) == []}>
+              <td colspan="10" class="text-center py-8 text-base-content/50">No sessions yet</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <!-- ============================= CRAWLERS ============================ -->
+    <div :if={@tab == "crawlers"} class="space-y-6">
+      <% bots = @data[:crawler_overview] || %{} %>
+
+      <div class="text-sm text-base-content/60">
+        Automated traffic is held out of every other tab by default. It is still recorded in
+        full — at a 10-second heartbeat rather than one second, so a crawler sweeping the site
+        cannot flood the collector.
+      </div>
+
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <.stat label="Crawler sessions" value={number(bots[:sessions])} />
+        <.stat label="Pages fetched" value={number(bots[:pageviews])} />
+        <.stat label="Distinct bots" value={number(bots[:distinct_bots])} />
+        <.stat
+          label="Share of traffic"
+          value={percent(bots[:share])}
+          hint={"#{number(bots[:human_sessions])} human sessions"}
+          tone="warning"
+        />
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-4">
+        <.bar_list
+          title="By kind"
+          rows={
+            Enum.map(@data[:crawlers_by_kind] || [], fn row ->
+              %{name: Map.get(@crawler_labels, row.name, row.name), count: row.count}
+            end)
+          }
+          empty="No automated traffic recorded"
+        />
+        <.bar_list
+          title={"Most crawled #{@filters.group_by}s"}
+          rows={@data[:crawler_pages] || []}
+          empty="No crawler pageviews yet"
+        />
+      </div>
+
+      <div class="rounded-box bg-base-100 border border-base-300 overflow-x-auto">
+        <div class="px-4 py-3 border-b border-base-300 font-medium text-sm">Bots seen</div>
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>Bot</th>
+              <th>Kind</th>
+              <th class="text-right">Sessions</th>
+              <th class="text-right">Pages</th>
+              <th class="text-right">Avg dwell</th>
+              <th class="text-right">Last seen</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr :for={bot <- @data[:crawlers_by_name] || []} class="hover">
+              <td class="font-medium">{display_name(bot.name)}</td>
+              <td>
+                <span class={[
+                  "badge badge-sm",
+                  bot.kind == "ai" && "badge-primary",
+                  bot.kind != "ai" && "badge-ghost"
+                ]}>
+                  {Map.get(@crawler_labels, bot.kind, bot.kind)}
+                </span>
+              </td>
+              <td class="text-right tabular-nums">{number(bot.count)}</td>
+              <td class="text-right tabular-nums">{number(bot.pageviews)}</td>
+              <td class="text-right tabular-nums">{duration(bot.dwell_ms)}</td>
+              <td class="text-right text-xs whitespace-nowrap">{relative(bot.last_seen)}</td>
+            </tr>
+            <tr :if={(@data[:crawlers_by_name] || []) == []}>
+              <td colspan="6" class="text-center py-8 text-base-content/50">
+                No crawlers have visited in this range
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="rounded-box bg-base-100 border border-base-300 overflow-x-auto">
+        <div class="px-4 py-3 border-b border-base-300 font-medium text-sm">
+          Recent crawler visits
+        </div>
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>Seen</th>
+              <th>Bot</th>
+              <th>Entry</th>
+              <th class="text-right">Pages</th>
+              <th class="text-right">Dwell</th>
+              <th class="text-right">Beats</th>
+              <th>Detected by</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr :for={visit <- @data[:recent_crawlers] || []} class="hover">
+              <td class="whitespace-nowrap text-xs">{relative(visit.last_seen_at)}</td>
+              <td class="font-medium">{display_name(visit.crawler_name)}</td>
+              <td class="max-w-[12rem] truncate" title={visit.entry_path}>
+                {display_name(visit.entry_path)}
+              </td>
+              <td class="text-right tabular-nums">{number(visit.pageview_count)}</td>
+              <td class="text-right tabular-nums">{duration(visit.dwell_ms)}</td>
+              <td class="text-right tabular-nums" title="Heartbeats received">
+                {number(visit.tick_count)}
+              </td>
+              <td class="text-xs">
+                {if visit.client_signal, do: visit.client_signal, else: "user agent"}
+                <span :if={visit.heartbeat_ms} class="text-base-content/50">
+                  · {div(visit.heartbeat_ms, 1000)}s
+                </span>
+              </td>
+            </tr>
+            <tr :if={(@data[:recent_crawlers] || []) == []}>
+              <td colspan="7" class="text-center py-8 text-base-content/50">Nothing yet</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- install snippet -->
+    <details class="rounded-box bg-base-100 border border-base-300 px-4 py-3">
+      <summary class="cursor-pointer text-sm font-medium">Install snippet</summary>
+      <p class="text-sm text-base-content/70 mt-3">
+        Paste this into the <code>&lt;head&gt;</code> of every page you want tracked.
+      </p>
+      <pre class="mt-2 p-3 rounded bg-base-200 text-xs overflow-x-auto"><code>{snippet(@site, url(~p"/") |> String.trim_trailing("/"))}</code></pre>
+      <p class="text-xs text-base-content/60 mt-2">
+        Site key <code class="font-mono">{@site.key}</code>. A demo page that exercises every
+        capture path is at <.link href={~p"/demo"} class="link">/demo</.link>.
+      </p>
+    </details>
+  </div>
+</Layouts.app>

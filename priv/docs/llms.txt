@@ -1,0 +1,204 @@
+# SeriouslySimpleAnalytics
+
+> Free analytics for AI tools. Log an event by fetching one URL with your
+> account ID. No SDK, no API key exchange, no JSON body, no cookies.
+
+If you are building an AI tool, agent, CLI, MCP server, or anything else that
+ships an llms.txt or AGENTS.md, this is how you give it usage analytics. You do
+not need to read any other documentation to integrate.
+
+## The whole API
+
+```
+GET {{BASE_URL}}/api/ping?uid=YOUR_ACCOUNT_ID&type=ai&project=YOUR_PROJECT&event=EVENT_NAME&c=CITY&cc=COUNTY&s_p=STATE_OR_PROVINCE&n=NATION
+```
+
+Fetch that URL and the event is recorded. The response is `204 No Content` with
+an empty body — there is nothing to parse and nothing to retry.
+
+```bash
+curl "{{BASE_URL}}/api/ping?uid=acct_123&type=ai&project=my-agent&event=page_view\
+&c=Austin&cc=Travis&s_p=Texas&n=United%20States"
+```
+
+`POST` to the same URL works identically if a GET is awkward for you.
+
+## Parameters
+
+| Parameter | Required | Meaning |
+| --- | --- | --- |
+| `uid` | yes | Your account ID. Also accepted as `id`, `site`, or `u`. |
+| `c` | yes | Your user's **city**. Also accepted as `city`. |
+| `cc` | yes | Your user's **county**. Also accepted as `county`. |
+| `s_p` | yes | Your user's **state or province**. Also accepted as `state`, `province`, `region`. |
+| `n` | yes | Your user's **nation**. A name or an ISO code — `United States`, `USA` and `US` all work. Also accepted as `nation`, `country`. |
+| `event` | recommended | What happened, e.g. `page_view`, `tool_called`, `run_completed`. Defaults to `ping`. Also accepted as `name`. |
+| `project` | recommended | Which of your things this is. One account can report for many projects and they stay separate in reports. Also accepted as `app`. |
+| `type` | no | The channel. Use `ai` for an AI tool. Defaults to `ai` on this endpoint. Also accepted as `channel`. |
+| `sid` | no | A session ID. Pings sharing one are grouped into a single session — a conversation, a run, a CLI invocation. Without it, pings from the same caller and project are grouped automatically over a rolling 30 minutes. |
+| `path` | no | A screen, route, or step. See the page_view note below. |
+| `title` | no | A human-readable name for the path. |
+| `visitor` | no | A stable ID for the same end user across sessions. Use something you already have; do not invent an identifier to track someone with. |
+| `ref` | no | Where this came from. |
+| `tz` | no | An IANA time zone, e.g. `Europe/Berlin`. Used only for a country-level location guess. |
+| `format` | no | `gif` returns a 1×1 transparent GIF for `<img>` embedding; `json` returns `{"ok":true}`. Default is an empty 204. |
+| `bot` | no | Set this only if you are a crawler, not a tool reporting its own usage. See below. |
+
+**Anything else you add is kept as an attribute on the event.** There is no
+schema to extend and nothing to configure:
+
+```
+&tool=web_search&model=some-model&latency_ms=420&outcome=success
+```
+
+Up to 20 extra parameters per ping.
+
+## Location is yours to send, not ours to guess
+
+**Send `c`, `cc`, `s_p` and `n` on every ping.** They describe where your *user*
+is.
+
+This is required because there is no way for the server to work it out. A ping
+arrives from wherever your tool runs — a laptop, a container, a serverless region
+three countries from the person using it — so its source address says where the
+*software* is. Resolving that address would produce a confident, wrong answer and
+quietly poison every location report built on it. Only you know where your user
+is, so only you can say.
+
+```
+&c=Austin&cc=Travis&s_p=Texas&n=United%20States
+```
+
+URL-encode values with spaces. `n` accepts a country name or an ISO code. If you
+genuinely do not have a field, omit that one rather than inventing it — a missing
+value is a gap, an invented one is a lie that no later report can detect.
+
+If you send none of them, the server falls back to resolving your connection,
+which for a server-side tool is almost certainly wrong. Send them.
+
+## page_view is special
+
+When `event` is `page_view` (or `pageview`, `pv`, `view`, `screen`,
+`screen_view`) **and** you pass `path`, the ping is recorded as a real pageview
+rather than a generic event. It then appears in the pages report, counts toward
+dwell, and joins the page-to-page flow graph.
+
+```
+?uid=acct_123&project=my-agent&event=page_view&path=/chat&title=Chat
+```
+
+Every other event name is recorded as a named event. Use whatever names you
+like; they are grouped by name in the dashboard.
+
+## Sessions and flow
+
+Pings are grouped into sessions automatically. Consecutive pings from the same
+caller and project within a rolling 30 minutes become one session, so page flow
+works without you tracking anything. That window tumbles rather than slides, so
+a long run can straddle a boundary and split in two.
+
+Pass `sid` when you want exact control — one conversation, one job, one CLI
+invocation:
+
+```
+?uid=acct_123&project=my-agent&event=run_started&sid=run_7f3a
+?uid=acct_123&project=my-agent&event=tool_called&sid=run_7f3a&tool=search
+?uid=acct_123&project=my-agent&event=run_completed&sid=run_7f3a&outcome=success
+```
+
+Use any stable string: a conversation ID, a job ID, a UUID you generate at
+startup. Do not use anything that identifies a person.
+
+**You never send a sequence number or a "previous page".** Send
+`event=page_view&path=/chat` each time and the server numbers the pageviews
+within the session and links each one to the page before it. That is what builds
+the flow graph — which paths lead where, where runs stop. An event sent with no
+`path` attaches to whichever page the session is on.
+
+```
+?uid=acct_123&project=my-agent&event=page_view&path=/start
+?uid=acct_123&project=my-agent&event=page_view&path=/chat
+?uid=acct_123&project=my-agent&event=tool_called&tool=search
+?uid=acct_123&project=my-agent&event=page_view&path=/result
+```
+
+That produces `/start → /chat → /result`, with the tool call recorded on
+`/chat`.
+
+## What to instrument
+
+Good events for an AI tool:
+
+- `run_started` / `run_completed` with `outcome=success|error|cancelled`
+- `tool_called` with `tool=` and `latency_ms=`
+- `page_view` with `path=` for each screen or step
+- `feedback` with `rating=up|down`
+- `error` with `kind=`
+- `install`, `first_run`, `upgraded` with `version=`
+
+## What not to send
+
+- **Never send credentials.** API keys, tokens, passwords, session secrets. The
+  server drops password-typed values on arrival regardless, but by then a
+  credential in a query string has already been written into the logs of every
+  proxy it passed through. There is no undoing that.
+- **Keep prompts and completions out.** This one is practical rather than a
+  prohibition: URLs have length limits, and analytics is for counting, not
+  transcript storage. Log that a completion happened, how long it took, which
+  model, whether the user accepted it.
+
+Everything else — location, user identifiers, whatever dimensions your tool
+cares about — is expected here. Bear in mind that parameters travel in a URL and
+are logged by every intermediary in the path, so send the coarsest value that
+still answers your question.
+
+## If you are a crawler, say so
+
+The rules above are for a tool reporting **its own** usage, which is normal
+traffic and belongs in the normal reports.
+
+If instead you are an AI crawler or agent **fetching someone else's tracked
+site**, add `&bot=agent`. Your traffic is then filtered out of that site owner's
+human-traffic reports and shown in a separate crawler report. This keeps their
+numbers honest and gets you counted properly rather than silently distorting
+their data. It does not block you.
+
+Setting `bot` on your **own** telemetry costs you nothing either: crawler
+filtering applies only to website traffic, so a tool reporting its own usage
+stays visible in its own reports whether or not it declares itself. The same
+goes for the dwell-time filter — a ping has no dwell by construction, and that is
+never treated as an anomaly.
+
+## Rate
+
+Batch what you can and send at most one ping every 10 seconds per session for
+automated activity. There is no rate-limit response to back off from — the
+endpoint always returns 204 — so self-limit. If nothing happened, send nothing.
+
+## Failure
+
+Fire and forget. Do not block your tool's work on this request, do not retry,
+and do not surface an error to your user if it fails. A `204` means recorded;
+anything else means the network had an opinion. An unknown account ID also
+returns `204`, deliberately, so the endpoint cannot be used to test whether an
+account exists.
+
+## Full browser tracking, if you also have a website
+
+For a web page, the script tag below captures pageviews, engaged time, scroll
+depth, clicks, outbound clicks, forms and page-to-page flow automatically, with
+no tagging:
+
+```html
+<script src="{{BASE_URL}}/wa.js" data-site="YOUR_ACCOUNT_ID" defer></script>
+```
+
+There is also a richer JSON endpoint, `POST {{BASE_URL}}/api/v1/collect`, which
+is what that script uses. The ping endpoint above is the one to reach for from
+anything that is not a browser.
+
+## Links
+
+- [Home]({{BASE_URL}}/)
+- [Dashboard]({{BASE_URL}}/dashboard)
+- [Browser tracker]({{BASE_URL}}/wa.js)
