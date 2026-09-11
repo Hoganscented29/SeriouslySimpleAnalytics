@@ -27,7 +27,13 @@ defmodule WebAnalyticsWeb.DashboardLive do
     # rather than making the reader reload to see a visit in progress.
     if connected?(socket), do: :timer.send_interval(@refresh_ms, self(), :refresh)
 
-    {:ok, assign(socket, sites: Sites.list_sites(), page_title: "Analytics")}
+    user = socket.assigns.current_scope.user
+
+    # Creating the first site here means a new account never lands on an empty
+    # page asking it to make something before it can see its own ID.
+    sites = Sites.ensure_site_for_user!(user)
+
+    {:ok, assign(socket, sites: sites, page_title: "Analytics")}
   end
 
   @impl true
@@ -79,16 +85,18 @@ defmodule WebAnalyticsWeb.DashboardLive do
     {:noreply, push_patch(socket, to: path_for(socket, %{"page" => nil}))}
   end
 
-  def handle_event("create_demo_site", _params, socket) do
-    case Sites.create_site(%{key: "demo", name: "Demo Site", domain: "localhost"}) do
+  def handle_event("add_site", _params, socket) do
+    user = socket.assigns.current_scope.user
+
+    case Sites.create_site_for_user(user) do
       {:ok, site} ->
         {:noreply,
          socket
-         |> assign(:sites, Sites.list_sites())
+         |> assign(:sites, Sites.list_sites_for_user(user))
          |> push_patch(to: ~p"/dashboard?site=#{site.key}")}
 
       {:error, _changeset} ->
-        {:noreply, put_flash(socket, :error, "Could not create the demo site")}
+        {:noreply, put_flash(socket, :error, "Could not create another site")}
     end
   end
 
@@ -272,7 +280,28 @@ defmodule WebAnalyticsWeb.DashboardLive do
   defp click_groups, do: @click_groups
   defp location_levels, do: @location_levels
 
+  defp base_url, do: url(~p"/") |> String.trim_trailing("/")
+
   defp snippet(site, endpoint) do
     ~s|<script src="#{endpoint}/wa.js" data-site="#{site.key}" defer></script>|
+  end
+
+  # A prompt rather than a description, because the reader's next move is to
+  # paste it somewhere. Pointing at llms.txt keeps this short and keeps the
+  # contract in one place.
+  defp agent_prompt(site, endpoint) do
+    """
+    Read #{endpoint}/llms.txt and instrument this project with
+    SeriouslySimpleAnalytics. Use account id #{site.key} and set project to this
+    tool's name. Report at least: first run, run started/completed with an
+    outcome, each tool call, and errors by kind. Reuse one sid for the whole run.
+    Never send credentials, prompts or completions.
+    """
+    |> String.trim()
+  end
+
+  defp ping_example(site, endpoint) do
+    "curl \"#{endpoint}/api/ping?uid=#{site.key}&type=ai" <>
+      "&project=my-agent&event=page_view&path=/docs/quickstart&sid=$SESSION_ID\""
   end
 end

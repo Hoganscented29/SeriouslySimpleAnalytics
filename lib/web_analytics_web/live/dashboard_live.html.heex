@@ -1,14 +1,4 @@
 <Layouts.app flash={@flash}>
-  <div :if={@sites == []} class="max-w-2xl mx-auto py-16 text-center">
-    <h1 class="text-2xl font-semibold">No sites yet</h1>
-    <p class="mt-2 text-base-content/70">
-      Create a site to get a tracking key and a snippet to paste into your pages.
-    </p>
-    <button phx-click="create_demo_site" class="btn btn-primary mt-6">
-      Create demo site
-    </button>
-  </div>
-
   <div :if={@site} class="space-y-6 pb-16">
     <!-- controls -->
     <div class="flex flex-wrap items-center gap-3 justify-between">
@@ -21,6 +11,12 @@
             </option>
           </select>
         </form>
+        <span
+          class="badge badge-outline font-mono text-xs"
+          title="Your account ID. Send it as uid= on every API call."
+        >
+          {@site.key}
+        </span>
       </div>
 
       <div class="flex flex-wrap items-center gap-2">
@@ -853,17 +849,68 @@
       </div>
     </div>
 
-    <!-- install snippet -->
-    <details class="rounded-box bg-base-100 border border-base-300 px-4 py-3">
-      <summary class="cursor-pointer text-sm font-medium">Install snippet</summary>
-      <p class="text-sm text-base-content/70 mt-3">
-        Paste this into the <code>&lt;head&gt;</code> of every page you want tracked.
-      </p>
-      <pre class="mt-2 p-3 rounded bg-base-200 text-xs overflow-x-auto"><code>{snippet(@site, url(~p"/") |> String.trim_trailing("/"))}</code></pre>
-      <p class="text-xs text-base-content/60 mt-2">
-        Site key <code class="font-mono">{@site.key}</code>. A demo page that exercises every
-        capture path is at <.link href={~p"/demo"} class="link">/demo</.link>.
-      </p>
-    </details>
+    <!-- account id + install -->
+    <div class="rounded-box bg-base-100 border border-base-300 px-4 py-4 space-y-4">
+      <div>
+        <div class="text-sm font-medium">Account ID</div>
+        <p class="text-sm text-base-content/70 mt-1">
+          One ID for both the browser tracker and the AI event API. Everything below uses it.
+        </p>
+        <pre class="mt-2 p-3 rounded bg-base-200 text-sm overflow-x-auto"><code>{@site.key}</code></pre>
+      </div>
+
+      <details>
+        <summary class="cursor-pointer text-sm font-medium">Install snippet</summary>
+        <p class="text-sm text-base-content/70 mt-3">
+          Paste this into the <code>&lt;head&gt;</code> of every page you want tracked.
+        </p>
+        <pre class="mt-2 p-3 rounded bg-base-200 text-xs overflow-x-auto"><code>{snippet(@site, base_url())}</code></pre>
+        <p class="text-xs text-base-content/60 mt-2">
+          A demo page that exercises every capture path is at <.link href={~p"/demo"} class="link">/demo</.link>.
+        </p>
+      </details>
+
+      <details>
+        <summary class="cursor-pointer text-sm font-medium">AI install instructions</summary>
+        <p class="text-sm text-base-content/70 mt-3">
+          For an agent, an MCP server, a CLI, an extension — anything that isn't a browser. One
+          request per event, no SDK and no key exchange: the account ID is the whole contract.
+        </p>
+        <pre class="mt-2 p-3 rounded bg-base-200 text-xs overflow-x-auto"><code>{ping_example(@site, base_url())}</code></pre>
+
+        <p class="text-sm font-medium mt-4">Hand this to your coding agent</p>
+        <p class="text-sm text-base-content/70 mt-1">
+          It contains the full parameter list, the event conventions and the rules about what must
+          never be sent, so an agent can wire this up unattended.
+        </p>
+        <pre class="mt-2 p-3 rounded bg-base-200 text-xs overflow-x-auto"><code>{agent_prompt(@site, base_url())}</code></pre>
+
+        <ul class="text-xs text-base-content/60 mt-3 space-y-1 list-disc list-inside">
+          <li>
+            Pass the same <code class="font-mono">sid</code>
+            across one run or conversation and the flow report works.
+          </li>
+          <li>
+            <code class="font-mono">event=page_view</code>
+            with a <code class="font-mono">path</code>
+            is recorded as a real pageview.
+          </li>
+          <li>
+            Send your user's location as <code class="font-mono">c</code>, <code class="font-mono">cc</code>, <code class="font-mono">s_p</code>,
+            <code class="font-mono">n</code>
+            — a ping's own address is where your code runs.
+          </li>
+          <li>
+            Never put credentials, prompts or completions in a parameter.
+          </li>
+        </ul>
+      </details>
+
+      <div class="pt-1">
+        <button phx-click="add_site" class="btn btn-ghost btn-xs">
+          Add another site
+        </button>
+      </div>
+    </div>
   </div>
 </Layouts.app>

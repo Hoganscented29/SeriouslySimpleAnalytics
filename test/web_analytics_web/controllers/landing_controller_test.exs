@@ -3,9 +3,57 @@ defmodule WebAnalyticsWeb.LandingControllerTest do
 
   import WebAnalytics.Fixtures
 
-  describe "landing page" do
-    test "leads with analytics for AI tools", %{conn: conn} do
+  describe "website landing page" do
+    test "leads with website analytics, not AI tools", %{conn: conn} do
       html = conn |> get(~p"/") |> html_response(200)
+
+      assert html =~ "SeriouslySimpleAnalytics"
+      assert html =~ "Website analytics"
+      assert html =~ "/wa.js"
+      assert html =~ "data-site="
+    end
+
+    test "names what the script tag captures", %{conn: conn} do
+      html = conn |> get(~p"/") |> html_response(200)
+
+      for claim <- ["scroll depth", "Page-to-page flow", "Outbound clicks", "Forms"] do
+        assert html =~ claim
+      end
+    end
+
+    test "names the AI crawlers it identifies", %{conn: conn} do
+      html = conn |> get(~p"/") |> html_response(200)
+
+      for bot <- ~w(GPTBot ClaudeBot PerplexityBot) do
+        assert html =~ bot
+      end
+    end
+
+    test "offers registration and sign-in", %{conn: conn} do
+      html = conn |> get(~p"/") |> html_response(200)
+
+      assert html =~ ~s|href="/users/register"|
+      assert html =~ ~s|href="/users/log-in"|
+    end
+
+    test "cross-links to the AI analytics page", %{conn: conn} do
+      html = conn |> get(~p"/") |> html_response(200)
+
+      assert html =~ ~s|href="/AI-Analytics-llms-txt"|
+    end
+
+    test "links to the dashboard, the demo and llms.txt", %{conn: conn} do
+      html = conn |> get(~p"/") |> html_response(200)
+
+      assert html =~ ~s|href="/dashboard"|
+      assert html =~ ~s|href="/demo"|
+      assert html =~ ~s|href="/llms.txt"|
+    end
+  end
+
+  describe "AI analytics landing page" do
+    test "leads with analytics for AI tools", %{conn: conn} do
+      html = conn |> get(~p"/AI-Analytics-llms-txt") |> html_response(200)
 
       assert html =~ "SeriouslySimpleAnalytics"
       assert html =~ "AI tool"
@@ -14,7 +62,7 @@ defmodule WebAnalyticsWeb.LandingControllerTest do
 
     test "shows a ping URL carrying a real account id", %{conn: conn} do
       site = site_fixture(%{key: "landing-key"})
-      html = conn |> get(~p"/") |> html_response(200)
+      html = conn |> get(~p"/AI-Analytics-llms-txt") |> html_response(200)
 
       assert html =~ "uid=#{site.key}"
       assert html =~ "project="
@@ -22,7 +70,7 @@ defmodule WebAnalyticsWeb.LandingControllerTest do
     end
 
     test "documents the parameters and what to log", %{conn: conn} do
-      html = conn |> get(~p"/") |> html_response(200)
+      html = conn |> get(~p"/AI-Analytics-llms-txt") |> html_response(200)
 
       for token <- ~w(uid event project type sid path) do
         assert html =~ token
@@ -33,14 +81,14 @@ defmodule WebAnalyticsWeb.LandingControllerTest do
     end
 
     test "states the credential rule prominently", %{conn: conn} do
-      html = conn |> get(~p"/") |> html_response(200)
+      html = conn |> get(~p"/AI-Analytics-llms-txt") |> html_response(200)
 
       assert html =~ "Never send credentials"
       assert html =~ "proxy"
     end
 
     test "shows the required location parameters", %{conn: conn} do
-      html = conn |> get(~p"/") |> html_response(200)
+      html = conn |> get(~p"/AI-Analytics-llms-txt") |> html_response(200)
 
       assert html =~ "c=Austin"
       assert html =~ "cc=Travis"
@@ -48,19 +96,18 @@ defmodule WebAnalyticsWeb.LandingControllerTest do
       assert html =~ "city, county, state/province and nation"
     end
 
-    test "still offers the browser tracker for websites", %{conn: conn} do
-      html = conn |> get(~p"/") |> html_response(200)
+    test "documents the self-service accounts endpoint", %{conn: conn} do
+      html = conn |> get(~p"/AI-Analytics-llms-txt") |> html_response(200)
 
-      assert html =~ "/wa.js"
-      assert html =~ "data-site="
+      assert html =~ "/api/v1/accounts"
+      assert html =~ "claim_url"
     end
 
-    test "links to the dashboard, the demo and llms.txt", %{conn: conn} do
-      html = conn |> get(~p"/") |> html_response(200)
+    test "cross-links back to the website analytics page", %{conn: conn} do
+      html = conn |> get(~p"/AI-Analytics-llms-txt") |> html_response(200)
 
-      assert html =~ ~s|href="/dashboard"|
-      assert html =~ ~s|href="/demo"|
-      assert html =~ ~s|href="/llms.txt"|
+      assert html =~ ~s|href="/"|
+      assert html =~ "/wa.js"
     end
   end
 

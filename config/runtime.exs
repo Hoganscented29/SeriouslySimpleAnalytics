@@ -98,6 +98,36 @@ if config_env() == :prod do
 
   host = System.get_env("PHX_HOST") || "example.com"
 
+  # Account email goes through Mailgun.
+  #
+  # Left unconfigured, delivery is stubbed: the application starts and works, and
+  # anything it would have sent is written to the log instead of vanishing. That
+  # matters because the mail in question is how people get into their accounts —
+  # a silent failure here looks like a broken signup, not a missing setting.
+  case System.get_env("MAILGUN_API_KEY") do
+    nil ->
+      IO.warn("""
+      MAILGUN_API_KEY is not set, so account email is stubbed.
+
+      Registration and sign-in links will be written to the log instead of being
+      delivered. Set MAILGUN_API_KEY, MAILGUN_DOMAIN and MAIL_FROM in .env to
+      turn delivery on.
+      """)
+
+      config :web_analytics, WebAnalytics.Mailer, adapter: WebAnalytics.Mailer.Stub
+
+    api_key ->
+      config :web_analytics, WebAnalytics.Mailer,
+        adapter: Swoosh.Adapters.Mailgun,
+        api_key: api_key,
+        domain: System.get_env("MAILGUN_DOMAIN") || host,
+        base_url: System.get_env("MAILGUN_BASE_URL") || "https://api.mailgun.net/v3"
+  end
+
+  config :web_analytics,
+         :mail_from,
+         System.get_env("MAIL_FROM") || "noreply@seriouslysimpleanalytics.com"
+
   # How this deployment is reached from outside, which is not always https on
   # 443. It matters more here than in most apps: /llms.txt is the integration
   # contract and every endpoint in it is an absolute URL built from these

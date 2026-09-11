@@ -12,7 +12,9 @@ defmodule WebAnalytics.Sites.Site do
     field :name, :string
     field :domain, :string
     field :settings, :map, default: %{}
+    field :claimed_at, :utc_datetime_usec
 
+    belongs_to :user, WebAnalytics.Accounts.User
     has_many :sessions, WebAnalytics.Tracking.Session
 
     timestamps(type: :utc_datetime_usec)
@@ -21,7 +23,7 @@ defmodule WebAnalytics.Sites.Site do
   @doc false
   def changeset(site, attrs) do
     site
-    |> cast(attrs, [:key, :name, :domain, :settings])
+    |> cast(attrs, [:key, :name, :domain, :settings, :claimed_at])
     |> validate_required([:key, :name])
     |> unique_constraint(:key)
   end

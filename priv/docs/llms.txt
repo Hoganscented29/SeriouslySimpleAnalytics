@@ -7,6 +7,63 @@ If you are building an AI tool, agent, CLI, MCP server, or anything else that
 ships an llms.txt or AGENTS.md, this is how you give it usage analytics. You do
 not need to read any other documentation to integrate.
 
+If you do not have an account ID yet, create one yourself — see
+"Getting an account ID" below. You do not need a human to fill in a form first.
+
+## Getting an account ID
+
+```
+POST https://seriouslysimpleanalytics.com/api/v1/accounts
+```
+
+Form-encoded or JSON. Every field is optional.
+
+| Parameter | Meaning |
+| --- | --- |
+| `email` | Where to send the sign-in link. Give the address of the person who will look at the dashboard. |
+| `project` | A label for what you are instrumenting, e.g. `my-agent`. Also accepted as `name`. |
+
+```bash
+curl -X POST "https://seriouslysimpleanalytics.com/api/v1/accounts" \
+  -d email=you@example.com -d project=my-agent
+```
+
+Responds `201` with JSON:
+
+```json
+{
+  "uid": "acct_9f3ab21c04",
+  "account_id": "acct_9f3ab21c04",
+  "project": "my-agent",
+  "claim": "emailed",
+  "dashboard_url": "https://seriouslysimpleanalytics.com/dashboard",
+  "ping_url": "https://seriouslysimpleanalytics.com/api/ping?uid=acct_9f3ab21c04&type=ai&project=my-agent&event=page_view",
+  "docs_url": "https://seriouslysimpleanalytics.com/llms.txt",
+  "message": "Account created. A sign-in link was emailed to you@example.com."
+}
+```
+
+Use `uid` on every ping from then on.
+
+**How the account gets claimed depends on whether you sent an email.**
+
+- **With `email`** — the sign-in link is mailed to that address and is *not* in
+  the response. Tell the human to check their inbox. This is the right call
+  whenever you know who the account belongs to.
+- **Without `email`** — the account is anonymous and the response carries a
+  `claim_url` instead. That link is the **only** way into the account, and it is
+  shown once. Print it, save it, or hand it to your user immediately. If you
+  lose it the data keeps collecting and nobody can ever read it.
+
+Two errors are worth handling:
+
+- `409 email_taken` — that address already has an account. Do not retry with a
+  different address; ask the human to sign in and read their ID off the
+  dashboard.
+- `429 rate_limited` — you have created several accounts from one address
+  recently. Honour `Retry-After`. Create **one** account per project, then keep
+  using its `uid`; do not call this endpoint on every run.
+
 ## The whole API
 
 ```
@@ -204,3 +261,6 @@ anything that is not a browser.
 - [Home](https://seriouslysimpleanalytics.com/)
 - [Dashboard](https://seriouslysimpleanalytics.com/dashboard)
 - [Browser tracker](https://seriouslysimpleanalytics.com/wa.js)
+- [AI tool analytics](https://seriouslysimpleanalytics.com/AI-Analytics-llms-txt)
+- [Website analytics](https://seriouslysimpleanalytics.com/)
+- [Create an account](https://seriouslysimpleanalytics.com/users/register)

@@ -51,6 +51,7 @@ defmodule WebAnalytics.MixProject do
   # Type `mix help deps` for examples and options.
   defp deps do
     [
+      {:bcrypt_elixir, "~> 3.0"},
       {:phoenix, "~> 1.8.13"},
       {:phoenix_ecto, "~> 4.5"},
       {:ecto_sql, "~> 3.13"},
@@ -79,6 +80,10 @@ defmodule WebAnalytics.MixProject do
       {:telemetry_metrics, "~> 1.0"},
       {:telemetry_poller, "~> 1.0"},
       {:jason, "~> 1.2"},
+      # Required by phx.gen.auth: confirmation and password-reset emails.
+      {:swoosh, "~> 1.16"},
+      # Swoosh's Mailgun adapter talks HTTP, not SMTP, and needs a client.
+      {:req, "~> 0.5"},
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, "~> 1.5"}
     ]

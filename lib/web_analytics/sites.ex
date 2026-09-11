@@ -29,6 +29,93 @@ defmodule WebAnalytics.Sites do
     Repo.all(from s in Site, order_by: [asc: s.name])
   end
 
+  @doc "Sites belonging to one user."
+  def list_sites_for_user(%{id: user_id}) do
+    Repo.all(from s in Site, where: s.user_id == ^user_id, order_by: [asc: s.name])
+  end
+
+  @doc """
+  Returns the user's sites, creating a first one if they have none.
+
+  Called wherever a signed-in user needs an account ID, so that every route into
+  the product — the dashboard, the API, a magic link — produces a usable ID
+  rather than an empty page telling them to make one.
+  """
+  def ensure_site_for_user!(user, attrs \\ %{}) do
+    case list_sites_for_user(user) do
+      [] ->
+        {:ok, site} = create_site_for_user(user, attrs)
+        [site]
+
+      sites ->
+        sites
+    end
+  end
+
+  @doc "Creates a site owned by a user, generating the account ID."
+  def create_site_for_user(user, attrs \\ %{}) do
+    attrs =
+      attrs
+      |> Map.new(fn {k, v} -> {to_string(k), v} end)
+      |> Map.put_new("key", generate_key())
+      |> Map.put_new("name", default_site_name(user))
+
+    %Site{user_id: user.id}
+    |> Site.changeset(attrs)
+    |> Repo.insert()
+    |> tap_invalidate()
+  end
+
+  @doc """
+  Marks a site as claimed by the person it was created for.
+
+  An account made through the API belongs to an email address that has not
+  proved it wants it yet; claiming is what turns that into an account someone
+  actually owns.
+  """
+  def claim_site(%Site{} = site) do
+    site
+    |> Site.changeset(%{"claimed_at" => DateTime.utc_now()})
+    |> Repo.update()
+    |> tap_invalidate()
+  end
+
+  @doc "Whether a site was created on someone's behalf and not yet claimed."
+  def unclaimed?(%Site{claimed_at: nil, user_id: user_id}), do: not is_nil(user_id)
+  def unclaimed?(_site), do: false
+
+  @doc """
+  A short, URL-safe account ID.
+
+  It travels in query strings and in other people's HTML, so it avoids anything
+  that needs escaping and anything easily misread aloud.
+  """
+  def generate_key, do: "acct_" <> random_body(10)
+
+  # `-` and `_` are dropped because a key gets read aloud and pasted into places
+  # that treat them as word boundaries. Dropping them shortens the string by an
+  # unpredictable amount, so draw far more than is needed and redraw on the rare
+  # occasion that too little survives — truncating blindly can crash.
+  defp random_body(length) do
+    candidate =
+      :crypto.strong_rand_bytes(length * 2)
+      |> Base.url_encode64(padding: false)
+      |> String.replace(["-", "_"], "")
+      |> String.downcase()
+
+    if byte_size(candidate) >= length do
+      binary_part(candidate, 0, length)
+    else
+      random_body(length)
+    end
+  end
+
+  defp default_site_name(%{email: email}) when is_binary(email) do
+    email |> String.split("@") |> List.first() |> Kernel.<>("'s site")
+  end
+
+  defp default_site_name(_user), do: "My site"
+
   def get_site!(id), do: Repo.get!(Site, id)
 
   def get_site_by_key(key) when is_binary(key), do: Repo.get_by(Site, key: key)

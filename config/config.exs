@@ -7,6 +7,19 @@
 # General application configuration
 import Config
 
+config :web_analytics, :scopes,
+  user: [
+    default: true,
+    module: WebAnalytics.Accounts.Scope,
+    assign_key: :current_scope,
+    access_path: [:user, :id],
+    schema_key: :user_id,
+    schema_type: :id,
+    schema_table: :users,
+    test_data_fixture: WebAnalytics.AccountsFixtures,
+    test_setup_helper: :register_and_log_in_user
+  ]
+
 config :web_analytics,
   ecto_repos: [WebAnalytics.Repo],
   generators: [timestamp_type: :utc_datetime]
@@ -95,6 +108,14 @@ config :web_analytics, :anomaly,
 # evaluating the software, and a development server binds to localhost only, so
 # it is a poor way to run a service anyway.
 config :web_analytics, :license, enforce: false
+
+# Account email. Overridden per environment: a local mailbox in development, a
+# real SMTP host in production.
+config :web_analytics, WebAnalytics.Mailer, adapter: Swoosh.Adapters.Local
+
+# Swoosh's Mailgun adapter is HTTP-based. Development and test use adapters that
+# never leave the machine, so the client is only needed in production.
+config :swoosh, :api_client, Swoosh.ApiClient.Req
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

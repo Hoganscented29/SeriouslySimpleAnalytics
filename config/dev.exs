@@ -72,3 +72,9 @@ config :phoenix_live_view,
   debug_attributes: true,
   # Enable helpful, but potentially expensive runtime checks
   enable_expensive_runtime_checks: true
+
+# Account email goes to a local mailbox in development. Read it at /dev/mailbox.
+config :web_analytics, WebAnalytics.Mailer, adapter: Swoosh.Adapters.Local
+
+# Nothing is delivered here, so no HTTP client is needed.
+config :swoosh, :api_client, false

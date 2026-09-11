@@ -1,32 +1,17 @@
 <div class="min-h-screen bg-base-200/40">
-  <header class="border-b border-base-300 bg-base-100">
-    <div class="mx-auto max-w-6xl px-4 sm:px-6 h-16 flex items-center gap-6">
-      <a href={~p"/"} class="flex items-center gap-2 font-semibold">
-        <span class="w-2.5 h-2.5 rounded-full bg-primary inline-block" /> SeriouslySimpleAnalytics
-      </a>
-      <nav class="hidden md:flex items-center gap-5 text-sm text-base-content/70">
-        <a href="#ping" class="hover:text-primary">The API</a>
-        <a href="#events" class="hover:text-primary">What to log</a>
-        <a href="#web" class="hover:text-primary">Websites</a>
-        <a href={~p"/llms.txt"} class="hover:text-primary font-mono text-xs">llms.txt</a>
-      </nav>
-      <span class="flex-1" />
-      <.link navigate={~p"/dashboard"} class="btn btn-primary btn-sm">Dashboard</.link>
-    </div>
-  </header>
+  <.site_header current_scope={@current_scope} active={:web} />
 
   <!-- hero -->
   <section class="mx-auto max-w-6xl px-4 sm:px-6 pt-16 pb-10">
     <div class="max-w-3xl">
-      <div class="badge badge-primary badge-outline mb-4">Free · AI tool analytics</div>
+      <div class="badge badge-primary badge-outline mb-4">Free · Website analytics</div>
       <h1 class="text-4xl sm:text-5xl font-semibold tracking-tight leading-tight">
-        Analytics for the AI tool you're building. One URL.
+        Website analytics that answers what people actually did.
       </h1>
       <p class="mt-5 text-lg text-base-content/70 leading-relaxed">
-        You shipped an agent, an MCP server, a CLI, a VS Code extension. You have no idea
-        whether anyone runs it twice. Fetch one URL with your account ID and you have usage
-        analytics — no SDK to install, no API key to exchange, no JSON to assemble, nothing to
-        add to your dependency tree.
+        One script tag. Dwell time separated from engaged time, how far down each page anyone
+        scrolled, which page led to which, every click that left your site, and every form
+        someone started and gave up on. No tagging plan, no cookie banner, no bill.
       </p>
     </div>
 
@@ -34,14 +19,14 @@
       <div class="text-xs uppercase tracking-wide text-base-content/60 mb-3">
         This is the entire integration
       </div>
-      <pre class="bg-base-200 rounded p-4 text-xs sm:text-sm overflow-x-auto"><code>{ping_url(@base_url, @site_key)}</code></pre>
+      <pre class="bg-base-200 rounded p-4 text-xs sm:text-sm overflow-x-auto"><code>{script_tag(@base_url, @site_key)}</code></pre>
       <div class="mt-4 flex flex-wrap items-center gap-3">
-        <.link navigate={~p"/dashboard"} class="btn btn-primary btn-sm">See it in the dashboard</.link>
-        <a href={~p"/llms.txt"} class="btn btn-outline btn-sm font-mono text-xs">
-          Read llms.txt
-        </a>
+        <.link navigate={~p"/users/register"} class="btn btn-primary btn-sm">
+          Create a free account
+        </.link>
+        <.link href={~p"/demo"} class="btn btn-outline btn-sm">See it capturing, live</.link>
         <span class="text-sm text-base-content/50">
-          Returns 204. Fire and forget.
+          Paste it in the <code class="font-mono text-xs">&lt;head&gt;</code>. That's the setup.
         </span>
       </div>
     </div>
@@ -51,182 +36,37 @@
   <section class="mx-auto max-w-6xl px-4 sm:px-6 pb-16">
     <div class="grid md:grid-cols-3 gap-4">
       <div class="rounded-box bg-base-100 border border-base-300 p-5">
-        <div class="text-sm font-medium">No dependency, in any language</div>
+        <div class="text-sm font-medium">Nothing to tag</div>
         <p class="mt-2 text-sm text-base-content/60">
-          If it can make an HTTP request it can report. Python, Go, Rust, bash, a Lambda, a
-          GitHub Action, a shell one-liner. Nothing to install and nothing to keep updated.
+          Clicks, outbound links, forms and scroll depth are captured on their own, grouped by the
+          id and class already on the element. You don't annotate your markup to get data out of
+          it.
         </p>
       </div>
       <div class="rounded-box bg-base-100 border border-base-300 p-5">
-        <div class="text-sm font-medium">Your agent can wire it up itself</div>
+        <div class="text-sm font-medium">Free, and self-hostable</div>
         <p class="mt-2 text-sm text-base-content/60">
-          The complete contract is at <a href={~p"/llms.txt"} class="link font-mono">/llms.txt</a>
-          — parameters, event conventions, rate guidance, and the rules about what must never be
-          sent. Point a coding agent at that URL and it can integrate unattended.
+          No plan, no event quota, no sampling above some traffic line. Run our copy or run it on
+          your own box against your own Postgres.
         </p>
       </div>
       <div class="rounded-box bg-base-100 border border-base-300 p-5">
-        <div class="text-sm font-medium">Many projects, one account</div>
+        <div class="text-sm font-medium">Bots counted, not blended</div>
         <p class="mt-2 text-sm text-base-content/60">
-          Pass <code class="font-mono text-xs">project=</code>
-          and each tool you ship reports separately under the same account ID. No new key, no new
-          setup.
+          Crawlers and AI agents are identified by name and pulled out of your human numbers —
+          then reported on their own page, because who is scraping you is worth knowing.
         </p>
       </div>
     </div>
   </section>
 
-  <!-- the API -->
-  <section id="ping" class="border-y border-base-300 bg-base-100">
+  <!-- what you get -->
+  <section id="capture" class="border-y border-base-300 bg-base-100">
     <div class="mx-auto max-w-6xl px-4 sm:px-6 py-16">
-      <h2 class="text-2xl font-semibold tracking-tight">Every parameter there is</h2>
+      <h2 class="text-2xl font-semibold tracking-tight">What the script tag gets you</h2>
       <p class="mt-3 text-base-content/70 max-w-2xl">
-        Four you will use, a few you might, and anything else you add is kept as an attribute on
-        the event. There is no schema to extend.
+        All of it, from the same snippet, with no configuration.
       </p>
-
-      <div class="mt-8 overflow-x-auto">
-        <table class="table table-sm">
-          <thead>
-            <tr>
-              <th>Parameter</th>
-              <th>Meaning</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr :for={
-              row <- [
-                {"uid", "Your account ID."},
-                {"c · cc · s_p · n",
-                 "Your user's city, county, state/province and nation. Required — see below."},
-                {"event",
-                 "What happened — page_view, tool_called, run_completed. Anything you like."},
-                {"project",
-                 "Which of your tools this is. Keeps them separate under one account."},
-                {"type", "Channel. ai for an AI tool; that is the default here."},
-                {"sid",
-                 "Session ID. Pings that share one are grouped into a run or conversation."},
-                {"path", "A screen or step. With event=page_view it becomes a real pageview."},
-                {"…anything", "Kept as an attribute: &tool=search&latency_ms=420&outcome=success"}
-              ]
-            }>
-              <td class="font-mono text-xs whitespace-nowrap">{elem(row, 0)}</td>
-              <td class="text-sm text-base-content/70">{elem(row, 1)}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div class="mt-10 grid lg:grid-cols-2 gap-6">
-        <div>
-          <div class="text-xs uppercase tracking-wide text-base-content/60 mb-2">
-            Instrumenting one run
-          </div>
-          <pre class="bg-base-200 rounded p-4 text-xs overflow-x-auto"><code>{run_example(@base_url, @site_key)}</code></pre>
-        </div>
-        <div class="space-y-4">
-          <div class="rounded-box border border-base-300 p-5">
-            <div class="text-sm font-medium">
-              Sessions and flow, for free
-            </div>
-            <p class="mt-2 text-sm text-base-content/60">
-              Consecutive pings are grouped into a session automatically, and the server numbers
-              your pageviews and links each to the one before it. Send
-              <code class="font-mono text-xs">event=page_view&amp;path=/chat</code>
-              each time — you never send a sequence number — and you get a flow graph showing
-              which paths lead where and where runs stop. Pass
-              <code class="font-mono text-xs">sid</code>
-              when you want exact control.
-            </p>
-          </div>
-          <div class="rounded-box border border-base-300 p-5">
-            <div class="text-sm font-medium">
-              <code class="font-mono text-xs">event=page_view</code> is special
-            </div>
-            <p class="mt-2 text-sm text-base-content/60">
-              With a <code class="font-mono text-xs">path</code>, it is recorded as a real
-              pageview rather than a generic event — so it lands in the pages report and the
-              page-to-page flow graph.
-            </p>
-          </div>
-          <div class="rounded-box border border-base-300 p-5">
-            <div class="text-sm font-medium">You send the location; we don't guess it</div>
-            <p class="mt-2 text-sm text-base-content/60">
-              <code class="font-mono text-xs">c</code>, <code class="font-mono text-xs">cc</code>,
-              <code class="font-mono text-xs">s_p</code>
-              and <code class="font-mono text-xs">n</code>
-              carry your user's city, county, state/province and nation. A ping arrives from
-              wherever your tool runs — a container, a serverless region three countries away —
-              so its address says where the software is, not where the person is. Guessing from
-              it would give a confident, wrong answer.
-            </p>
-          </div>
-          <div class="rounded-box border border-base-300 p-5">
-            <div class="text-sm font-medium">Your account ID is the whole credential</div>
-            <p class="mt-2 text-sm text-base-content/60">
-              It identifies an account and grants nothing else. Unknown IDs get the same empty 204
-              as real ones, so the endpoint cannot be used to test whether an account exists.
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- what to log -->
-  <section id="events" class="mx-auto max-w-6xl px-4 sm:px-6 py-16">
-    <h2 class="text-2xl font-semibold tracking-tight">What's worth logging</h2>
-    <p class="mt-3 text-base-content/70 max-w-2xl">
-      Event names are yours to choose. These are the ones that answer the questions you
-      actually have about a tool you just shipped.
-    </p>
-
-    <div class="mt-8 grid md:grid-cols-2 gap-4">
-      <div
-        :for={
-          item <- [
-            {"install · first_run · upgraded",
-             "Is anyone adopting it, and are they staying current? Pass version=."},
-            {"run_started · run_completed",
-             "How many runs finish. Pass outcome=success|error|cancelled."},
-            {"tool_called", "Which capabilities actually get used. Pass tool= and latency_ms=."},
-            {"page_view", "Which screens or steps people reach, with path=."},
-            {"error", "What breaks in the wild. Pass kind= — never the message text."},
-            {"feedback", "Whether it helped. Pass rating=up|down."}
-          ]
-        }
-        class="rounded-box bg-base-100 border border-base-300 p-5"
-      >
-        <div class="text-sm font-mono">{elem(item, 0)}</div>
-        <p class="mt-2 text-sm text-base-content/60">{elem(item, 1)}</p>
-      </div>
-    </div>
-
-    <div class="mt-8 rounded-box border border-warning/40 bg-warning/5 p-5">
-      <div class="text-sm font-medium">Never send credentials</div>
-      <p class="mt-2 text-sm text-base-content/70">
-        API keys, tokens, passwords, session secrets. Parameters travel in a URL, so by the time
-        one reaches us it has already been written into the logs of every proxy it passed
-        through. Keep prompts and completions out too — URLs have length limits, and analytics is
-        for counting, not transcript storage. The rules are stated in full in <a
-          href={~p"/llms.txt"}
-          class="link font-mono"
-        >/llms.txt</a>, so an agent integrating on
-        your behalf reads them too.
-      </p>
-    </div>
-  </section>
-
-  <!-- websites -->
-  <section id="web" class="border-y border-base-300 bg-base-100">
-    <div class="mx-auto max-w-6xl px-4 sm:px-6 py-16">
-      <h2 class="text-2xl font-semibold tracking-tight">Got a website too?</h2>
-      <p class="mt-3 text-base-content/70 max-w-2xl">
-        The same account covers it. One script tag captures everything below automatically, with
-        no tagging — and it reports into the same dashboard as your tools.
-      </p>
-
-      <pre class="mt-6 bg-base-200 rounded p-4 text-xs sm:text-sm overflow-x-auto"><code>{script_tag(@base_url, @site_key)}</code></pre>
 
       <div class="mt-8 grid md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div
@@ -238,12 +78,12 @@
               {"Page-to-page flow",
                "By URL or title. Click any page to re-centre the diagram and follow a route."},
               {"Outbound clicks", "Caught on mousedown, before the browser tears the page down."},
+              {"Every button and link",
+               "Grouped by the id, class and text already on the element. No tagging plan."},
               {"Forms, field by field",
                "On submit and on abandonment. Passwords are masked in the browser and never sent."},
-              {"City, state, country",
+              {"City, county, state, country",
                "Resolved at ingest; the address is used for the lookup and then discarded."},
-              {"AI crawlers, named",
-               "GPTBot, ClaudeBot, PerplexityBot and the rest — filtered out of your human numbers and reported separately."},
               {"Junk filtered, not hidden",
                "Impossible dwell times are held back by default, with the reason shown and a toggle to see them."}
             ]
@@ -257,59 +97,88 @@
     </div>
   </section>
 
+  <!-- crawlers -->
+  <section id="crawlers" class="mx-auto max-w-6xl px-4 sm:px-6 py-16">
+    <h2 class="text-2xl font-semibold tracking-tight">
+      You can see which AI is reading your site
+    </h2>
+    <p class="mt-3 text-base-content/70 max-w-2xl">
+      Every crawler below is recognised by name, kept out of your visitor counts, and reported
+      separately — which pages it took, how often, and when it started. Dwell for automated
+      traffic is sampled every 10 seconds rather than every second, so a crawl can't flood the
+      collector.
+    </p>
+
+    <div class="mt-6 flex flex-wrap gap-2">
+      <span
+        :for={{name, vendor} <- ai_crawlers()}
+        class="badge badge-outline badge-lg font-mono text-xs"
+        title={vendor}
+      >
+        {name}
+      </span>
+    </div>
+  </section>
+
   <!-- privacy -->
-  <section class="mx-auto max-w-6xl px-4 sm:px-6 py-16">
-    <h2 class="text-2xl font-semibold tracking-tight">Privacy by construction</h2>
-    <div class="mt-6 grid md:grid-cols-2 gap-x-10 gap-y-4 max-w-4xl">
-      <div :for={
-        item <- [
-          {"No cookies",
-           "Identifiers live in browser storage, so there is no consent banner to show."},
-          {"No IP addresses stored",
-           "Used in-request to resolve a city, then salted, hashed and discarded. The hash rotates daily."},
-          {"Credentials are never accepted",
-           "Password-typed fields are masked in the browser and dropped again server-side, so a stale snippet cannot defeat it."},
-          {"You choose what to send",
-           "The ping API records the dimensions you pass and nothing more. Nothing is inferred from a parameter you did not send."},
-          {"Self-hosted",
-           "Run it yourself and the data stays in your own Postgres. No third party in the path."},
-          {"Opt out per element",
-           "data-wa-ignore on any element, form or field excludes it entirely."}
-        ]
-      }>
-        <div class="text-sm font-medium">{elem(item, 0)}</div>
-        <p class="text-sm text-base-content/60 mb-2">{elem(item, 1)}</p>
+  <section class="border-y border-base-300 bg-base-100">
+    <div class="mx-auto max-w-6xl px-4 sm:px-6 py-16">
+      <h2 class="text-2xl font-semibold tracking-tight">Privacy by construction</h2>
+      <div class="mt-6 grid md:grid-cols-2 gap-x-10 gap-y-4 max-w-4xl">
+        <div :for={
+          item <- [
+            {"No cookies",
+             "Identifiers live in browser storage, so there is no consent banner to show."},
+            {"No IP addresses stored",
+             "Used in-request to resolve a city, then salted, hashed and discarded. The hash rotates daily."},
+            {"Credentials are never accepted",
+             "Password-typed fields are masked in the browser and dropped again server-side, so a stale snippet cannot defeat it."},
+            {"Opt out per element",
+             "data-wa-ignore on any element, form or field excludes it entirely."},
+            {"Self-hosted if you want",
+             "Run it yourself and the data stays in your own Postgres. No third party in the path."},
+            {"No third-party sharing",
+             "There is no ad network here to sell to. The data is yours and it stays where you put it."}
+          ]
+        }>
+          <div class="text-sm font-medium">{elem(item, 0)}</div>
+          <p class="text-sm text-base-content/60 mb-2">{elem(item, 1)}</p>
+        </div>
       </div>
+    </div>
+  </section>
+
+  <!-- ai analytics cross-link -->
+  <section class="mx-auto max-w-6xl px-4 sm:px-6 py-16">
+    <div class="rounded-box bg-base-100 border border-base-300 p-6 sm:p-8">
+      <div class="badge badge-primary badge-outline mb-3">Also free</div>
+      <h2 class="text-2xl font-semibold tracking-tight">
+        Building an AI tool, not just a website?
+      </h2>
+      <p class="mt-3 text-base-content/70 max-w-2xl">
+        An agent, an MCP server, a CLI, an extension — anything that ships an
+        <code class="font-mono text-xs">llms.txt</code>
+        or an <code class="font-mono text-xs">AGENTS.md</code>. The same account tracks it by
+        fetching one URL, with no SDK and nothing added to your dependency tree.
+      </p>
+      <pre class="mt-6 bg-base-200 rounded p-4 text-xs sm:text-sm overflow-x-auto"><code>{ping_url(@base_url, @site_key)}</code></pre>
+      <a href={ai_path()} class="btn btn-primary btn-sm mt-5">AI tool analytics →</a>
     </div>
   </section>
 
   <!-- cta -->
   <section class="border-t border-base-300 bg-base-100">
     <div class="mx-auto max-w-6xl px-4 sm:px-6 py-16 text-center">
-      <h2 class="text-2xl font-semibold tracking-tight">Send your first event now</h2>
+      <h2 class="text-2xl font-semibold tracking-tight">Start counting in about a minute</h2>
       <p class="mt-3 text-base-content/70">
-        Paste the URL at the top into a terminal, then open the dashboard. It will be there.
+        Create an account, copy the snippet, paste it in your <code class="font-mono text-xs">&lt;head&gt;</code>.
       </p>
       <div class="mt-6 flex flex-wrap gap-3 justify-center">
-        <.link navigate={~p"/dashboard"} class="btn btn-primary">Open the dashboard</.link>
+        <.link navigate={~p"/users/register"} class="btn btn-primary">Create a free account</.link>
         <.link href={~p"/demo"} class="btn btn-outline">See the browser tracker</.link>
       </div>
     </div>
   </section>
 
-  <footer class="border-t border-base-300">
-    <div class="mx-auto max-w-6xl px-4 sm:px-6 py-8 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-      <span class="text-base-content/60">SeriouslySimpleAnalytics</span>
-      <span class="text-base-content/30">·</span>
-      <.link navigate={~p"/dashboard"} class="link link-hover">Dashboard</.link>
-      <a href={~p"/llms.txt"} class="link link-hover font-mono text-xs">llms.txt</a>
-      <span class="flex-1" />
-      <a
-        href="mailto:me@LoganBesecker.com?subject=Business%20development%20inquiry"
-        class="link link-hover font-medium"
-      >
-        Business development inquiries
-      </a>
-    </div>
-  </footer>
+  <.site_footer />
 </div>

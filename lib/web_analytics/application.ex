@@ -17,6 +17,7 @@ defmodule WebAnalytics.Application do
       WebAnalytics.Repo,
       {DNSCluster, query: Application.get_env(:web_analytics, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: WebAnalytics.PubSub},
+      WebAnalytics.RateLimiter,
       WebAnalytics.Sites.Cache,
       WebAnalytics.Geo.Database,
       WebAnalytics.Ingest.Collector,

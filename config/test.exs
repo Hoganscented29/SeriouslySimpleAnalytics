@@ -1,5 +1,8 @@
 import Config
 
+# Only in tests, remove the complexity from the password hashing algorithm
+config :bcrypt_elixir, :log_rounds, 1
+
 # Configure your database
 #
 # The MIX_TEST_PARTITION environment variable can be used
@@ -42,3 +45,9 @@ config :web_analytics, :anomaly, enabled: false, min_sample: 5
 # The site cache outlives a sandbox transaction, so a site created and rolled
 # back by one test would still be served to the next one that asks for its key.
 config :web_analytics, WebAnalytics.Sites.Cache, enabled: false
+
+# Emails are asserted on, never delivered.
+config :web_analytics, WebAnalytics.Mailer, adapter: Swoosh.Adapters.Test
+
+# Nothing is delivered here, so no HTTP client is needed.
+config :swoosh, :api_client, false

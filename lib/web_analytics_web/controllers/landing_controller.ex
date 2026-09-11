@@ -1,6 +1,11 @@
 defmodule WebAnalyticsWeb.LandingController do
   @moduledoc """
-  The public landing page and the machine-readable integration guide.
+  The two public landing pages and the machine-readable integration guide.
+
+  They are split because they sell different things to different people: `/` is
+  for someone with a website, `/AI-Analytics-llms-txt` for someone shipping an AI
+  tool. One account and one dashboard serves both, so each page says so and
+  links across rather than trying to be both at once.
 
   `/llms.txt` is the same document an AI agent is expected to fetch before
   integrating, following the llmstxt.org convention. It is rendered rather than
@@ -20,10 +25,18 @@ defmodule WebAnalyticsWeb.LandingController do
 
   def home(conn, _params) do
     conn
-    |> assign(:page_title, "Free analytics for AI tools")
+    |> assign(:page_title, "Free website analytics")
     |> assign(:site_key, demo_site_key())
     |> assign(:base_url, base_url(conn))
     |> render(:home)
+  end
+
+  def ai(conn, _params) do
+    conn
+    |> assign(:page_title, "Free analytics for AI tools")
+    |> assign(:site_key, demo_site_key())
+    |> assign(:base_url, base_url(conn))
+    |> render(:ai)
   end
 
   # The canonical host is written into priv/docs/llms.txt literally, so the file

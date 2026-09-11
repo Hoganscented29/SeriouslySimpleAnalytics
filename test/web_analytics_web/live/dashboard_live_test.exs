@@ -8,8 +8,10 @@ defmodule WebAnalyticsWeb.DashboardLiveTest do
   alias WebAnalytics.Geo
   alias WebAnalytics.Ingest
 
-  setup do
-    site = site_fixture(%{key: "dash", name: "Dashboard Site"})
+  setup :register_and_log_in_user
+
+  setup %{user: user} do
+    site = user_site_fixture(user, %{key: "dash", name: "Dashboard Site"})
 
     submit(
       site,
@@ -221,10 +223,35 @@ defmodule WebAnalyticsWeb.DashboardLiveTest do
     end
   end
 
-  test "offers a setup path when no sites exist", %{conn: conn} do
-    for site <- WebAnalytics.Sites.list_sites(), do: WebAnalytics.Sites.delete_site(site)
+  describe "account" do
+    test "a user with no site gets one, rather than an empty page", %{conn: conn, user: user} do
+      for site <- WebAnalytics.Sites.list_sites_for_user(user),
+          do: WebAnalytics.Sites.delete_site(site)
 
-    {:ok, _live, html} = live(conn, ~p"/dashboard")
-    assert html =~ "No sites yet"
+      {:ok, _live, html} = live(conn, ~p"/dashboard")
+
+      [site] = WebAnalytics.Sites.list_sites_for_user(user)
+      assert html =~ site.key
+      assert html =~ "Account ID"
+    end
+
+    test "shows both install paths", %{conn: conn, site: site} do
+      {:ok, _live, html} = live(conn, ~p"/dashboard?site=dash")
+
+      assert html =~ "Install snippet"
+      assert html =~ "AI install instructions"
+      assert html =~ "data-site=&quot;#{site.key}&quot;"
+      assert html =~ "uid=#{site.key}"
+    end
+
+    test "never shows another user's sites", %{conn: conn} do
+      other = WebAnalytics.AccountsFixtures.user_fixture()
+      theirs = user_site_fixture(other, %{key: "not-yours", name: "Someone Else"})
+
+      {:ok, _live, html} = live(conn, ~p"/dashboard?site=#{theirs.key}")
+
+      refute html =~ "Someone Else"
+      refute html =~ theirs.key
+    end
   end
 end

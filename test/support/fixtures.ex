@@ -17,6 +17,20 @@ defmodule WebAnalytics.Fixtures do
     site
   end
 
+  @doc "A site owned by `user`, as the dashboard requires."
+  def user_site_fixture(user, attrs \\ %{}) do
+    attrs = Map.new(attrs, fn {k, v} -> {to_string(k), v} end)
+
+    {:ok, site} =
+      attrs
+      |> Map.put_new("key", "site-#{System.unique_integer([:positive])}")
+      |> Map.put_new("name", "Test Site")
+      |> Map.put_new("domain", "example.com")
+      |> then(&Sites.create_site_for_user(user, &1))
+
+    site
+  end
+
   @doc "A beacon payload with sensible defaults; `events` replaces the event list."
   def payload(site, events, opts \\ []) do
     %{
