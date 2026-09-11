@@ -1,0 +1,32 @@
+# Caddy in front of SeriouslySimpleAnalytics.
+#
+#   sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
+#   sudo systemctl reload caddy
+#
+# Caddy obtains and renews a Let's Encrypt certificate on its own, so there is
+# nothing to configure for TLS and nothing to remember to renew. Point the
+# domain's A/AAAA records at this box first — the certificate is issued by
+# answering a challenge on port 80, so it cannot be obtained before DNS resolves
+# here.
+
+seriouslysimpleanalytics.com {
+	encode zstd gzip
+
+	reverse_proxy 127.0.0.1:4001 {
+		# The app has force_ssl with rewrite_on: [:x_forwarded_proto]. Caddy sets
+		# that header itself, which is what stops the app from redirecting a
+		# request that already arrived over TLS and looping forever.
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-Forwarded-For {remote_host}
+	}
+}
+
+# The tracker and the ping endpoint are called from other people's sites and
+# from other people's servers, so they must stay reachable without a redirect
+# dance. They are already CORS-open by design; this only avoids the extra hop.
+#
+# Uncomment if you also want a bare apex or www alias:
+#
+# www.seriouslysimpleanalytics.com {
+# 	redir https://seriouslysimpleanalytics.com{uri} permanent
+# }

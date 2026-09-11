@@ -150,7 +150,7 @@ if [ "$MIX_ENV" = "prod" ]; then
   say "Deployment key"
 
   KEY="${SSA_LICENSE_KEY:-}"
-  [ -z "$KEY" ] && [ -f "$ENV_FILE" ] && KEY="$(. "./$ENV_FILE" >/dev/null 2>&1; printf '%s' "${SSA_LICENSE_KEY:-}")"
+  [ -z "$KEY" ] && [ -f "$ENV_FILE" ] && KEY="$(set -a; . "./$ENV_FILE" >/dev/null 2>&1; set +a; printf '%s' "${SSA_LICENSE_KEY:-}")"
 
   if [ -z "$KEY" ]; then
     printf '\n%serror%s A deployment key is required to run in production.\n\n' "$red$bold" "$reset" >&2
@@ -194,26 +194,35 @@ else
   auth="$DB_USER"
   [ -n "${PGPASSWORD:-}" ] && auth="$DB_USER:$PGPASSWORD"
 
+  # No `export` prefixes: systemd's EnvironmentFile= cannot parse them, and
+  # sourcing under `set -a` exports everything anyway. One file, both uses.
   cat > "$ENV_FILE" <<ENV
 # Written by install.sh. Secrets — never commit this file.
-export MIX_ENV=$MIX_ENV
-export PORT=$PORT
-export SECRET_KEY_BASE=$secret
-export IP_SALT=$salt
-export DATABASE_URL=ecto://$auth@$DB_HOST/$DB_NAME
-export PHX_HOST=localhost
-# How this box is reached from outside. /llms.txt publishes absolute URLs built
-# from these, so set them to the public address before pointing anyone at it.
-export PHX_SCHEME=http
-export PHX_PORT=$PORT
-export SSA_LICENSE_KEY=${SSA_LICENSE_KEY:-}
+MIX_ENV=$MIX_ENV
+PORT=$PORT
+SECRET_KEY_BASE=$secret
+IP_SALT=$salt
+DATABASE_URL=ecto://$auth@$DB_HOST/$DB_NAME
+SSA_LICENSE_KEY=${SSA_LICENSE_KEY:-}
+
+# How this box is reached from outside.
+#
+# Two things depend on these and break quietly if they are wrong: /llms.txt
+# publishes absolute URLs built from them, and force_ssl redirects visitors to
+# this host — so left at localhost, every visitor on your real domain is sent to
+# https://localhost/ and lands nowhere.
+PHX_HOST=localhost
+PHX_SCHEME=http
+PHX_PORT=$PORT
 ENV
   chmod 600 "$ENV_FILE"
   ok "Wrote $ENV_FILE (secrets generated, mode 600)"
 fi
 
+set -a
 # shellcheck source=/dev/null
 . "./$ENV_FILE"
+set +a
 export MIX_ENV PORT
 
 # -- 6. dependencies and database -----------------------------------------

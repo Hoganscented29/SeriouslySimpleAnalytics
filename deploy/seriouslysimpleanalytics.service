@@ -1,0 +1,57 @@
+# systemd unit for SeriouslySimpleAnalytics.
+#
+#   sudo cp deploy/seriouslysimpleanalytics.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now seriouslysimpleanalytics
+#   sudo systemctl status seriouslysimpleanalytics
+#   journalctl -u seriouslysimpleanalytics -f
+#
+# Without this the server dies when you close the terminal, and does not come
+# back after a reboot.
+
+[Unit]
+Description=SeriouslySimpleAnalytics
+Documentation=https://github.com/lbesecker195/SeriouslySimpleAnalytics
+# Wants= rather than Requires=: if Postgres is briefly down the app should keep
+# retrying rather than being stopped along with it.
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=ssa
+Group=ssa
+WorkingDirectory=/opt/seriouslysimpleanalytics
+
+# Plain KEY=value — systemd does not understand a leading `export`, which is why
+# install.sh writes the file without one.
+EnvironmentFile=/opt/seriouslysimpleanalytics/.env
+
+# Full path: systemd runs with a minimal PATH that will not find asdf or a
+# Homebrew mix. `command -v mix` on the box tells you what to put here.
+ExecStart=/usr/local/bin/mix phx.server
+
+Restart=always
+RestartSec=5
+
+# Give migrations and the ~120MB GeoIP load time to finish before systemd
+# decides the start failed.
+TimeoutStartSec=120
+
+# The BEAM handles SIGTERM itself and drains connections; let it.
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ssa
+
+# The app needs to read its own directory and write nothing outside it.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/seriouslysimpleanalytics
+
+[Install]
+WantedBy=multi-user.target

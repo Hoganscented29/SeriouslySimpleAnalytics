@@ -275,6 +275,7 @@ priv/geoip/          GeoIP database (gitignored; mix geoip.download)
 priv/docs/llms.txt   the integration guide, rendered with real URLs at /llms.txt
 install.sh           first-time setup and launch
 bin/server           launch, once set up
+deploy/              reverse proxy and systemd unit for a public deployment
 config/license.exs   licensor public key (generated, committed)
 ```
 
@@ -283,6 +284,26 @@ embedded at compile time, not an asset, which keeps its URL stable and free of a
 digest hash — it gets pasted into other people's HTML.
 
 Run `mix precommit` before committing.
+
+## Putting it on the internet
+
+`./install.sh` gets it running on port 4001. That is not the same as a domain
+resolving to it — see [deploy/README.md](deploy/README.md), which covers DNS,
+the reverse proxy ([deploy/Caddyfile](deploy/Caddyfile)) and keeping it running
+([deploy/seriouslysimpleanalytics.service](deploy/seriouslysimpleanalytics.service)).
+
+The step that fails quietly is telling the app its own address. Set these in
+`.env` on the server and restart:
+
+```
+PHX_HOST=your-domain.com
+PHX_SCHEME=https
+PHX_PORT=443
+```
+
+Left at the default, `force_ssl` redirects every visitor to `https://localhost/`
+and `/llms.txt` tells integrating AI tools to send their events to their own
+machine. Neither logs an error.
 
 ## Running it requires a key
 
