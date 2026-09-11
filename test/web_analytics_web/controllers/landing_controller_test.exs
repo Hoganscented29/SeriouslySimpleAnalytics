@@ -112,6 +112,35 @@ defmodule WebAnalyticsWeb.LandingControllerTest do
   end
 
   describe "llms.txt" do
+    test "carries a block the reader can paste into their own llms.txt", %{conn: conn} do
+      body = conn |> get(~p"/llms.txt") |> response(200)
+
+      assert body =~ "Put this in your own llms.txt"
+      assert body =~ "--- copy from here ---"
+      assert body =~ "--- copy to here ---"
+
+      [_, block] = String.split(body, "--- copy from here ---", parts: 2)
+      [block, _] = String.split(block, "--- copy to here ---", parts: 2)
+
+      # The block is read by an agent that will never see the rest of this file,
+      # so it has to carry the whole integration on its own.
+      assert block =~ "/api/v1/accounts"
+      assert block =~ "/api/ping"
+      assert block =~ "claim_url"
+      assert block =~ "sid"
+      assert block =~ "NEVER send credentials"
+      assert block =~ "ONE account per project"
+    end
+
+    test "documents the account creation endpoint for agents", %{conn: conn} do
+      body = conn |> get(~p"/llms.txt") |> response(200)
+
+      assert body =~ "Getting an account ID"
+      assert body =~ ~r{POST https?://[^/\s]+/api/v1/accounts}
+      assert body =~ "409 email_taken"
+      assert body =~ "429 rate_limited"
+    end
+
     test "is served as plain text", %{conn: conn} do
       conn = get(conn, ~p"/llms.txt")
 

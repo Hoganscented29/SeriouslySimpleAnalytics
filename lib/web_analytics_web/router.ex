@@ -56,6 +56,16 @@ defmodule WebAnalyticsWeb.Router do
     get "/", LandingController, :home
     get "/AI-Analytics-llms-txt", LandingController, :ai
 
+    # One page per AI crawler provider. Generated from the same registry that
+    # holds the content, so a route can never point at a page that isn't written.
+    get "/ai-crawler-analytics", ProviderController, :index
+
+    for slug <- WebAnalytics.Crawlers.Provider.slugs() do
+      get "/#{slug}-analytics", ProviderController, :show,
+        as: :"#{String.replace(slug, "-", "_")}_analytics",
+        assigns: %{provider_slug: slug}
+    end
+
     get "/demo", DemoController, :home
     get "/demo/pricing", DemoController, :pricing
     get "/demo/docs", DemoController, :docs

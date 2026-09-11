@@ -78,6 +78,30 @@ defmodule WebAnalyticsWeb.LandingHTML do
     """
   end
 
+  attr :current_scope, :map, default: nil
+  attr :class, :string, default: "btn btn-primary"
+
+  @doc """
+  The primary call to action.
+
+  Someone already signed in has no use for a signup button, and showing one
+  reads as though the page has not noticed them.
+  """
+  def cta(assigns) do
+    ~H"""
+    <.link :if={@current_scope && @current_scope.user} navigate={~p"/dashboard"} class={@class}>
+      Open your dashboard
+    </.link>
+    <.link
+      :if={!(@current_scope && @current_scope.user)}
+      navigate={~p"/users/register"}
+      class={@class}
+    >
+      Create a free account
+    </.link>
+    """
+  end
+
   @doc "The footer shared by both landing pages."
   def site_footer(assigns) do
     ~H"""

@@ -20,12 +20,14 @@ defmodule WebAnalyticsWeb.UserSessionControllerTest do
       assert get_session(conn, :user_token)
       assert redirected_to(conn) == ~p"/"
 
-      # Now do a logged in request and assert on the menu
+      # Now do a logged in request and assert on the menu. The landing page is a
+      # public marketing page, so it offers the dashboard rather than printing
+      # who is signed in.
       conn = get(conn, ~p"/")
       response = html_response(conn, 200)
-      assert response =~ user.email
-      assert response =~ ~p"/users/settings"
-      assert response =~ ~p"/users/log-out"
+      refute response =~ user.email
+      assert response =~ ~p"/dashboard"
+      refute response =~ ~p"/users/register"
     end
 
     test "logs the user in with remember me", %{conn: conn, user: user} do
@@ -84,12 +86,14 @@ defmodule WebAnalyticsWeb.UserSessionControllerTest do
       assert get_session(conn, :user_token)
       assert redirected_to(conn) == ~p"/"
 
-      # Now do a logged in request and assert on the menu
+      # Now do a logged in request and assert on the menu. The landing page is a
+      # public marketing page, so it offers the dashboard rather than printing
+      # who is signed in.
       conn = get(conn, ~p"/")
       response = html_response(conn, 200)
-      assert response =~ user.email
-      assert response =~ ~p"/users/settings"
-      assert response =~ ~p"/users/log-out"
+      refute response =~ user.email
+      assert response =~ ~p"/dashboard"
+      refute response =~ ~p"/users/register"
     end
 
     test "confirms unconfirmed user", %{conn: conn, unconfirmed_user: user} do
@@ -108,12 +112,14 @@ defmodule WebAnalyticsWeb.UserSessionControllerTest do
 
       assert Accounts.get_user!(user.id).confirmed_at
 
-      # Now do a logged in request and assert on the menu
+      # Now do a logged in request and assert on the menu. The landing page is a
+      # public marketing page, so it offers the dashboard rather than printing
+      # who is signed in.
       conn = get(conn, ~p"/")
       response = html_response(conn, 200)
-      assert response =~ user.email
-      assert response =~ ~p"/users/settings"
-      assert response =~ ~p"/users/log-out"
+      refute response =~ user.email
+      assert response =~ ~p"/dashboard"
+      refute response =~ ~p"/users/register"
     end
 
     test "redirects to login page when magic link is invalid", %{conn: conn} do

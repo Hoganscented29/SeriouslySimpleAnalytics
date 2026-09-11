@@ -241,9 +241,10 @@
           <div class="rounded-box border border-base-300 p-5">
             <div class="text-sm font-medium">Or just sign up yourself</div>
             <p class="mt-2 text-sm text-base-content/60">
-              The endpoint exists because agents shouldn't need a browser. You have one.
-              <.link navigate={~p"/users/register"} class="link">Create an account</.link>
-              and the ID is on your dashboard.
+              The endpoint exists because agents shouldn't need a browser. You have one. Your
+              account ID is on
+              <.link navigate={~p"/dashboard"} class="link">your dashboard</.link>
+              the moment you sign in.
             </p>
           </div>
         </div>
@@ -273,7 +274,7 @@
         Paste the URL at the top into a terminal, then open the dashboard. It will be there.
       </p>
       <div class="mt-6 flex flex-wrap gap-3 justify-center">
-        <.link navigate={~p"/users/register"} class="btn btn-primary">Create a free account</.link>
+        <.cta current_scope={@current_scope} />
         <a href={~p"/llms.txt"} class="btn btn-outline font-mono text-sm">Read llms.txt</a>
       </div>
     </div>

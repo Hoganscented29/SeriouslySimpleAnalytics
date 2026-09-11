@@ -21,9 +21,7 @@
       </div>
       <pre class="bg-base-200 rounded p-4 text-xs sm:text-sm overflow-x-auto"><code>{script_tag(@base_url, @site_key)}</code></pre>
       <div class="mt-4 flex flex-wrap items-center gap-3">
-        <.link navigate={~p"/users/register"} class="btn btn-primary btn-sm">
-          Create a free account
-        </.link>
+        <.cta current_scope={@current_scope} class="btn btn-primary btn-sm" />
         <.link href={~p"/demo"} class="btn btn-outline btn-sm">See it capturing, live</.link>
         <span class="text-sm text-base-content/50">
           Paste it in the <code class="font-mono text-xs">&lt;head&gt;</code>. That's the setup.
@@ -174,7 +172,7 @@
         Create an account, copy the snippet, paste it in your <code class="font-mono text-xs">&lt;head&gt;</code>.
       </p>
       <div class="mt-6 flex flex-wrap gap-3 justify-center">
-        <.link navigate={~p"/users/register"} class="btn btn-primary">Create a free account</.link>
+        <.cta current_scope={@current_scope} />
         <.link href={~p"/demo"} class="btn btn-outline">See the browser tracker</.link>
       </div>
     </div>

@@ -46,6 +46,11 @@ defmodule WebAnalyticsWeb.Layouts do
           <.link href={~p"/"} class="hover:text-primary">Home</.link>
         </nav>
         <div class="flex-1" />
+        <div :if={@current_scope} class="hidden sm:flex items-center gap-3 text-sm">
+          <span class="text-base-content/60">{@current_scope.user.email}</span>
+          <.link href={~p"/users/settings"} class="link link-hover">Settings</.link>
+          <.link href={~p"/users/log-out"} method="delete" class="link link-hover">Log out</.link>
+        </div>
         <.theme_toggle />
       </div>
     </header>

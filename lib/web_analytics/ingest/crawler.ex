@@ -24,6 +24,7 @@ defmodule WebAnalytics.Ingest.Crawler do
     {~r/ClaudeBot/i, "ai", "ClaudeBot"},
     {~r/Claude-Web/i, "ai", "Claude-Web"},
     {~r/Claude-User/i, "ai", "Claude-User"},
+    {~r/Claude-SearchBot/i, "ai", "Claude-SearchBot"},
     {~r/anthropic-ai/i, "ai", "Anthropic"},
     {~r/PerplexityBot/i, "ai", "PerplexityBot"},
     {~r/Perplexity-User/i, "ai", "Perplexity-User"},
