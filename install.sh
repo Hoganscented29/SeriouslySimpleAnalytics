@@ -254,14 +254,21 @@ if [ "$NEED_DATABASE" = "1" ]; then
   DB_USER=""
   DB_PASSWORD=""
 
+  # A PGUSER that does not work is a reason to keep looking, not to stop. It is
+  # usually set by someone who was told to set it — and if that role exists but
+  # has the wrong password, the role-creation path below is exactly what fixes
+  # it. Dying here would refuse the repair on the grounds that something needs
+  # repairing.
   if [ -n "${PGUSER:-}" ]; then
     if db_works "$PGUSER" "${PGPASSWORD:-}"; then
       DB_USER="$PGUSER"
       DB_PASSWORD="${PGPASSWORD:-}"
     else
-      die "PGUSER=$PGUSER cannot connect to PostgreSQL at $DB_HOST."
+      warn "PGUSER=$PGUSER cannot connect; trying the alternatives."
     fi
-  else
+  fi
+
+  if [ -z "$DB_USER" ]; then
     for candidate in "${USER:-}" postgres; do
       [ -z "$candidate" ] && continue
       if db_works "$candidate" ""; then DB_USER="$candidate"; break; fi
@@ -274,7 +281,12 @@ if [ "$NEED_DATABASE" = "1" ]; then
   if [ -z "$DB_USER" ] && have sudo && sudo -n -u postgres psql -w -tAc 'select 1' >/dev/null 2>&1; then
     warn "No TCP login found — normal on a fresh Debian/Ubuntu server."
 
-    if confirm "Create a dedicated 'ssa' database role for this install?"; then
+    # Honour PGUSER as the role name if one was given: someone who set it named
+    # the role they want, and creating a differently named one beside it would
+    # leave two half-configured roles and no clue which is in use.
+    ROLE="${PGUSER:-ssa}"
+
+    if confirm "Create or reset the '$ROLE' database role for this install?"; then
       # Alphanumeric only: this password is interpolated into SQL, into a URL
       # and into a sed replacement, and the quoting rules of those three do not
       # agree.
@@ -283,20 +295,20 @@ if [ "$NEED_DATABASE" = "1" ]; then
       sudo -u postgres psql -w -v ON_ERROR_STOP=1 -q <<SQL
 DO \$do\$
 BEGIN
-  IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'ssa') THEN
-    ALTER ROLE ssa WITH LOGIN CREATEDB PASSWORD '$DB_PASSWORD';
+  IF EXISTS (SELECT FROM pg_roles WHERE rolname = '$ROLE') THEN
+    ALTER ROLE $ROLE WITH LOGIN CREATEDB PASSWORD '$DB_PASSWORD';
   ELSE
-    CREATE ROLE ssa WITH LOGIN CREATEDB PASSWORD '$DB_PASSWORD';
+    CREATE ROLE $ROLE WITH LOGIN CREATEDB PASSWORD '$DB_PASSWORD';
   END IF;
 END
 \$do\$;
 SQL
 
-      if db_works "ssa" "$DB_PASSWORD"; then
-        DB_USER="ssa"
-        ok "Created role 'ssa'"
+      if db_works "$ROLE" "$DB_PASSWORD"; then
+        DB_USER="$ROLE"
+        ok "Created/reset role '$ROLE'"
       else
-        die "Created the 'ssa' role, but it still cannot connect over TCP.
+        die "Created the '$ROLE' role, but it still cannot connect over TCP.
 
       Check that pg_hba.conf allows md5 or scram-sha-256 for host connections
       from 127.0.0.1, then re-run."
