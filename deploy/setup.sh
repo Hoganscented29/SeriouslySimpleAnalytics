@@ -53,15 +53,29 @@ run() {
 
 write_file() {
   # $1 = path, stdin = contents
-  local path="$1" content
+  local path="$1" content backup
   content="$(cat)"
 
   if [ "$DRY_RUN" = "1" ]; then
-    printf '\n  %swould write %s:%s\n' "$dim" "$path" "$reset"
+    if [ -e "$path" ]; then
+      printf '\n  %swould BACK UP and replace %s:%s\n' "$yellow" "$path" "$reset"
+    else
+      printf '\n  %swould write %s:%s\n' "$dim" "$path" "$reset"
+    fi
     printf '%s\n' "$content" | sed 's/^/    | /'
-  else
-    printf '%s\n' "$content" > "$path"
+    return
   fi
+
+  # Never destroy a file that was already there. This box serves other things,
+  # and a name collision — a site file, a unit — would otherwise take one of
+  # them down with no way back.
+  if [ -e "$path" ]; then
+    backup="${path}.bak.$(date +%Y%m%d%H%M%S)"
+    cp -p "$path" "$backup"
+    warn "$path existed; kept a copy at $backup"
+  fi
+
+  printf '%s\n' "$content" > "$path"
 }
 
 [ -n "$DOMAIN" ] || die "Which domain?  sudo ./deploy/setup.sh example.com"
@@ -74,6 +88,14 @@ fi
 [ -f .env ] || die "No .env here. Run ./install.sh first."
 
 # -- what this box actually looks like -------------------------------------
+
+printf '\n%sThis changes only the following:%s\n' "$bold" "$reset"
+printf '  .env in this directory\n'
+printf '  /etc/systemd/system/%s.service      (new unit)\n' "$SERVICE_NAME"
+printf '  the reverse proxy config for %s only\n' "$DOMAIN"
+printf '  firewall rules for 80 and 443, if ufw is active\n\n'
+printf '%sNothing else is edited.%s Other sites and services on this box keep their own\n' "$bold" "$reset"
+printf 'config files, and any file that already exists is backed up before replacement.\n\n'
 
 say "Inspecting this machine"
 
@@ -275,6 +297,15 @@ if [ "$PROXY" = "nginx" ]; then
 
   SITE="/etc/nginx/sites-available/${DOMAIN}"
 
+  # An existing file under this name might be another application's, and
+  # server_name is the honest test of whose it is.
+  if [ -f "$SITE" ] && ! grep -q "server_name .*${DOMAIN}" "$SITE" 2>/dev/null; then
+    die "$SITE already exists and does not mention $DOMAIN.
+
+      It probably belongs to something else. Move it aside, or pass a different
+      domain, rather than letting this overwrite it."
+  fi
+
   # Written as its own site file and symlinked in. Nothing existing is edited,
   # so the other application on this box is untouched.
   write_file "$SITE" <<NGINX
@@ -389,7 +420,10 @@ fi
 say "Starting"
 run systemctl restart "$SERVICE_NAME"
 
-if [ "$DRY_RUN" = "0" ]; then
+# Only the proxy actually in use. Restarting Caddy on an nginx box would start a
+# second web server against ports nginx already holds — and on a box serving
+# someone else's application, that is not a harmless mistake.
+if [ "$DRY_RUN" = "0" ] && [ "$PROXY" = "caddy" ]; then
   systemctl reload caddy 2>/dev/null || systemctl restart caddy || true
 fi
 

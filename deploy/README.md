@@ -66,6 +66,36 @@ copies of what it generates. Do not install them as-is: `User=` and `ExecStart=`
 have no correct general value, and the ones that were there originally were
 wrong on the first server they met.
 
+## Does it disturb the other sites on the box?
+
+No, and it is worth being precise about why rather than asking you to take it on
+trust.
+
+It writes exactly four things: `.env` in this directory, a new systemd unit named
+after this service, one nginx site file named after this domain, and — only if
+`ufw` is active — rules for ports 80 and 443.
+
+It never edits `nginx.conf`, the default site, or any other site file. The new
+site is added as its own file in `sites-available` and symlinked into
+`sites-enabled`, which is how nginx is designed to host several sites at once.
+
+Three specific protections:
+
+- **`nginx -t` must pass before anything is reloaded.** If the new file is
+  invalid, nothing is reloaded and every existing site carries on untouched.
+- **Reload, not restart.** A reload keeps serving the previous configuration if
+  the new one cannot be loaded; there is no window where the box serves nothing.
+- **Any file that already exists is copied to `.bak.<timestamp>` first.** And if
+  a site file with this domain's name exists but its `server_name` says it
+  belongs to something else, the script stops rather than overwriting it.
+
+`--dry-run` prints every file it would write, in full, and changes nothing. Run
+that first if you would rather see it than trust it.
+
+The one shared thing it touches is the nginx process, via reload. That is
+unavoidable — adding a site means telling nginx about it — and it is why the
+config is validated first.
+
 ## Checking it worked
 
 ```bash
