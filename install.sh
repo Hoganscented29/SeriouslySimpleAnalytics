@@ -453,5 +453,11 @@ if [ "$START" = "0" ]; then
   exit 0
 fi
 
+if [ "$MIX_ENV" = "prod" ]; then
+  printf '  %sThis runs in the foreground and stops when you close the terminal.%s\n' "$yellow" "$reset"
+  printf '  To put it on a domain with TLS, and keep it running:\n\n'
+  printf '    sudo ./deploy/setup.sh your-domain.com\n\n'
+fi
+
 say "Starting on port $PORT — Ctrl-C twice to stop"
 exec mix phx.server

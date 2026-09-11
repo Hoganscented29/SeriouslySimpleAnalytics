@@ -202,6 +202,25 @@ ok "Service installed"
 
 # -- TLS and the public ports ----------------------------------------------
 
+say "Checking DNS"
+
+# Caddy proves control of the domain over port 80, so a certificate cannot be
+# issued until the name resolves to this machine. Checking first turns a
+# confusing TLS failure into a plain statement of what is wrong.
+resolved="$(getent hosts "$DOMAIN" 2>/dev/null | awk '{print $1}' | head -1 || true)"
+[ -z "$resolved" ] && have dig && resolved="$(dig +short "$DOMAIN" A | head -1 || true)"
+public_ip="$(curl -s --max-time 10 https://api.ipify.org 2>/dev/null || true)"
+
+if [ -z "$resolved" ]; then
+  warn "$DOMAIN does not resolve yet."
+  warn "Caddy will keep retrying; TLS starts working once DNS propagates."
+elif [ -n "$public_ip" ] && [ "$resolved" != "$public_ip" ]; then
+  warn "$DOMAIN resolves to $resolved, but this machine is $public_ip."
+  warn "Until the A record points here, no certificate can be issued."
+else
+  ok "$DOMAIN resolves to $resolved"
+fi
+
 say "Setting up Caddy"
 
 if ! have caddy; then
@@ -262,7 +281,10 @@ fi
 
 say "Starting"
 run systemctl restart "$SERVICE_NAME"
-run systemctl reload caddy || run systemctl restart caddy
+
+if [ "$DRY_RUN" = "0" ]; then
+  systemctl reload caddy 2>/dev/null || systemctl restart caddy || true
+fi
 
 if [ "$DRY_RUN" = "1" ]; then
   printf '\n%sDry run complete.%s Nothing was changed.\n\n' "$yellow$bold" "$reset"
@@ -270,11 +292,31 @@ if [ "$DRY_RUN" = "1" ]; then
 fi
 
 sleep 3
+
 if systemctl is-active --quiet "$SERVICE_NAME"; then
   ok "$SERVICE_NAME is running"
 else
   die "$SERVICE_NAME did not start. See why with:
       journalctl -u $SERVICE_NAME -n 50 --no-pager"
+fi
+
+# The application being up says nothing about whether the public can reach it.
+# These two checks are the difference between "it works" and "it works on
+# localhost", which is the whole problem this script exists to solve.
+if curl -sf -o /dev/null --max-time 10 "http://127.0.0.1:${APP_PORT}/"; then
+  ok "Application answering on 127.0.0.1:${APP_PORT}"
+else
+  warn "Application is not answering on 127.0.0.1:${APP_PORT} yet."
+fi
+
+if ! systemctl is-active --quiet caddy; then
+  warn "Caddy is not running — nothing is listening on 80 or 443."
+  warn "  systemctl status caddy --no-pager"
+  warn "  journalctl -u caddy -n 50 --no-pager"
+elif ss -lntp 2>/dev/null | grep -qE ':(80|443)\b'; then
+  ok "Caddy is listening on 80 and 443"
+else
+  warn "Caddy is running but not listening on 80/443. Check: journalctl -u caddy -n 50"
 fi
 
 printf '\n%sDone.%s\n\n' "$green$bold" "$reset"
