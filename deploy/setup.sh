@@ -250,6 +250,88 @@ run systemctl daemon-reload
 run systemctl enable "$SERVICE_NAME"
 ok "Service installed"
 
+# -- building the checked-out code ------------------------------------------
+
+# The realistic way this script gets run a second time is `git pull && sudo
+# ./deploy/setup.sh domain`. A pull can bring new dependencies, new assets and
+# new migrations, and restarting without building leaves systemd in a restart
+# loop whose only symptom is "did not start" — the real message being several
+# screens back in the journal.
+say "Building the application"
+
+if [ "$DRY_RUN" = "1" ]; then
+  printf '  %swould run:%s mix deps.get, compile, assets.deploy, ecto.migrate in %s\n' \
+    "$dim" "$reset" "$APP_DIR"
+else
+  # As the service user, so the build artefacts belong to whoever will run them.
+  # _build owned by root under a non-root service is a start failure with an
+  # even less obvious message than the one above.
+  as_service_user() {
+    if [ "$SERVICE_USER" = "root" ] || [ "$SERVICE_USER" = "$(id -un)" ]; then
+      ( cd "$APP_DIR" && set -a && . ./.env && set +a && "$@" )
+    else
+      run_as="cd $(printf '%q' "$APP_DIR") && set -a && . ./.env && set +a && $*"
+      su -s /bin/sh -c "$run_as" "$SERVICE_USER"
+    fi
+  }
+
+  build_failed=""
+
+  as_service_user "$MIX_PATH" local.hex --force --if-missing >/dev/null 2>&1 || true
+  as_service_user "$MIX_PATH" local.rebar --force --if-missing >/dev/null 2>&1 || true
+
+  # Debian and Ubuntu split the Erlang standard library across packages, and a
+  # box provisioned with erlang-nox has no xmerl. Nothing here uses XML, but
+  # swoosh compiles an adapter that does, so the whole build dies on a missing
+  # header with a message that names neither the package nor the fix.
+  if ! erl -noshell -eval "case code:lib_dir(xmerl) of {error,_} -> halt(1); _ -> halt(0) end" \
+       >/dev/null 2>&1; then
+    warn "Erlang's xmerl is missing; swoosh will not compile without it."
+    if have apt-get && confirm "Install erlang-xmerl?"; then
+      run apt-get install -y erlang-xmerl
+    else
+      die "Install it, then re-run:  apt-get install -y erlang-xmerl"
+    fi
+  fi
+
+  if as_service_user "$MIX_PATH" deps.get >/dev/null; then
+    ok "Dependencies up to date"
+  else
+    build_failed="mix deps.get"
+  fi
+
+  if [ -z "$build_failed" ]; then
+    if as_service_user "$MIX_PATH" compile >/dev/null; then
+      ok "Compiled"
+    else
+      build_failed="mix compile"
+    fi
+  fi
+
+  if [ -z "$build_failed" ]; then
+    if as_service_user "$MIX_PATH" assets.deploy >/dev/null 2>&1; then
+      ok "Assets built"
+    else
+      warn "mix assets.deploy failed; the site will serve stale or missing CSS."
+    fi
+  fi
+
+  if [ -z "$build_failed" ]; then
+    if as_service_user "$MIX_PATH" ecto.migrate; then
+      ok "Migrations up to date"
+    else
+      build_failed="mix ecto.migrate"
+    fi
+  fi
+
+  if [ -n "$build_failed" ]; then
+    die "$build_failed failed, so the service was left alone rather than
+      restarted into a crash loop. Run it by hand to see the error:
+
+      cd $APP_DIR && set -a && . ./.env && set +a && $build_failed"
+  fi
+fi
+
 # -- TLS and the public ports ----------------------------------------------
 
 say "Checking DNS"
@@ -331,6 +413,34 @@ if [ "$PROXY" = "nginx" ]; then
       domain, rather than letting this overwrite it."
   fi
 
+  # certbot --nginx edits this file in place: it adds the 443 server block, the
+  # certificate paths, and the HTTP redirect. Regenerating the file from the
+  # template below therefore *deletes* the TLS configuration, and because the
+  # certificate itself survives on disk, the TLS step afterwards sees a
+  # certificate, says so, and does nothing. The site is then HTTP only, requests
+  # for https fall through to whichever other block owns 443, and the domain
+  # serves someone else's application.
+  #
+  # That is not hypothetical — it is what this script did on every re-run. So a
+  # file certbot has already taken over is left alone.
+  SITE_HAS_TLS=0
+  if [ -f "$SITE" ] && grep -qE 'listen[^;]*443' "$SITE" 2>/dev/null; then
+    SITE_HAS_TLS=1
+  fi
+
+  if [ "$SITE_HAS_TLS" = "1" ]; then
+    ok "$SITE already has a 443 block; leaving it alone"
+    warn "Re-generating it would delete the TLS configuration certbot wrote."
+    warn "To rebuild it from scratch: move it aside, re-run, then re-run certbot."
+
+    # The proxy target can still drift — a port change in .env, say — and that
+    # is worth saying out loud rather than silently serving the wrong port.
+    if ! grep -q "127.0.0.1:${APP_PORT}" "$SITE" 2>/dev/null; then
+      warn "It does not proxy to 127.0.0.1:${APP_PORT}. Check the proxy_pass lines:"
+      warn "  grep -n proxy_pass $SITE"
+    fi
+  else
+
   # Written as its own site file and symlinked in. Nothing existing is edited,
   # so the other application on this box is untouched.
   write_file "$SITE" <<NGINX
@@ -372,6 +482,8 @@ server {
 }
 NGINX
 
+  fi
+
   run mkdir -p /var/www/html
   run ln -sf "$SITE" "/etc/nginx/sites-enabled/${DOMAIN}"
 
@@ -411,14 +523,100 @@ NGINX
     fi
   fi
 
+  # A certificate on disk says nothing about whether nginx is serving it for this
+  # name. The two can be out of step — a half-finished run, a rewritten site
+  # file, a certificate issued by a different plugin — and the symptom is the
+  # nastiest one this script can produce: https://DOMAIN resolves, answers, and
+  # serves a different application, because with no 443 block of its own the
+  # request falls through to whichever block owns the port.
+  #
+  # So the question asked here is "does this domain have a 443 server block",
+  # not "does a certificate exist".
+  domain_has_tls_vhost() {
+    have nginx || return 1
+    nginx -T 2>/dev/null | awk -v domain="$DOMAIN" '
+      # Brace depth is tracked across the whole file, and a server block is
+      # remembered by the depth it opened at. Counting per line, or assuming
+      # server blocks sit at depth zero, both give the wrong answer on a real
+      # config: server blocks are nested inside http, and they contain location
+      # blocks whose closing brace is not the end of the server block.
+      {
+        line = $0
+        sub(/#.*/, "", line)
+        opens  = gsub(/\{/, "{", line)
+        closes = gsub(/\}/, "}", line)
+
+        if (!in_server && opens > 0 &&
+            (line ~ /(^|[ \t])server[ \t]*\{/ || pending)) {
+          in_server = 1; server_depth = depth; tls = 0; named = 0
+        }
+        pending = (!in_server && line ~ /(^|[ \t])server[ \t]*$/)
+
+        if (in_server) {
+          if (line ~ /listen/ && line ~ /443/) tls = 1
+
+          if (line ~ /^[ \t]*server_name[ \t]/) {
+            value = line
+            sub(/^[ \t]*server_name[ \t]+/, "", value)
+            sub(/;.*/, "", value)
+            count = split(value, names, /[ \t]+/)
+            for (i = 1; i <= count; i++) if (names[i] == domain) named = 1
+          }
+        }
+
+        depth += opens - closes
+
+        if (in_server && depth <= server_depth) {
+          if (tls && named) found = 1
+          in_server = 0
+        }
+      }
+      END { exit(found ? 0 : 1) }
+    '
+  }
+
   if have certbot && [ "$DRY_RUN" = "0" ]; then
-    if [ -d "/etc/letsencrypt/live/${DOMAIN}" ]; then
-      ok "Certificate already present for ${DOMAIN}"
+    cert_present=0
+    [ -d "/etc/letsencrypt/live/${DOMAIN}" ] && cert_present=1
+
+    tls_vhost=0
+    domain_has_tls_vhost && tls_vhost=1
+
+    if [ "$cert_present" = "1" ] && [ "$tls_vhost" = "1" ]; then
+      ok "Certificate installed and nginx serves ${DOMAIN} on 443"
+
+    elif [ "$cert_present" = "1" ] && [ "$tls_vhost" = "0" ]; then
+      # The case that bit us. Older runs stopped at "certificate already
+      # present" and left the domain with no 443 block at all, so HTTPS served
+      # whichever other application owned the port. Reinstalling is what fixes
+      # it: same certificate, but certbot writes the missing server block and
+      # the HTTP redirect.
+      warn "A certificate exists for ${DOMAIN} but nginx has no 443 block for it."
+      warn "https://${DOMAIN}/ is currently served by some other server block."
+      if confirm "Install it into nginx now (certbot --nginx --reinstall --redirect)?"; then
+        certbot --nginx -d "$DOMAIN" --redirect --reinstall --agree-tos --non-interactive \
+          -m "${CERT_EMAIL:-me@LoganBesecker.com}" || \
+          warn "certbot could not install the certificate. By hand:
+      certbot --nginx -d $DOMAIN --redirect     # choose 2 (redirect) if asked"
+      fi
+
     elif confirm "Obtain a Let's Encrypt certificate for ${DOMAIN} now?"; then
       certbot --nginx -d "$DOMAIN" --redirect --agree-tos --non-interactive \
         -m "${CERT_EMAIL:-me@LoganBesecker.com}" || \
         warn "certbot failed — usually DNS not pointing here yet. Re-run once it does:
       certbot --nginx -d $DOMAIN --redirect"
+    fi
+
+    # Whatever happened above, say plainly whether the domain now terminates TLS
+    # on its own block. certbot can exit 0 and still not have installed where
+    # you expected, and this is the one outcome that must not pass quietly.
+    if domain_has_tls_vhost; then
+      ok "${DOMAIN} has its own 443 server block"
+    else
+      warn "${DOMAIN} still has no 443 server block."
+      warn "https://${DOMAIN}/ will serve whatever other application owns port 443."
+      warn "Fix it with:  certbot --nginx -d $DOMAIN --redirect"
+      warn "and choose option 2 (redirect) if it asks."
     fi
   fi
 else
@@ -523,6 +721,18 @@ printf '  https://%s/\n' "$DOMAIN"
 printf '  https://%s/dashboard\n' "$DOMAIN"
 printf '  https://%s/llms.txt\n\n' "$DOMAIN"
 printf '  %sLogs:%s     journalctl -u %s -f\n' "$bold" "$reset" "$SERVICE_NAME"
-printf '  %sRestart:%s  systemctl restart %s\n\n' "$bold" "$reset" "$SERVICE_NAME"
-printf '  If the certificate has not appeared yet, DNS may still be propagating.\n'
-printf '  Watch it with:  journalctl -u caddy -f\n\n'
+printf '  %sRestart:%s  systemctl restart %s\n' "$bold" "$reset" "$SERVICE_NAME"
+printf '  %sUpdate:%s   git pull && sudo ./deploy/setup.sh %s\n\n' \
+  "$bold" "$reset" "$DOMAIN"
+
+# Naming the proxy actually in use, rather than whichever one this script was
+# written against first.
+if [ "$PROXY" = "caddy" ]; then
+  printf '  Caddy obtains the certificate itself once DNS points here.\n'
+  printf '  Watch it with:  journalctl -u caddy -f\n\n'
+else
+  printf '  If https serves the wrong application, this domain has no 443 block\n'
+  printf '  of its own and the request is falling through to another site. Fix:\n'
+  printf '    certbot --nginx -d %s --redirect\n' "$DOMAIN"
+  printf '  choosing option 2 (redirect) if it asks, then re-run this script.\n\n'
+fi

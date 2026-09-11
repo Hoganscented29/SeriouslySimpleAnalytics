@@ -205,6 +205,17 @@ fi
 say "Installing dependencies"
 mix local.hex --force --if-missing >/dev/null
 mix local.rebar --force --if-missing >/dev/null
+
+# Debian and Ubuntu split the Erlang standard library across packages, and a box
+# provisioned with erlang-nox has no xmerl. Nothing here uses XML, but swoosh
+# compiles an adapter that does, so the build dies on a missing header with a
+# message that names neither the package nor the fix.
+if ! erl -noshell -eval "case code:lib_dir(xmerl) of {error,_} -> halt(1); _ -> halt(0) end" \
+     >/dev/null 2>&1; then
+  die "Erlang's xmerl is missing, and the mailer dependency needs it.
+      Install it, then re-run:  sudo apt-get install -y erlang-xmerl"
+fi
+
 mix deps.get >/dev/null
 ok "Dependencies installed"
 
