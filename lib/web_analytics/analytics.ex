@@ -290,7 +290,21 @@ defmodule WebAnalytics.Analytics do
       |> Map.new(fn row -> {row.bucket, row.count} end)
 
     Enum.map(0..9, fn bucket ->
-      %{from: bucket * 10, to: bucket * 10 + 9, count: Map.get(rows, bucket, 0)}
+      from = bucket * 10
+      # `LEAST(pct/10, 9)` puts 100% in the last bucket alongside 90-99, so that
+      # one spans eleven points and the arithmetic for the other nine does not
+      # describe it.
+      to = if bucket == 9, do: 100, else: from + 9
+
+      %{
+        from: from,
+        to: to,
+        # The histogram component reads `:label` for the caption under each bar.
+        # Without one it renders an empty span, which is a chart of ten unnamed
+        # bars — you can see the shape and not read a value off it.
+        label: "#{from}-#{to}%",
+        count: Map.get(rows, bucket, 0)
+      }
     end)
   end
 
@@ -774,6 +788,106 @@ defmodule WebAnalytics.Analytics do
 
     query = query |> filter_anomalies(f) |> filter_crawlers(f)
     Repo.all(query)
+  end
+
+  # Two windows, because they answer different questions. Thirty minutes is the
+  # conventional "active users" figure — how many people are around. Thirty
+  # seconds is who is touching the page as you watch, which is the number you
+  # want when you have just shipped something and are asking whether it works.
+  @active_window_ms 30 * 60 * 1000
+  @live_window_ms 30 * 1000
+
+  @doc """
+  Who is on the site right now.
+
+  Deliberately ignores the selected range: "active" is a fact about the clock,
+  not about the window the reader happens to be looking at, and a live panel
+  that went empty because someone picked last month would be reporting on the
+  filter rather than on the traffic. The dimension filters — project, domain —
+  are kept, because those narrow which traffic you meant.
+  """
+  def active_now(f, now \\ DateTime.utc_now(), limit \\ 40) do
+    active_since = DateTime.add(now, -@active_window_ms, :millisecond)
+    live_since = DateTime.add(now, -@live_window_ms, :millisecond)
+
+    base =
+      from(s in Session,
+        where: s.site_id == ^f.site_id,
+        where: s.last_seen_at >= ^active_since
+      )
+      |> filter_anomalies(f)
+      |> filter_crawlers(f)
+      |> filter_project(f)
+      |> filter_host(f)
+
+    totals =
+      Repo.one(
+        from s in base,
+          select: %{
+            sessions: count(s.id),
+            visitors: count(s.visitor_token, :distinct),
+            pageviews: coalesce(sum(s.pageview_count), 0),
+            live_sessions: filter(count(s.id), s.last_seen_at >= ^live_since),
+            live_visitors:
+              fragment(
+                "count(distinct ?) FILTER (WHERE ? >= ?)",
+                s.visitor_token,
+                s.last_seen_at,
+                ^live_since
+              )
+          }
+      ) || %{}
+
+    sessions =
+      Repo.all(
+        from s in base,
+          order_by: [desc: s.last_seen_at],
+          limit: ^limit
+      )
+
+    totals
+    |> Map.put(:sessions_list, sessions)
+    |> Map.put(:series, concurrent_series(base, now))
+    |> Map.put(:as_of, now)
+  end
+
+  @doc "The two live windows, in milliseconds, for anything that has to label them."
+  def live_windows, do: %{active_ms: @active_window_ms, live_ms: @live_window_ms}
+
+  # How many sessions were open during each of the last thirty minutes.
+  #
+  # A session is counted in every minute it spanned, not just the one it was
+  # last seen in. Bucketing on last_seen_at alone would put a visit that has
+  # been reading for ten minutes in the newest bucket only, and draw the other
+  # nine as empty — a chart that says nothing was happening during the exact
+  # period something was.
+  #
+  # Bucketed here rather than in SQL because the row set is already bounded by
+  # the thirty minute window: two timestamps per active session is a small read,
+  # and a lateral join over generate_series to save it would be the harder thing
+  # to read for no gain.
+  defp concurrent_series(base, now) do
+    spans =
+      Repo.all(from s in base, select: {s.started_at, s.last_seen_at})
+
+    start = now |> DateTime.add(-29, :minute) |> truncate_minute()
+
+    for offset <- 0..29 do
+      at = DateTime.add(start, offset, :minute)
+      until = DateTime.add(at, 60, :second)
+
+      count =
+        Enum.count(spans, fn {started_at, last_seen_at} ->
+          DateTime.compare(started_at, until) == :lt and
+            DateTime.compare(last_seen_at, at) != :lt
+        end)
+
+      %{at: at, sessions: count}
+    end
+  end
+
+  defp truncate_minute(%DateTime{} = at) do
+    %{at | second: 0, microsecond: {0, 0}}
   end
 
   @doc "How many sessions each anomaly reason accounts for."

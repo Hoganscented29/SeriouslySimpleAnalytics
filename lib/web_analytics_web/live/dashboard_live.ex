@@ -17,17 +17,26 @@ defmodule WebAnalyticsWeb.DashboardLive do
   alias WebAnalytics.Ingest.Crawler
   alias WebAnalytics.Sites
 
-  @tabs ~w(overview pages events flow locations clicks forms sessions crawlers)
+  @tabs ~w(live overview pages events flow locations clicks forms sessions crawlers)
   @click_groups ~w(name id class text selector tag)
   @location_levels ~w(country region county city)
   @flow_modes ~w(pages events)
   @refresh_ms 5_000
 
+  # The live tab gets its own clock. The general refresh is for a page whose
+  # numbers move slowly; this one is a question about the last thirty seconds,
+  # and it runs on its own interval so it neither waits on that refresh nor
+  # makes every other tab pay for a query it does not show.
+  @live_ms 10_000
+
   @impl true
   def mount(params, _session, socket) do
     # The tracker beacons every second, so the dashboard refreshes on its own
     # rather than making the reader reload to see a visit in progress.
-    if connected?(socket), do: :timer.send_interval(@refresh_ms, self(), :refresh)
+    if connected?(socket) do
+      :timer.send_interval(@refresh_ms, self(), :refresh)
+      :timer.send_interval(@live_ms, self(), :live_tick)
+    end
 
     case socket.assigns.live_action do
       :admin -> mount_admin(params, socket)
@@ -108,12 +117,26 @@ defmodule WebAnalyticsWeb.DashboardLive do
       # compliant without the operator having to know that.
       |> assign(:geoip_loaded?, Geo.Database.loaded?())
       |> assign(:filters, build_filters(site, params))
+      |> assign_new(:live, fn -> nil end)
 
-    {:noreply, load(socket)}
+    socket = load(socket)
+
+    # Loaded on arrival as well as on the interval, so opening the tab shows
+    # numbers rather than ten seconds of nothing.
+    {:noreply, if(socket.assigns.tab == "live" and site, do: assign_live(socket), else: socket)}
   end
 
   @impl true
   def handle_info(:refresh, socket), do: {:noreply, load(socket)}
+
+  # Only while the tab is open: a timer that queries for a panel nobody is
+  # looking at is load with no reader.
+  def handle_info(:live_tick, %{assigns: %{tab: "live", site: site}} = socket)
+      when not is_nil(site) do
+    {:noreply, assign_live(socket)}
+  end
+
+  def handle_info(:live_tick, socket), do: {:noreply, socket}
 
   @impl true
   def handle_event("navigate", params, socket) do
@@ -373,7 +396,15 @@ defmodule WebAnalyticsWeb.DashboardLive do
     }
   end
 
+  # Loaded by assign_live/1 on its own interval rather than here, so the five
+  # second refresh does not run it too.
+  defp tab_data("live", _filters, _assigns), do: %{}
+
   defp tab_data(_tab, _filters, _assigns), do: %{}
+
+  defp assign_live(socket) do
+    assign(socket, :live, Analytics.active_now(socket.assigns.filters))
+  end
 
   # -- template helpers ----------------------------------------------------
 

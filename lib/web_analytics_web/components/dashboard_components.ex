@@ -131,27 +131,33 @@ defmodule WebAnalyticsWeb.DashboardComponents do
           </span>
         </span>
       </div>
-      <div class="px-4 py-4 flex items-end gap-1 h-40">
-        <div
-          :for={bucket <- @buckets}
-          class="flex-1 flex flex-col items-center gap-1 h-full justify-end"
-        >
-          <div class="w-full flex flex-col justify-end items-stretch flex-1 gap-px">
-            <div
-              :if={@secondary_key && Map.get(bucket, @secondary_key, 0) > 0}
-              class="bg-warning rounded-t-sm min-h-[2px]"
-              style={"height: #{bar_height(Map.get(bucket, @secondary_key, 0), @max)}%"}
-              title={"#{@secondary_label}: #{Map.get(bucket, @secondary_key, 0)}"}
-            />
-            <div
-              class="bg-primary min-h-[2px] rounded-sm"
-              style={"height: #{bar_height(Map.get(bucket, @primary_key, 0), @max)}%"}
-              title={"#{@primary_label}: #{Map.get(bucket, @primary_key, 0)}"}
-            />
+      <!-- Captions do not wrap, so on a narrow screen the bars' min-content width
+           is the width of ten labels. Scroll the plot inside the card, the way
+           the tables on this dashboard already do, rather than letting it push
+           the page sideways. -->
+      <div class="px-4 py-4 overflow-x-auto">
+        <div class="flex items-end gap-1 h-40 min-w-max">
+          <div
+            :for={bucket <- @buckets}
+            class="flex-1 flex flex-col items-center gap-1 h-full justify-end"
+          >
+            <div class="w-full flex flex-col justify-end items-stretch flex-1 gap-px">
+              <div
+                :if={@secondary_key && Map.get(bucket, @secondary_key, 0) > 0}
+                class="bg-warning rounded-t-sm min-h-[2px]"
+                style={"height: #{bar_height(Map.get(bucket, @secondary_key, 0), @max)}%"}
+                title={"#{@secondary_label}: #{Map.get(bucket, @secondary_key, 0)}"}
+              />
+              <div
+                class="bg-primary min-h-[2px] rounded-sm"
+                style={"height: #{bar_height(Map.get(bucket, @primary_key, 0), @max)}%"}
+                title={"#{@primary_label}: #{Map.get(bucket, @primary_key, 0)}"}
+              />
+            </div>
+            <span class="text-[10px] text-base-content/50 whitespace-nowrap px-1">
+              {Map.get(bucket, @label_key)}
+            </span>
           </div>
-          <span class="text-[10px] text-base-content/50 whitespace-nowrap">
-            {Map.get(bucket, @label_key)}
-          </span>
         </div>
       </div>
     </div>
@@ -484,6 +490,78 @@ defmodule WebAnalyticsWeb.DashboardComponents do
   def svg_width, do: @svg_width
 
   # -- anomaly badge -------------------------------------------------------
+
+  attr :series, :list, required: true, doc: "one entry per minute, oldest first"
+  attr :value_key, :atom, default: :sessions
+  attr :label, :string, default: "Sessions open, per minute"
+
+  @doc """
+  The last thirty minutes, one bar per minute.
+
+  Written to survive both ends of its range. A busy window scales to its own
+  peak. An empty one still draws thirty baseline ticks and an axis rather than
+  collapsing to a blank box, because "nothing happened" and "this panel is
+  broken" look identical otherwise — and on a live view that is the difference
+  a reader most needs to see.
+
+  The scale is floored at one so an empty window does not divide by zero. One
+  session therefore fills the height, which is what the "peak 1" label beside
+  it is for: the shape says when, the label says how much.
+  """
+  def live_sparkline(assigns) do
+    values = Enum.map(assigns.series, &Map.get(&1, assigns.value_key, 0))
+    peak = values |> Enum.max(fn -> 0 end)
+
+    assigns =
+      assigns
+      |> assign(:values, values)
+      |> assign(:peak, peak)
+      |> assign(:scale, max(peak, 1))
+      |> assign(:total, Enum.sum(values))
+
+    ~H"""
+    <div class="rounded-box bg-base-200/50 border border-base-300 p-3">
+      <div class="flex items-baseline justify-between gap-3 mb-2">
+        <span class="text-[11px] font-medium">{@label}</span>
+        <span class="text-[10px] text-base-content/40 tabular-nums">
+          {if @peak > 0, do: "peak #{@peak}", else: "no activity"}
+        </span>
+      </div>
+
+      <%!-- A floor under the bars, so an all-zero window still reads as a chart
+      with nothing in it rather than as an empty box. --%>
+      <div class="flex items-end gap-[2px] h-16 border-b border-base-300">
+        <div
+          :for={{point, value} <- Enum.zip(@series, @values)}
+          class="flex-1 min-w-0 flex items-end h-full"
+          title={"#{Calendar.strftime(point.at, "%H:%M")} UTC · #{value}"}
+        >
+          <%!-- A zero still gets a visible tick. It reads as a minute that was
+          measured and was quiet, which a bar of no height does not. --%>
+          <div
+            class={[
+              "w-full rounded-sm transition-colors",
+              value > 0 && "bg-success/80 hover:bg-success",
+              value == 0 && "bg-base-content/15 hover:bg-base-content/30"
+            ]}
+            style={
+              if value > 0,
+                do: "height: #{max(round(value * 100 / @scale), 6)}%",
+                else: "height: 3px"
+            }
+          >
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-between text-[10px] text-base-content/40 mt-1.5">
+        <span>30 min ago</span>
+        <span :if={@total > 0} class="tabular-nums">{@total} session-minutes</span>
+        <span>now</span>
+      </div>
+    </div>
+    """
+  end
 
   attr :reasons, :list, required: true
   attr :score, :float, default: nil

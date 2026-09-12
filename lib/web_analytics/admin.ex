@@ -146,6 +146,88 @@ defmodule WebAnalytics.Admin do
     }
   end
 
+  # Thirty minutes is the conventional "active users" figure; thirty seconds is
+  # who is touching the box as you watch. Both, because they answer different
+  # questions — how busy is it, and is anything happening right now.
+  @active_window_ms 30 * 60 * 1000
+  @live_window_ms 30 * 1000
+
+  @doc """
+  Who is on the deployment right now, across every account.
+
+  Separate from `counters/2` because it runs on every tick while the heavier
+  breakdowns run once a minute: this is the one number on the page that is
+  worthless if it is a minute old.
+  """
+  def active_now(scope \\ %{domain: nil, project: nil}, now \\ DateTime.utc_now()) do
+    active_since = DateTime.add(now, -@active_window_ms, :millisecond)
+    live_since = DateTime.add(now, -@live_window_ms, :millisecond)
+
+    base = from [session: s] in scoped_sessions(scope), where: s.last_seen_at >= ^active_since
+
+    totals =
+      Repo.one(
+        from [session: s] in base,
+          select: %{
+            sessions: count(s.id),
+            visitors: count(s.visitor_token, :distinct),
+            sites: count(s.site_id, :distinct),
+            crawlers: filter(count(s.id), s.crawler),
+            live_sessions: filter(count(s.id), s.last_seen_at >= ^live_since)
+          }
+      ) || %{}
+
+    sessions =
+      Repo.all(
+        from [session: s] in base,
+          join: site in Site,
+          on: site.id == s.site_id,
+          order_by: [desc: s.last_seen_at],
+          limit: 25,
+          select: %{
+            site: site.name,
+            key: site.key,
+            host: s.host,
+            project: s.project,
+            channel: s.channel,
+            crawler: s.crawler,
+            crawler_name: s.crawler_name,
+            city: s.city,
+            country: s.country,
+            entry_path: s.entry_path,
+            pageviews: s.pageview_count,
+            dwell_ms: s.dwell_ms,
+            last_seen_at: s.last_seen_at
+          }
+      )
+
+    totals
+    |> Map.put(:sessions_list, sessions)
+    |> Map.put(:series, concurrent_series(base, now))
+    |> Map.put(:as_of, now)
+  end
+
+  # Every minute of the last thirty, including the quiet ones, and a session
+  # counted in every minute it spanned rather than only the one it was last
+  # seen in. See the note on the same function in WebAnalytics.Analytics.
+  defp concurrent_series(base, now) do
+    spans = Repo.all(from [session: s] in base, select: {s.started_at, s.last_seen_at})
+    start = %{DateTime.add(now, -29, :minute) | second: 0, microsecond: {0, 0}}
+
+    for offset <- 0..29 do
+      at = DateTime.add(start, offset, :minute)
+      until = DateTime.add(at, 60, :second)
+
+      count =
+        Enum.count(spans, fn {started_at, last_seen_at} ->
+          DateTime.compare(started_at, until) == :lt and
+            DateTime.compare(last_seen_at, at) != :lt
+        end)
+
+      %{at: at, sessions: count}
+    end
+  end
+
   @doc "Facts about the deployment itself, which change rarely."
   def system do
     %{

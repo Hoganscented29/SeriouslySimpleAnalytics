@@ -153,6 +153,97 @@
       </button>
     </div>
 
+    <% live = @live || %{} %>
+    <!-- ============================== LIVE =============================== -->
+    <div :if={@tab == "live"} class="space-y-6">
+      <div class="rounded-box border-2 border-success/50 bg-base-100 overflow-hidden">
+        <div class="px-4 py-3 border-b border-success/30 bg-success/10 flex items-center gap-3 flex-wrap">
+          <span class="inline-flex items-center gap-2 rounded-full bg-success text-success-content px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider">
+            <span class="relative flex h-2 w-2" aria-hidden="true">
+              <span class="motion-safe:animate-ping absolute inline-flex h-full w-full rounded-full bg-success-content opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-2 w-2 bg-success-content"></span>
+            </span>
+            Live
+          </span>
+          <h2 class="text-sm font-semibold">Who is on the site right now</h2>
+          <span class="text-xs text-base-content/50 ml-auto">
+            Refreshes every 10 seconds{if live[:as_of], do: " · updated #{relative(live[:as_of])}"}
+          </span>
+        </div>
+
+        <div class="p-4 space-y-4">
+          <p class="text-xs text-base-content/60">
+            Counted off the clock, not off the range above: a visit is active if the tag has
+            reported it recently, whatever window the rest of this page is showing.
+          </p>
+
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <.stat label="Active now" value={number(live[:live_sessions])} hint="last 30 seconds" />
+            <.stat
+              label="Visitors now"
+              value={number(live[:live_visitors])}
+              hint="last 30 seconds"
+            />
+            <.stat label="Active sessions" value={number(live[:sessions])} hint="last 30 minutes" />
+            <.stat label="Visitors" value={number(live[:visitors])} hint="last 30 minutes" />
+          </div>
+
+          <.live_sparkline :if={live[:series]} series={live[:series]} />
+        </div>
+      </div>
+
+      <div class="rounded-box bg-base-100 border border-base-300 overflow-x-auto">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>Last seen</th>
+              <th>On</th>
+              <th>Entry</th>
+              <th class="text-right">Pages</th>
+              <th class="text-right">Dwell</th>
+              <th class="text-right">Scroll</th>
+              <th>Where</th>
+              <th>Device</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% cutoff = live[:as_of] && DateTime.add(live[:as_of], -30, :second) %>
+            <tr
+              :for={session <- live[:sessions_list] || []}
+              class={[
+                "hover transition-colors",
+                cutoff && DateTime.compare(session.last_seen_at, cutoff) != :lt &&
+                  "bg-success/10"
+              ]}
+            >
+              <td class="whitespace-nowrap text-xs">{relative(session.last_seen_at)}</td>
+              <td class="max-w-[12rem] truncate" title={session.exit_path}>
+                {display_name(session.exit_path)}
+              </td>
+              <td
+                class="max-w-[10rem] truncate text-xs text-base-content/60"
+                title={session.entry_path}
+              >
+                {display_name(session.entry_path)}
+              </td>
+              <td class="text-right tabular-nums">{number(session.pageview_count)}</td>
+              <td class="text-right tabular-nums">{duration(session.dwell_ms)}</td>
+              <td class="text-right tabular-nums">{percent(session.max_scroll_pct)}</td>
+              <td class="text-xs whitespace-nowrap">{display_name(session.city)}</td>
+              <td class="text-xs whitespace-nowrap">
+                {display_name(session.browser)} · {display_name(session.device_type)}
+              </td>
+            </tr>
+            <tr :if={(live[:sessions_list] || []) == []}>
+              <td colspan="8" class="text-center py-8 text-base-content/50">
+                Nobody in the last 30 minutes
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <% overview = @data[:overview] || %{} %>
     <!-- ============================= OVERVIEW ============================ -->
     <div :if={@tab == "overview"} class="space-y-6">

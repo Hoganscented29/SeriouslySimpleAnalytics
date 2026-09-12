@@ -47,6 +47,100 @@
       <button phx-click="clear_filter" class="btn btn-xs btn-outline">Clear</button>
     </div>
 
+    <!-- live: on its own clock, refreshed on every tick -->
+    <section class="rounded-box border-2 border-success/50 bg-base-100 overflow-hidden">
+      <div class="px-4 py-3 border-b border-success/30 bg-success/10 flex items-center gap-3 flex-wrap">
+        <span class="inline-flex items-center gap-2 rounded-full bg-success text-success-content px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider">
+          <span class="relative flex h-2 w-2" aria-hidden="true">
+            <span class="motion-safe:animate-ping absolute inline-flex h-full w-full rounded-full bg-success-content opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2 w-2 bg-success-content"></span>
+          </span>
+          Live
+        </span>
+        <h2 class="text-sm font-semibold">Who is on this deployment right now</h2>
+        <span class="text-xs text-base-content/50 ml-auto">
+          every {@counter_seconds}s · updated {ago(@live.as_of)}
+        </span>
+      </div>
+
+      <div class="p-4 space-y-4">
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+          <div
+            :for={
+              stat <- [
+                {"Active now", @live.live_sessions, "last 30 seconds"},
+                {"Active sessions", @live.sessions, "last 30 minutes"},
+                {"Visitors", @live.visitors, "last 30 minutes"},
+                {"Accounts", @live.sites, "with traffic in 30 min"},
+                {"Crawlers", @live.crawlers, "of the active sessions"}
+              ]
+            }
+            class="rounded-box bg-base-200/50 border border-base-300 p-4"
+          >
+            <div class="text-xs text-base-content/60">{elem(stat, 0)}</div>
+            <div class="text-2xl font-semibold tabular-nums mt-1">{num(elem(stat, 1))}</div>
+            <div class="text-[11px] text-base-content/40 mt-0.5">{elem(stat, 2)}</div>
+          </div>
+        </div>
+
+        <.live_sparkline series={@live.series} />
+
+        <div class="overflow-x-auto">
+          <table class="table table-xs">
+            <thead>
+              <tr>
+                <th>Last seen</th>
+                <th>Account</th>
+                <th>Domain</th>
+                <th>Project</th>
+                <th>On</th>
+                <th class="text-right">Pages</th>
+                <th class="text-right">Dwell</th>
+                <th>Where</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% cutoff = DateTime.add(@live.as_of, -30, :second) %>
+              <tr
+                :for={session <- @live.sessions_list}
+                class={[
+                  "hover",
+                  DateTime.compare(session.last_seen_at, cutoff) != :lt && "bg-success/10"
+                ]}
+              >
+                <td class="whitespace-nowrap">{ago(session.last_seen_at)}</td>
+                <td>
+                  <.link
+                    navigate={~p"/admin/accounts/#{session.key}"}
+                    class="link link-hover font-medium"
+                  >
+                    {session.site}
+                  </.link>
+                </td>
+                <td class="font-mono text-[11px] max-w-[10rem] truncate">
+                  {session.host || "—"}
+                </td>
+                <td class="font-mono text-[11px]">{session.project || "—"}</td>
+                <td class="max-w-[12rem] truncate">
+                  {session.crawler_name || session.entry_path || "—"}
+                </td>
+                <td class="text-right tabular-nums">{num(session.pageviews)}</td>
+                <td class="text-right tabular-nums">{duration(session.dwell_ms)}</td>
+                <td class="text-[11px] whitespace-nowrap">
+                  {session.city || session.country || "—"}
+                </td>
+              </tr>
+              <tr :if={@live.sessions_list == []}>
+                <td colspan="8" class="text-center py-8 text-base-content/50">
+                  Nobody in the last 30 minutes
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
     <!-- live counters -->
     <section>
       <h2 class="text-xs uppercase tracking-wide text-base-content/50 mb-3">Right now</h2>

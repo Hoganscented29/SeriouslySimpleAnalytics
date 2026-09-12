@@ -9,6 +9,72 @@ defmodule WebAnalytics.AdminTest do
   alias WebAnalytics.Admin
   alias WebAnalytics.Ingest
 
+  describe "active_now/2" do
+    test "an empty deployment reports zeros rather than failing" do
+      live = Admin.active_now()
+
+      assert live.sessions == 0
+      assert live.live_sessions == 0
+      assert live.sessions_list == []
+    end
+
+    test "separates the last thirty seconds from the last thirty minutes" do
+      site = site_fixture(%{key: "live-admin"})
+
+      for path <- ["/now", "/recent", "/stale"] do
+        {:ok, _} =
+          Ingest.submit_sync(site, payload(site, [init_event(), pageview_event(1, path)]),
+            received_at: DateTime.utc_now(),
+            token: path
+          )
+      end
+
+      sessions = WebAnalytics.Repo.all(WebAnalytics.Tracking.Session)
+      assert length(sessions) == 3
+      [minutes_ago, long_ago, _still_here] = Enum.sort_by(sessions, & &1.id)
+
+      # One a few minutes back, one well outside the half hour. Only the third
+      # is still inside the thirty second window.
+      age(minutes_ago, -5, :minute)
+      age(long_ago, -45, :minute)
+
+      live = Admin.active_now()
+
+      assert live.sessions == 2
+      assert live.live_sessions == 1
+      assert length(live.sessions_list) == 2
+    end
+
+    test "honours the domain scope, so a filtered page counts filtered traffic" do
+      site = site_fixture(%{key: "live-scoped"})
+
+      for host <- ["a.example.com", "b.example.com"] do
+        {:ok, _} =
+          Ingest.submit_sync(
+            site,
+            payload(
+              site,
+              [init_event(), pageview_event(1, "/", %{"url" => "https://#{host}/"})],
+              token: host
+            ),
+            received_at: DateTime.utc_now()
+          )
+      end
+
+      assert Admin.active_now().sessions == 2
+      assert Admin.active_now(%{domain: "a.example.com", project: nil}).sessions == 1
+    end
+
+    defp age(session, amount, unit) do
+      at = DateTime.add(DateTime.utc_now(), amount, unit)
+
+      WebAnalytics.Repo.update_all(
+        from(s in WebAnalytics.Tracking.Session, where: s.id == ^session.id),
+        set: [last_seen_at: at, started_at: at]
+      )
+    end
+  end
+
   describe "counters/1" do
     test "an empty deployment reports zeros rather than failing" do
       counters = Admin.counters()

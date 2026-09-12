@@ -12,6 +12,10 @@ defmodule WebAnalyticsWeb.AdminLive do
   """
   use WebAnalyticsWeb, :live_view
 
+  # Only the one component: this module defines its own num/1 and duration/1,
+  # and importing the rest would collide with them.
+  import WebAnalyticsWeb.DashboardComponents, only: [live_sparkline: 1]
+
   alias WebAnalytics.Admin
   alias WebAnalytics.Admin.Host
 
@@ -44,6 +48,7 @@ defmodule WebAnalyticsWeb.AdminLive do
      |> assign(:scope, Admin.scope())
      |> load_host()
      |> load_counters()
+     |> load_live()
      |> load_sites()
      |> load_detail()}
   end
@@ -57,7 +62,7 @@ defmodule WebAnalyticsWeb.AdminLive do
 
     socket = assign(socket, :scope, scope)
 
-    {:noreply, socket |> load_counters() |> load_sites() |> load_detail()}
+    {:noreply, socket |> load_counters() |> load_live() |> load_sites() |> load_detail()}
   end
 
   @impl true
@@ -70,6 +75,9 @@ defmodule WebAnalyticsWeb.AdminLive do
       |> sample_cpu(@counter_ms)
       |> load_host()
       |> load_counters()
+      # Every tick, not every sixth: a figure about the last thirty seconds is
+      # worthless if it is a minute old.
+      |> load_live()
 
     {:noreply,
      if rem(tick, @detail_every) == 0 do
@@ -104,6 +112,7 @@ defmodule WebAnalyticsWeb.AdminLive do
      socket
      |> load_host()
      |> load_counters()
+     |> load_live()
      |> load_sites()
      |> load_detail()
      |> assign(:system, Admin.system())
@@ -178,6 +187,10 @@ defmodule WebAnalyticsWeb.AdminLive do
     socket
     |> assign(:counters, Admin.counters(socket.assigns.scope, now))
     |> assign(:counters_at, now)
+  end
+
+  defp load_live(socket) do
+    assign(socket, :live, Admin.active_now(socket.assigns.scope))
   end
 
   defp load_sites(socket) do

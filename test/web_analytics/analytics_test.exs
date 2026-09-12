@@ -58,6 +58,101 @@ defmodule WebAnalytics.AnalyticsTest do
     Analytics.filters(site.id, Map.merge(%{range: "30d"}, opts))
   end
 
+  describe "active_now/3" do
+    test "counts off the clock, not off the selected range", %{site: site} do
+      # The setup's visits are all just-now. Reading a window that ended years
+      # ago must not empty the live panel: "active" is a fact about the clock,
+      # and a panel that went blank because someone changed the range above it
+      # would be reporting on the filter rather than on the traffic.
+      last_year = %{
+        filters(site)
+        | from: ~U[2020-01-01 00:00:00.000000Z],
+          to: ~U[2020-01-02 00:00:00.000000Z]
+      }
+
+      # The range genuinely excludes everything, or this proves nothing.
+      assert Analytics.overview(last_year).sessions == 0
+
+      live = Analytics.active_now(last_year)
+
+      assert live.sessions > 0
+      assert live.live_sessions > 0
+    end
+
+    test "separates the last thirty seconds from the last thirty minutes", %{site: site} do
+      submit(site, [
+        init_event(),
+        pageview_event(1, "/older"),
+        tick_event(1, %{"d" => 5_000})
+      ])
+
+      [older | _] =
+        Repo.all(from s in Session, where: s.site_id == ^site.id, order_by: [desc: s.id])
+
+      at = DateTime.add(DateTime.utc_now(), -10, :minute)
+
+      Repo.update_all(from(s in Session, where: s.id == ^older.id),
+        set: [last_seen_at: at, started_at: at]
+      )
+
+      live = Analytics.active_now(filters(site))
+
+      # Still active, not still live: ten minutes is inside the half hour and
+      # well outside the thirty seconds.
+      assert live.sessions > live.live_sessions
+      assert Enum.any?(live.sessions_list, &(&1.id == older.id))
+    end
+  end
+
+  describe "the live series" do
+    test "keeps every minute of the window, including the quiet ones", %{site: site} do
+      series = Analytics.active_now(filters(site)).series
+
+      # Thirty buckets whatever the traffic: a chart that returned only the
+      # minutes with data would draw two visits an hour apart side by side and
+      # call it a busy half hour.
+      assert length(series) == 30
+      assert Enum.all?(series, &is_integer(&1.sessions))
+
+      minutes =
+        series
+        |> Enum.map(& &1.at)
+        |> Enum.chunk_every(2, 1, :discard)
+        |> Enum.map(fn [a, b] -> DateTime.diff(b, a) end)
+
+      assert Enum.all?(minutes, &(&1 == 60))
+    end
+
+    test "counts a session in every minute it spanned", %{site: site} do
+      submit(site, [init_event(), pageview_event(1, "/long")])
+
+      [long | _] =
+        Repo.all(from s in Session, where: s.site_id == ^site.id, order_by: [desc: s.id])
+
+      now = DateTime.utc_now()
+
+      # One visit, still open, that started ten minutes ago.
+      Repo.update_all(from(s in Session, where: s.id == ^long.id),
+        set: [started_at: DateTime.add(now, -10, :minute), last_seen_at: now]
+      )
+
+      series = Analytics.active_now(filters(site), now).series
+      covered = Enum.count(series, &(&1.sessions > 0))
+
+      # Bucketing on last_seen_at alone would put it in one bucket and draw the
+      # ten minutes it was actually being read as empty.
+      assert covered >= 10
+    end
+
+    test "an account with no traffic still gets a full, flat window" do
+      site = site_fixture(%{key: "quiet-live"})
+      series = Analytics.active_now(Analytics.filters(site.id, %{range: "30d"})).series
+
+      assert length(series) == 30
+      assert Enum.all?(series, &(&1.sessions == 0))
+    end
+  end
+
   describe "bounce rate" do
     test "counts a visit that did not last ten seconds, however many pages", %{site: site} do
       # Two pages in four seconds is someone who arrived, saw the wrong thing
@@ -258,7 +353,19 @@ defmodule WebAnalytics.AnalyticsTest do
   end
 
   test "scroll and dwell distributions bucket without crashing", %{site: site} do
-    assert length(Analytics.scroll_distribution(filters(site))) == 10
+    scroll = Analytics.scroll_distribution(filters(site))
+    assert length(scroll) == 10
+
+    # Every bar is captioned. The histogram component reads `:label`, so a bucket
+    # without one renders an empty span and the chart becomes ten unnamed bars.
+    assert Enum.all?(scroll, &is_binary(&1.label))
+    assert Enum.map(scroll, & &1.label) |> Enum.take(3) == ["0-9%", "10-19%", "20-29%"]
+
+    # `LEAST(pct/10, 9)` files 100% with 90-99, so the last bucket really does
+    # span eleven points and its caption has to say so.
+    assert List.last(scroll).label == "90-100%"
+    assert List.last(scroll).to == 100
+
     buckets = Analytics.dwell_distribution(filters(site))
 
     assert length(buckets) == 9
