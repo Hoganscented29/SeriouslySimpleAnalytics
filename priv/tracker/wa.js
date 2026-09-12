@@ -224,7 +224,11 @@
         clicks: 0,
         outbound: 0,
         fromPath: null,
-        fromTitle: null
+        fromTitle: null,
+        // Whether anything from this session has ever been dispatched. A
+        // session that has not been reported has never sent its init, so the
+        // server has no user agent, no referrer and no host for it.
+        reported: false
       };
 
   var page = null;
@@ -269,6 +273,14 @@
     });
 
     log('flush', events.length, events);
+
+    // Marked on dispatch rather than on a confirmed response: sendBeacon never
+    // reports one, and re-sending init after every unlucky request would be a
+    // worse failure than missing it after a lost one.
+    if (!session.reported) {
+      session.reported = true;
+      persist();
+    }
 
     // text/plain keeps this a CORS "simple request", so cross-origin beacons
     // never pay for a preflight round trip.
@@ -1253,7 +1265,11 @@
   }
 
   function start() {
-    if (!resumed) {
+    // Not just new sessions: one resumed from a stretch where nothing could be
+    // sent — the tag measuring only, an extension blocking it, the collector
+    // unreachable — has never delivered its init either, and without it the
+    // server files the whole visit with no browser, no referrer and no host.
+    if (!resumed || !session.reported) {
       enqueue({
         n: 'init',
         ref: document.referrer || null,

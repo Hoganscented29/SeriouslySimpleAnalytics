@@ -357,6 +357,61 @@ defmodule WebAnalytics.IngestTest do
       assert session.host == "old-tag.example.com"
     end
 
+    test "a session that resumes without its entry pageview still gets a host" do
+      site = site_fixture(%{key: "resumed"})
+
+      # What a visit looks like when the opening batch never reached us: the
+      # tag kept measuring, and the first thing we see is page nine. Without a
+      # host the whole session is invisible to every domain filter.
+      {:ok, _} =
+        Ingest.submit_sync(
+          site,
+          payload(site, [
+            pageview_event(9, "/pricing", %{"url" => "https://shop.example.com/pricing"}),
+            tick_event(9, %{"d" => 30_000})
+          ]),
+          received_at: DateTime.utc_now()
+        )
+
+      session = Repo.one(from s in Session, where: s.site_id == ^site.id)
+
+      assert session.host == "shop.example.com"
+      # Still not an entry, though — that is a different claim and unknown here.
+      assert session.entry_path == nil
+    end
+
+    test "a later batch never moves a session to a different host" do
+      site = site_fixture(%{key: "stable-host"})
+
+      {:ok, _} =
+        Ingest.submit_sync(
+          site,
+          payload(
+            site,
+            [
+              init_event(),
+              pageview_event(1, "/", %{"url" => "https://first.example.com/"})
+            ],
+            token: "one-session"
+          ),
+          received_at: DateTime.utc_now()
+        )
+
+      {:ok, _} =
+        Ingest.submit_sync(
+          site,
+          payload(
+            site,
+            [pageview_event(2, "/next", %{"url" => "https://second.example.com/next"})],
+            token: "one-session"
+          ),
+          received_at: DateTime.utc_now()
+        )
+
+      session = Repo.one(from s in Session, where: s.site_id == ^site.id)
+      assert session.host == "first.example.com"
+    end
+
     test "later ticks keep the largest paint, not the first" do
       site = site_fixture(%{key: "lcp"})
 

@@ -312,9 +312,14 @@ defmodule WebAnalytics.Ingest.Processor do
       |> put_unless_nil(:agent_name, plan.agent_name)
       |> put_unless_nil(:contact_email, plan.contact_email)
       |> Map.merge(location_attrs(plan.location))
-      # The host comes from the first pageview's URL, which is the only place the
-      # client tells us which domain the tag is deployed on.
-      |> put_unless_nil(:host, entry && entry.url && uri_host(entry.url))
+      # The host comes off a pageview's URL, the only place the client tells us
+      # which domain the tag is deployed on. Normally that is the entry
+      # pageview — but a session resuming after a stretch where nothing could
+      # be sent arrives without one, and a visit filed under no domain is
+      # invisible to every domain filter. Any pageview in the batch answers the
+      # same question; the upsert only ever fills a null, so a later batch
+      # cannot move a session to a different host.
+      |> put_unless_nil(:host, host_of(entry || earliest_pageview(plan.pageviews)))
       |> put_unless_nil(:entry_path, entry && entry.path)
       |> put_unless_nil(:entry_title, entry && entry.title)
       |> Map.merge(init_attrs(init))
@@ -377,6 +382,17 @@ defmodule WebAnalytics.Ingest.Processor do
 
   # Identity fields are only filled in where still blank, so a late `init` from
   # a resumed tab can complete a session without clobbering what it already has.
+  defp earliest_pageview(pageviews) when map_size(pageviews) == 0, do: nil
+
+  defp earliest_pageview(pageviews) do
+    pageviews |> Enum.min_by(fn {seq, _} -> seq end) |> elem(1)
+  end
+
+  defp host_of(nil), do: nil
+  defp host_of(%{url: nil}), do: nil
+  defp host_of(%{url: url}), do: uri_host(url)
+  defp host_of(_), do: nil
+
   defp session_on_conflict do
     from(s in Session,
       update: [
