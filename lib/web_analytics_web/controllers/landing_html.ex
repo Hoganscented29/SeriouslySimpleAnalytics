@@ -5,7 +5,13 @@ defmodule WebAnalyticsWeb.LandingHTML do
   # Before embed_templates, which compiles the templates at that point: an
   # import underneath it is not in scope for them.
   import WebAnalyticsWeb.IntegrationComponents,
-    only: [integration_chat: 1, dashboard_preview: 1, live_proof: 1]
+    only: [
+      integration_chat: 1,
+      dashboard_preview: 1,
+      agent_preview: 1,
+      live_proof: 1,
+      agent_prompt: 1
+    ]
 
   embed_templates "landing_html/*"
 
@@ -134,51 +140,6 @@ defmodule WebAnalyticsWeb.LandingHTML do
   def ping_url(base_url, account_id) do
     "#{base_url}/api/ping?uid=#{account_id}&type=ai&project=my-agent&event=page_view" <>
       "&c=Austin&cc=Travis&s_p=Texas&n=United%20States"
-  end
-
-  @doc """
-  A worked example of instrumenting one run.
-
-  HEEx reads `{` as interpolation, so anything containing braces is assembled
-  here rather than escaped in the template.
-  """
-  def run_example(base_url, account_id) do
-    base =
-      "#{base_url}/api/ping?uid=#{account_id}&project=my-agent&sid=run_7f3a" <>
-        "&c=Austin&cc=Travis&s_p=Texas&n=US"
-
-    [
-      "# a run starts",
-      "curl \"#{base}&event=run_started\"",
-      "",
-      "# it calls a tool",
-      "curl \"#{base}&event=tool_called&tool=web_search&latency_ms=420\"",
-      "",
-      "# and finishes",
-      "curl \"#{base}&event=run_completed&outcome=success\""
-    ]
-    |> Enum.join("\n")
-  end
-
-  @doc """
-  Creating an account and using it, in two requests.
-
-  Shown as one block because the account id from the first is the whole input to
-  the second — an agent reading this needs to see them joined up.
-  """
-  def account_example(base_url) do
-    [
-      "# 1. create an account (the email is optional)",
-      "curl -X POST \"#{base_url}/api/v1/accounts\" \\",
-      "  -d email=you@example.com -d project=my-agent",
-      "",
-      "# => {\"uid\": \"acct_9f3ab21c04\", \"ping_url\": \"...\", ...}",
-      "",
-      "# 2. report an event with the id it gave you",
-      "curl \"#{base_url}/api/ping?uid=acct_9f3ab21c04&type=ai&project=my-agent" <>
-        "&event=run_started&sid=run_7f3a\""
-    ]
-    |> Enum.join("\n")
   end
 
   @doc "The install snippet, for sites that also want browser tracking."

@@ -411,4 +411,103 @@ defmodule WebAnalyticsWeb.AdminLiveTest do
       refute html =~ theirs.key
     end
   end
+
+  describe "drilling into a domain or project" do
+    setup %{conn: conn} do
+      admin = admin_fixture()
+      a = user_site_fixture(admin, %{key: "acct-a", name: "Account A"})
+      b = user_site_fixture(admin, %{key: "acct-b", name: "Account B"})
+
+      # Two domains and two projects, deliberately spread across two accounts so
+      # a filter has something to exclude.
+      {:ok, _} =
+        Ingest.submit_sync(
+          a,
+          payload(a, [init_event(), pageview_event(1, "/", %{"url" => "https://shop.example/"})]),
+          received_at: DateTime.utc_now()
+        )
+
+      {:ok, _} =
+        Ingest.submit_sync(
+          b,
+          payload(b, [init_event(), pageview_event(1, "/", %{"url" => "https://docs.example/"})]),
+          received_at: DateTime.utc_now()
+        )
+
+      %{conn: log_in_user(conn, admin), a: a, b: b}
+    end
+
+    test "a domain narrows the traffic panels to it", %{conn: conn} do
+      {:ok, live, _html} = live(conn, ~p"/admin")
+
+      html = live |> element("button[phx-value-domain='shop.example']") |> render_click()
+
+      assert html =~ "Filtered"
+      assert_patch(live, ~p"/admin?domain=shop.example")
+
+      counters = :sys.get_state(live.pid).socket.assigns.counters
+      assert counters.sessions == 1
+    end
+
+    test "an account with nothing on that domain drops out of the table", %{conn: conn} do
+      {:ok, live, _html} = live(conn, ~p"/admin?domain=shop.example")
+
+      keys = :sys.get_state(live.pid).socket.assigns.sites |> Enum.map(& &1.key)
+
+      # Not a quiet account — it is not part of the question being asked.
+      assert "acct-a" in keys
+      refute "acct-b" in keys
+    end
+
+    test "the domain list still shows every domain while one is picked", %{conn: conn} do
+      {:ok, live, _html} = live(conn, ~p"/admin?domain=shop.example")
+
+      names = :sys.get_state(live.pid).socket.assigns.detail.domains |> Enum.map(& &1.name)
+
+      # A control you cannot get out of is not a control.
+      assert "shop.example" in names
+      assert "docs.example" in names
+    end
+
+    test "deployment-wide panels are hidden rather than shown unscoped", %{conn: conn} do
+      {:ok, _live, filtered} = live(conn, ~p"/admin?domain=shop.example")
+      {:ok, _live, unfiltered} = live(conn, ~p"/admin")
+
+      # A global user count beside nine scoped numbers quietly misleads.
+      assert unfiltered =~ "This deployment"
+      refute filtered =~ "This deployment"
+      assert unfiltered =~ "This server"
+      refute filtered =~ "This server"
+    end
+
+    test "clearing returns to everything", %{conn: conn} do
+      {:ok, live, _html} = live(conn, ~p"/admin?domain=shop.example")
+
+      live |> element("button", "Clear") |> render_click()
+
+      assert_patch(live, ~p"/admin")
+      assert :sys.get_state(live.pid).socket.assigns.counters.sessions == 2
+    end
+
+    test "the filter survives a reload, so it can be shared", %{conn: conn} do
+      {:ok, live, html} = live(conn, ~p"/admin?domain=docs.example")
+
+      assert html =~ "Filtered"
+      assert :sys.get_state(live.pid).socket.assigns.scope.domain == "docs.example"
+    end
+
+    test "a project narrows the same way", %{conn: conn, a: a} do
+      {:ok, _} =
+        Ingest.submit_sync(
+          a,
+          payload(a, [init_event(), pageview_event(1, "/x")]),
+          received_at: DateTime.utc_now(),
+          project: "my-agent"
+        )
+
+      {:ok, live, _html} = live(conn, ~p"/admin?project=my-agent")
+
+      assert :sys.get_state(live.pid).socket.assigns.counters.sessions == 1
+    end
+  end
 end

@@ -6,7 +6,7 @@
     <div class="max-w-3xl">
       <h1 class="badge badge-primary badge-outline mb-4">AI Analytics</h1>
       <h2 class="text-4xl sm:text-5xl font-semibold tracking-tight leading-tight">
-        llms.txt Analytics — Free AI Data Metrics
+        <code class="font-mono">llms.txt</code> Analytics — Free AI Data Metrics
       </h2>
       <p class="mt-5 text-lg text-base-content/70 leading-relaxed">
         You shipped an agent, an MCP server, a CLI, a VS Code extension. You have no idea
@@ -17,7 +17,7 @@
     </div>
 
     <div class="mt-8 rounded-box bg-base-100 border border-base-300 p-5 sm:p-6">
-      <.dashboard_preview />
+      <.agent_preview />
       <div class="mt-4 flex flex-wrap items-center gap-3">
         <.link navigate={~p"/dashboard"} class="btn btn-primary btn-sm">See it in the dashboard</.link>
         <a href={~p"/llms.txt"} class="btn btn-outline btn-sm font-mono text-xs">
@@ -64,20 +64,19 @@
                 {"…anything", "Kept as an attribute: &tool=search&latency_ms=420&outcome=success"}
               ]
             }>
-              <td class="font-mono text-xs whitespace-nowrap">{elem(row, 0)}</td>
+              <td class="font-mono text-xs whitespace-nowrap">
+                <span :if={elem(row, 0) == "…anything"} class="font-bold">
+                  <span class="wa-ellipsis" aria-hidden="true"><i class="not-italic">.</i><i class="not-italic">.</i><i class="not-italic">.</i></span>anything
+                </span>
+                <span :if={elem(row, 0) != "…anything"}>{elem(row, 0)}</span>
+              </td>
               <td class="text-sm text-base-content/70">{elem(row, 1)}</td>
             </tr>
           </tbody>
         </table>
       </div>
 
-      <div class="mt-10 grid lg:grid-cols-2 gap-6">
-        <div>
-          <div class="text-xs uppercase tracking-wide text-base-content/60 mb-2">
-            Instrumenting one run
-          </div>
-          <pre class="bg-base-200 rounded p-4 text-xs overflow-x-auto"><code>{run_example(@base_url, @site_key)}</code></pre>
-        </div>
+      <div class="mt-10">
         <div class="space-y-4">
           <div class="rounded-box border border-base-300 p-5">
             <div class="text-sm font-medium">
@@ -155,83 +154,6 @@
         <p class="mt-2 text-sm text-base-content/60">{elem(item, 1)}</p>
       </div>
     </div>
-
-    <div class="mt-8 rounded-box border border-warning/40 bg-warning/5 p-5">
-      <div class="text-sm font-medium">Never send credentials</div>
-      <p class="mt-2 text-sm text-base-content/70">
-        API keys, tokens, passwords, session secrets. Parameters travel in a URL, so by the time
-        one reaches us it has already been written into the logs of every proxy it passed
-        through. Keep prompts and completions out too — URLs have length limits, and analytics is
-        for counting, not transcript storage. The rules are stated in full in <a
-          href={~p"/llms.txt"}
-          class="link font-mono"
-        >/llms.txt</a>, so an agent integrating on
-        your behalf reads them too.
-      </p>
-    </div>
-  </section>
-
-  <!-- accounts API -->
-  <section id="accounts" class="border-y border-base-300 bg-base-100">
-    <div class="mx-auto max-w-6xl px-4 sm:px-6 py-16">
-      <h3 class="text-2xl font-semibold tracking-tight">Your agent can open its own account</h3>
-      <p class="mt-3 text-base-content/70 max-w-2xl">
-        A signup form is the step most likely to end an integration before it starts. So there
-        isn't one in the way: an agent that reads
-        <a href={~p"/llms.txt"} class="link font-mono">/llms.txt</a>
-        can create an account, get an ID back, and report its first event in the same run.
-      </p>
-
-      <div class="mt-8 grid lg:grid-cols-2 gap-6">
-        <div>
-          <div class="text-xs uppercase tracking-wide text-base-content/60 mb-2">
-            Create an account, then use it
-          </div>
-          <pre class="bg-base-200 rounded p-4 text-xs overflow-x-auto"><code>{account_example(@base_url)}</code></pre>
-        </div>
-        <div class="space-y-4">
-          <div class="rounded-box border border-base-300 p-5">
-            <div class="text-sm font-medium">With an email, the link goes to the inbox</div>
-            <p class="mt-2 text-sm text-base-content/60">
-              Pass <code class="font-mono text-xs">email</code>
-              and the sign-in link is mailed there rather than returned in the response — so
-              whoever ends up signing in has to control the address.
-            </p>
-          </div>
-          <div class="rounded-box border border-base-300 p-5">
-            <div class="text-sm font-medium">Without one, the response is the only way in</div>
-            <p class="mt-2 text-sm text-base-content/60">
-              Leave <code class="font-mono text-xs">email</code>
-              out and the account is anonymous. The response carries a <code class="font-mono text-xs">claim_url</code>; nothing else does. Print it, log
-              it, hand it to a human — but keep it.
-            </p>
-          </div>
-          <div class="rounded-box border border-base-300 p-5">
-            <div class="text-sm font-medium">Or just sign up yourself</div>
-            <p class="mt-2 text-sm text-base-content/60">
-              The endpoint exists because agents shouldn't need a browser. You have one. Your
-              account ID is on
-              <.link navigate={~p"/dashboard"} class="link">your dashboard</.link>
-              the moment you sign in.
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- websites too -->
-  <section class="mx-auto max-w-6xl px-4 sm:px-6 py-16">
-    <div class="rounded-box bg-base-100 border border-base-300 p-6 sm:p-8">
-      <h3 class="text-2xl font-semibold tracking-tight">Got a website too?</h3>
-      <p class="mt-3 text-base-content/70 max-w-2xl">
-        The same account covers it, reporting into the same dashboard. One script tag captures
-        dwell time, scroll depth, page-to-page flow, outbound clicks and form abandonment, with
-        no tagging.
-      </p>
-      <pre class="mt-6 bg-base-200 rounded p-4 text-xs sm:text-sm overflow-x-auto"><code>{script_tag(@base_url, @site_key)}</code></pre>
-      <a href={~p"/"} class="btn btn-outline btn-sm mt-5">Website analytics →</a>
-    </div>
   </section>
 
   <!-- the integration, as the conversation it is -->
@@ -247,10 +169,16 @@
   <!-- cta -->
   <section class="border-t border-base-300 bg-base-100">
     <div class="mx-auto max-w-6xl px-4 sm:px-6 py-16 text-center">
-      <h3 class="text-2xl font-semibold tracking-tight">Send your first event now</h3>
-      <p class="mt-3 text-base-content/70">
-        Paste the URL at the top into a terminal, then open the dashboard. It will be there.
+      <h3 class="text-2xl font-semibold tracking-tight">Integrate with AI, now!</h3>
+      <p class="mt-3 text-base-content/70 max-w-2xl mx-auto">
+        Copy this and give it to whatever coding agent works on your project. It does the rest —
+        reads the contract, opens an account, reports the events, and updates your own
+        <code class="font-mono text-sm">llms.txt</code>
+        so the next agent does the same.
       </p>
+
+      <pre class="mt-6 mx-auto max-w-3xl text-left bg-base-200 rounded-box p-5 text-sm whitespace-pre-wrap break-words"><code>{agent_prompt(@base_url)}</code></pre>
+
       <div class="mt-6 flex flex-wrap gap-3 justify-center">
         <.cta current_scope={@current_scope} />
         <a href={~p"/llms.txt"} class="btn btn-outline font-mono text-sm">Read llms.txt</a>

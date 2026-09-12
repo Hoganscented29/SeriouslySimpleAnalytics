@@ -391,4 +391,77 @@ defmodule WebAnalyticsWeb.DashboardLiveTest do
       assert "events" in ~w(overview pages events flow locations clicks forms sessions crawlers)
     end
   end
+
+  describe "filtering by domain and project" do
+    setup %{user: user} do
+      site = user_site_fixture(user, %{key: "multi", name: "Multi"})
+
+      for {host, path} <- [{"shop.example", "/a"}, {"shop.example", "/b"}, {"docs.example", "/c"}] do
+        {:ok, _} =
+          Ingest.submit_sync(
+            site,
+            payload(site, [
+              init_event(),
+              pageview_event(1, path, %{"url" => "https://#{host}#{path}"})
+            ]),
+            received_at: DateTime.utc_now()
+          )
+      end
+
+      %{site: site}
+    end
+
+    test "domains are listed and clickable", %{conn: conn, site: site} do
+      {:ok, live, html} = live(conn, ~p"/dashboard?site=#{site.key}&range=24h")
+
+      assert html =~ "Domains"
+      assert html =~ "shop.example"
+
+      live |> element("button[phx-value-domain='shop.example']") |> render_click()
+
+      assert :sys.get_state(live.pid).socket.assigns.filters.host == "shop.example"
+    end
+
+    test "picking a domain narrows the numbers", %{conn: conn, site: site} do
+      {:ok, live, _html} = live(conn, ~p"/dashboard?site=#{site.key}&range=24h")
+
+      before = :sys.get_state(live.pid).socket.assigns.data.overview.sessions
+      live |> element("button[phx-value-domain='docs.example']") |> render_click()
+      after_click = :sys.get_state(live.pid).socket.assigns.data.overview.sessions
+
+      assert before == 3
+      assert after_click == 1
+    end
+
+    test "clicking the domain you are on clears it", %{conn: conn, site: site} do
+      {:ok, live, _html} =
+        live(conn, ~p"/dashboard?site=#{site.key}&range=24h&domain=shop.example")
+
+      # The row is visibly highlighted, so clicking it again should let go.
+      live |> element("button[phx-value-domain='shop.example']") |> render_click()
+
+      assert :sys.get_state(live.pid).socket.assigns.filters.host == nil
+    end
+
+    test "the domain list keeps every domain while one is picked", %{conn: conn, site: site} do
+      {:ok, live, _html} =
+        live(conn, ~p"/dashboard?site=#{site.key}&range=24h&domain=shop.example")
+
+      names = :sys.get_state(live.pid).socket.assigns.data.domains |> Enum.map(& &1.name)
+
+      assert "shop.example" in names
+      assert "docs.example" in names
+    end
+
+    test "the filter is in the URL, so the view is shareable", %{conn: conn, site: site} do
+      {:ok, live, _html} = live(conn, ~p"/dashboard?site=#{site.key}&range=24h")
+
+      live |> element("button[phx-value-domain='shop.example']") |> render_click()
+
+      assert_patch(
+        live,
+        ~p"/dashboard?#{[anomalies: "exclude", clicks: "name", crawlers: "exclude", domain: "shop.example", group: "path", loc: "country", range: "24h", site: site.key, tab: "overview"]}"
+      )
+    end
+  end
 end

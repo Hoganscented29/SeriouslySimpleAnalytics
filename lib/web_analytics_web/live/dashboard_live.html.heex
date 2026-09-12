@@ -234,6 +234,50 @@
         secondary_key={:filtered}
       />
     </div>
+    <div :if={@tab == "overview"} class="grid md:grid-cols-2 gap-4">
+      <% domains = @data[:domains] || [] %>
+      <% projects = @data[:projects] || [] %>
+
+      <div :if={domains != []} class="rounded-box bg-base-100 border border-base-300">
+        <div class="px-4 py-3 border-b border-base-300 font-medium text-sm">Domains</div>
+        <div class="divide-y divide-base-200 max-h-64 overflow-y-auto">
+          <button
+            :for={domain <- domains}
+            phx-click="select_domain"
+            phx-value-domain={domain.name}
+            class={[
+              "w-full text-left px-4 py-2 flex items-center justify-between gap-3 hover:bg-base-200/60",
+              @filters.host == domain.name && "bg-primary/10"
+            ]}
+          >
+            <span class="font-mono text-xs truncate">{domain.name}</span>
+            <span class="tabular-nums text-sm">{number(domain.count)}</span>
+          </button>
+        </div>
+      </div>
+
+      <div :if={projects != []} class="rounded-box bg-base-100 border border-base-300">
+        <div class="px-4 py-3 border-b border-base-300 font-medium text-sm">Projects</div>
+        <div class="divide-y divide-base-200 max-h-64 overflow-y-auto">
+          <button
+            :for={project <- projects}
+            phx-click="select_project"
+            phx-value-project={project.name}
+            class={[
+              "w-full text-left px-4 py-2 flex items-center justify-between gap-3 hover:bg-base-200/60",
+              @filters.project == project.name && "bg-primary/10"
+            ]}
+          >
+            <span class="font-mono text-xs truncate">
+              {project.name}
+              <span class="text-base-content/40">{project.channel || "web"}</span>
+            </span>
+            <span class="tabular-nums text-sm">{number(project.count)}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- =============================== PAGES ============================= -->
     <div :if={@tab == "pages"} class="space-y-6">
       <.histogram title="Max scroll depth reached" buckets={@data[:scroll] || []} />

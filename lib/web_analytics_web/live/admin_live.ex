@@ -41,10 +41,23 @@ defmodule WebAnalyticsWeb.AdminLive do
      |> assign(:cpu_util, nil)
      |> assign(:cpu_window, nil)
      |> assign(:site_window, :day)
+     |> assign(:scope, Admin.scope())
      |> load_host()
      |> load_counters()
      |> load_sites()
      |> load_detail()}
+  end
+
+  @impl true
+  def handle_params(params, _uri, socket) do
+    scope = %{
+      domain: blank_to_nil(params["domain"]),
+      project: blank_to_nil(params["project"])
+    }
+
+    socket = assign(socket, :scope, scope)
+
+    {:noreply, socket |> load_counters() |> load_sites() |> load_detail()}
   end
 
   @impl true
@@ -97,6 +110,22 @@ defmodule WebAnalyticsWeb.AdminLive do
      |> put_flash(:info, "Refreshed.")}
   end
 
+  def handle_event("filter", params, socket) do
+    scope = socket.assigns.scope
+
+    next = %{
+      "domain" => Map.get(params, "domain", scope.domain),
+      "project" => Map.get(params, "project", scope.project)
+    }
+
+    {:noreply,
+     push_patch(socket, to: ~p"/admin?#{Enum.reject(next, &(elem(&1, 1) in [nil, ""]))}")}
+  end
+
+  def handle_event("clear_filter", _params, socket) do
+    {:noreply, push_patch(socket, to: ~p"/admin")}
+  end
+
   def handle_event("site_window", %{"window" => window}, socket) do
     window = parse_window(window)
 
@@ -105,6 +134,15 @@ defmodule WebAnalyticsWeb.AdminLive do
     # in a different order.
     {:noreply, socket |> assign(:site_window, window) |> load_sites()}
   end
+
+  defp blank_to_nil(value) when is_binary(value) do
+    case String.trim(value) do
+      "" -> nil
+      trimmed -> trimmed
+    end
+  end
+
+  defp blank_to_nil(_), do: nil
 
   defp parse_window(value) do
     Enum.find(Admin.windows(), :day, &(to_string(&1) == value))
@@ -138,19 +176,23 @@ defmodule WebAnalyticsWeb.AdminLive do
     now = DateTime.utc_now()
 
     socket
-    |> assign(:counters, Admin.counters(now))
+    |> assign(:counters, Admin.counters(socket.assigns.scope, now))
     |> assign(:counters_at, now)
   end
 
   defp load_sites(socket) do
-    assign(socket, :sites, Admin.sites(socket.assigns.site_window))
+    assign(
+      socket,
+      :sites,
+      Admin.sites(socket.assigns.site_window, DateTime.utc_now(), socket.assigns.scope)
+    )
   end
 
   defp load_detail(socket) do
     now = DateTime.utc_now()
 
     socket
-    |> assign(:detail, Admin.detail(now))
+    |> assign(:detail, Admin.detail(socket.assigns.scope, now))
     |> assign(:detail_at, now)
   end
 

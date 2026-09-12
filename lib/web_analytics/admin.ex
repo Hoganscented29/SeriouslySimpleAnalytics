@@ -25,49 +25,102 @@ defmodule WebAnalytics.Admin do
   alias WebAnalytics.Tracking.Session
 
   @doc """
+  An empty scope: everything on the deployment.
+
+  A scope narrows the traffic panels to one domain or one project. The
+  deployment-wide facts — how many users exist, how much disk Postgres is using
+  — are not narrowed by it, because they do not vary by domain, and the page
+  hides them rather than showing a global number beside nine scoped ones.
+  """
+  def scope, do: %{domain: nil, project: nil}
+
+  @doc "Whether anything is narrowing the view."
+  def scoped?(%{domain: nil, project: nil}), do: false
+  def scoped?(_scope), do: true
+
+  # Session-derived queries take the scope directly.
+  defp scoped_sessions(scope) do
+    from(s in Session, as: :session) |> apply_scope(scope)
+  end
+
+  # Pageviews and events reach it through their session.
+  defp scoped_pageviews(scope) do
+    from(p in Pageview, join: s in assoc(p, :session), as: :session) |> apply_scope(scope)
+  end
+
+  defp scoped_events(scope) do
+    from(e in Event, join: s in assoc(e, :session), as: :session) |> apply_scope(scope)
+  end
+
+  defp apply_scope(query, scope) do
+    query
+    |> then(fn q ->
+      case scope[:domain] do
+        nil -> q
+        domain -> where(q, [session: s], s.host == ^domain)
+      end
+    end)
+    |> then(fn q ->
+      case scope[:project] do
+        nil -> q
+        project -> where(q, [session: s], s.project == ^project)
+      end
+    end)
+  end
+
+  @doc """
   The headline numbers, refreshed on every tick.
 
   One query per table rather than one join across all of them: the tables have
   no relationship worth joining here, and separate counts let Postgres use the
   index-only paths it already has.
   """
-  def counters(now \\ DateTime.utc_now()) do
+  def counters(scope \\ %{domain: nil, project: nil}, now \\ DateTime.utc_now()) do
     day = DateTime.add(now, -24, :hour)
     hour = DateTime.add(now, -1, :hour)
     minute = DateTime.add(now, -1, :minute)
+
+    sessions = scoped_sessions(scope)
+    pageviews = scoped_pageviews(scope)
+    events = scoped_events(scope)
 
     %{
       users: Repo.aggregate(User, :count),
       users_confirmed: Repo.aggregate(from(u in User, where: not is_nil(u.confirmed_at)), :count),
       sites: Repo.aggregate(Site, :count),
       sites_claimed: Repo.aggregate(from(s in Site, where: not is_nil(s.user_id)), :count),
-      sessions: Repo.aggregate(Session, :count),
-      pageviews: Repo.aggregate(Pageview, :count),
-      events: Repo.aggregate(Event, :count),
+      sessions: Repo.aggregate(sessions, :count),
+      pageviews: Repo.aggregate(pageviews, :count),
+      events: Repo.aggregate(events, :count),
       forms: Repo.aggregate(FormCapture, :count),
-      sessions_24h: count_since(Session, :started_at, day),
-      pageviews_24h: count_since(Pageview, :entered_at, day),
-      events_24h: count_since(Event, :occurred_at, day),
-      sessions_1h: count_since(Session, :started_at, hour),
-      events_1h: count_since(Event, :occurred_at, hour),
-      events_1m: count_since(Event, :occurred_at, minute),
+      sessions_24h: count_since(sessions, :started_at, day),
+      pageviews_24h: count_since(pageviews, :entered_at, day),
+      events_24h: count_since(events, :occurred_at, day),
+      sessions_1h: count_since(sessions, :started_at, hour),
+      events_1h: count_since(events, :occurred_at, hour),
+      events_1m: count_since(events, :occurred_at, minute),
       # "Active" is a session seen in the last five minutes, which is the
       # shortest window that does not flicker between ticks.
       active_now:
         Repo.aggregate(
-          from(s in Session, where: s.last_seen_at > ^DateTime.add(now, -5, :minute)),
+          from([session: s] in sessions, where: s.last_seen_at > ^DateTime.add(now, -5, :minute)),
           :count
         ),
-      crawler_sessions: Repo.aggregate(from(s in Session, where: s.crawler), :count),
+      crawler_sessions: Repo.aggregate(from([session: s] in sessions, where: s.crawler), :count),
       crawler_sessions_24h:
         Repo.aggregate(
-          from(s in Session, where: s.crawler and s.started_at > ^day),
+          from([session: s] in sessions, where: s.crawler and s.started_at > ^day),
           :count
         ),
-      ai_sessions: Repo.aggregate(from(s in Session, where: s.channel == "ai"), :count),
+      ai_sessions:
+        Repo.aggregate(from([session: s] in sessions, where: s.channel == "ai"), :count),
       web_sessions:
-        Repo.aggregate(from(s in Session, where: is_nil(s.channel) or s.channel != "ai"), :count),
-      anomalous_sessions: Repo.aggregate(from(s in Session, where: s.anomalous), :count),
+        Repo.aggregate(
+          from([session: s] in sessions, where: is_nil(s.channel) or s.channel != "ai"),
+          :count
+        ),
+      anomalous_sessions:
+        Repo.aggregate(from([session: s] in sessions, where: s.anomalous), :count),
       queue_depth: queue_depth()
     }
   end
@@ -76,17 +129,20 @@ defmodule WebAnalytics.Admin do
   The tables and breakdowns. Heavier, so refreshed on a slower cadence than the
   counters above.
   """
-  def detail(now \\ DateTime.utc_now()) do
+  def detail(scope \\ %{domain: nil, project: nil}, now \\ DateTime.utc_now()) do
     %{
       users: users_with_activity(),
-      projects: top_projects(now),
-      domains: top_domains(now),
-      crawlers: top_crawlers(now),
-      countries: top_countries(now),
-      channels: sessions_by_channel(now),
-      hourly: events_per_hour(now),
-      recent_sessions: recent_sessions(),
-      top_paths: top_paths(now)
+      # The lists that drive the drill-down deliberately ignore their own half
+      # of the scope: a domain list that only ever showed the domain you already
+      # picked would be a control you cannot get out of.
+      projects: top_projects(%{scope | project: nil}, now),
+      domains: top_domains(%{scope | domain: nil}, now),
+      crawlers: top_crawlers(scope, now),
+      countries: top_countries(scope, now),
+      channels: sessions_by_channel(scope, now),
+      hourly: events_per_hour(scope, now),
+      recent_sessions: recent_sessions(scope),
+      top_paths: top_paths(scope, now)
     }
   end
 
@@ -120,12 +176,12 @@ defmodule WebAnalytics.Admin do
   before it counts them, and the numbers come out as the product of the three
   rather than the three. Four indexed aggregates are both correct and cheaper.
   """
-  def sites(window \\ :day, now \\ DateTime.utc_now()) do
+  def sites(window \\ :day, now \\ DateTime.utc_now(), scope \\ %{domain: nil, project: nil}) do
     since = window_start(window, now)
 
-    views = counts_by_site(Pageview, :entered_at, since)
-    events = counts_by_site(Event, :occurred_at, since)
-    sessions = counts_by_site(Session, :started_at, since)
+    views = counts_by_site(scoped_pageviews(scope), :entered_at, since)
+    events = counts_by_site(scoped_events(scope), :occurred_at, since)
+    sessions = counts_by_site(scoped_sessions(scope), :started_at, since)
     last_seen = last_seen_by_site()
 
     Repo.all(
@@ -152,6 +208,15 @@ defmodule WebAnalytics.Admin do
     # Views first because that is the question being asked — who is busiest —
     # with events and sessions breaking ties rather than a site with no
     # pageviews sorting arbitrarily among the other empty ones.
+    |> then(fn rows ->
+      # Under a filter, an account with nothing on that domain or project is not
+      # a quiet account — it is not part of the question being asked.
+      if scoped?(scope) do
+        Enum.reject(rows, &(&1.views == 0 and &1.events == 0 and &1.sessions == 0))
+      else
+        rows
+      end
+    end)
     |> Enum.sort_by(&{&1.views, &1.events, &1.sessions}, :desc)
   end
 
@@ -162,14 +227,14 @@ defmodule WebAnalytics.Admin do
   defp window_start(:month, now), do: DateTime.add(now, -30, :day)
   defp window_start(_other, now), do: window_start(:day, now)
 
-  defp counts_by_site(schema, _field, nil) do
-    Repo.all(from r in schema, group_by: r.site_id, select: {r.site_id, count(r.id)})
+  defp counts_by_site(queryable, _field, nil) do
+    Repo.all(from r in queryable, group_by: r.site_id, select: {r.site_id, count(r.id)})
     |> Map.new()
   end
 
-  defp counts_by_site(schema, field, since) do
+  defp counts_by_site(queryable, field, since) do
     Repo.all(
-      from r in schema,
+      from r in queryable,
         where: field(r, ^field) > ^since,
         group_by: r.site_id,
         select: {r.site_id, count(r.id)}
@@ -204,11 +269,11 @@ defmodule WebAnalytics.Admin do
     )
   end
 
-  defp top_projects(now) do
+  defp top_projects(scope, now) do
     since = DateTime.add(now, -30, :day)
 
     Repo.all(
-      from s in Session,
+      from [session: s] in scoped_sessions(scope),
         where: not is_nil(s.project) and s.started_at > ^since,
         group_by: [s.project, s.channel],
         order_by: [desc: count(s.id)],
@@ -226,11 +291,11 @@ defmodule WebAnalytics.Admin do
 
   # Across every account, so the operator can see which domains this deployment
   # is actually carrying rather than which accounts exist.
-  defp top_domains(now) do
+  defp top_domains(scope, now) do
     since = DateTime.add(now, -30, :day)
 
     Repo.all(
-      from s in Session,
+      from [session: s] in scoped_sessions(scope),
         join: site in Site,
         on: site.id == s.site_id,
         where: not is_nil(s.host) and s.started_at > ^since,
@@ -247,11 +312,11 @@ defmodule WebAnalytics.Admin do
     )
   end
 
-  defp top_crawlers(now) do
+  defp top_crawlers(scope, now) do
     since = DateTime.add(now, -30, :day)
 
     Repo.all(
-      from s in Session,
+      from [session: s] in scoped_sessions(scope),
         where: s.crawler and s.started_at > ^since,
         group_by: [s.crawler_name, s.crawler_kind],
         order_by: [desc: count(s.id)],
@@ -266,11 +331,11 @@ defmodule WebAnalytics.Admin do
     )
   end
 
-  defp top_countries(now) do
+  defp top_countries(scope, now) do
     since = DateTime.add(now, -30, :day)
 
     Repo.all(
-      from s in Session,
+      from [session: s] in scoped_sessions(scope),
         where: not is_nil(s.country) and s.started_at > ^since,
         group_by: [s.country, s.country_code],
         order_by: [desc: count(s.id)],
@@ -279,7 +344,7 @@ defmodule WebAnalytics.Admin do
     )
   end
 
-  defp sessions_by_channel(now) do
+  defp sessions_by_channel(scope, now) do
     since = DateTime.add(now, -30, :day)
 
     # Older sessions have a null channel and newer ones say "web" outright, so
@@ -291,7 +356,7 @@ defmodule WebAnalytics.Admin do
     # here would silently group by the raw column while displaying the
     # coalesced one — the counts split, and the page looks merged.
     Repo.all(
-      from s in Session,
+      from [session: s] in scoped_sessions(scope),
         where: s.started_at > ^since,
         group_by: fragment("coalesce(?, 'web')", s.channel),
         order_by: [desc: count(s.id)],
@@ -302,11 +367,11 @@ defmodule WebAnalytics.Admin do
     )
   end
 
-  defp top_paths(now) do
+  defp top_paths(scope, now) do
     since = DateTime.add(now, -7, :day)
 
     Repo.all(
-      from p in Pageview,
+      from p in scoped_pageviews(scope),
         join: s in Site,
         on: s.id == p.site_id,
         where: p.entered_at > ^since,
@@ -317,9 +382,9 @@ defmodule WebAnalytics.Admin do
     )
   end
 
-  defp recent_sessions do
+  defp recent_sessions(scope) do
     Repo.all(
-      from s in Session,
+      from [session: s] in scoped_sessions(scope),
         join: site in Site,
         on: site.id == s.site_id,
         order_by: [desc: s.last_seen_at],
@@ -342,12 +407,12 @@ defmodule WebAnalytics.Admin do
 
   # Bucketed in SQL rather than in Elixir: pulling 24 hours of rows back to count
   # them here would be the most expensive query on the page by a wide margin.
-  defp events_per_hour(now) do
+  defp events_per_hour(scope, now) do
     since = DateTime.add(now, -24, :hour)
 
     rows =
       Repo.all(
-        from e in Event,
+        from e in scoped_events(scope),
           where: e.occurred_at > ^since,
           group_by: selected_as(:bucket),
           order_by: selected_as(:bucket),
@@ -422,8 +487,8 @@ defmodule WebAnalytics.Admin do
 
   # -- helpers --------------------------------------------------------------
 
-  defp count_since(schema, field, since) do
-    Repo.aggregate(from(r in schema, where: field(r, ^field) > ^since), :count)
+  defp count_since(queryable, field, since) do
+    Repo.aggregate(from(r in queryable, where: field(r, ^field) > ^since), :count)
   end
 
   defp truncate_hour(datetime) do

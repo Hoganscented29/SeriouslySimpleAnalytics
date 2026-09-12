@@ -10,6 +10,28 @@ defmodule WebAnalyticsWeb.IntegrationComponents do
   use Phoenix.Component
   use WebAnalyticsWeb, :verified_routes
 
+  @doc """
+  A count and its share, because one without the other answers half the
+  question: 1,842 means nothing until you know whether it is most of the traffic
+  or a rounding error.
+  """
+  def share(_count, 0), do: "—"
+
+  def share(count, total) do
+    percent = count / total * 100
+    if percent < 1, do: "<1%", else: "#{round(percent)}%"
+  end
+
+  def thousands(n) when is_integer(n) do
+    n
+    |> Integer.to_string()
+    |> String.reverse()
+    |> String.replace(~r/(\d{3})(?=\d)/, "\\1,")
+    |> String.reverse()
+  end
+
+  def thousands(n), do: to_string(n)
+
   attr :crawler_summary, :map, default: nil
 
   @doc """
@@ -161,6 +183,191 @@ defmodule WebAnalyticsWeb.IntegrationComponents do
   end
 
   @doc """
+  The same dashboard, showing what an AI tool reports rather than what a website
+  does.
+
+  A page about instrumenting agents should not open on pageviews and scroll
+  depth. The numbers are illustrative, same as the website one, and it is
+  `role="img"` for the same reason.
+  """
+  def agent_preview(assigns) do
+    ~H"""
+    <div
+      class="rounded-2xl border border-base-300 bg-base-100 overflow-hidden shadow-lg"
+      role="img"
+      aria-label={
+        "An illustration of the dashboard for an AI tool: runs, tool calls and errors across " <>
+          "the top, events over the last day, the events being reported with their share, the " <>
+          "attributes carried on a tool call, and the flow from run_started through tool calls " <>
+          "to run_completed."
+      }
+    >
+      <div class="flex items-center gap-2.5 px-4 py-2.5 border-b border-base-300 bg-base-200">
+        <span class="flex gap-1.5" aria-hidden="true">
+          <i class="w-2.5 h-2.5 rounded-full bg-base-300 block"></i>
+          <i class="w-2.5 h-2.5 rounded-full bg-base-300 block"></i>
+          <i class="w-2.5 h-2.5 rounded-full bg-base-300 block"></i>
+        </span>
+        <span class="text-[11px] font-medium text-base-content/50">Analytics — Events</span>
+        <span class="flex-1"></span>
+        <span class="hidden sm:inline text-[10px] px-1.5 py-0.5 rounded bg-primary text-primary-content font-medium">
+          my-agent
+        </span>
+      </div>
+
+      <div class="p-3 sm:p-4 space-y-3">
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <div
+            :for={
+              stat <- [
+                {"Runs", "9,142", "+24%"},
+                {"Tool calls", "41,806", "4.6 per run"},
+                {"Completed", "96.2%", "outcome=success"},
+                {"Median run", "8.4s", "start to finish"}
+              ]
+            }
+            class="rounded-lg border border-base-300 px-3 py-2"
+          >
+            <div class="text-[10px] text-base-content/50">{elem(stat, 0)}</div>
+            <div class="text-base sm:text-lg font-semibold tabular-nums leading-tight">
+              {elem(stat, 1)}
+            </div>
+            <div class="text-[10px] text-success">{elem(stat, 2)}</div>
+          </div>
+        </div>
+
+        <div class="rounded-lg border border-base-300 p-3">
+          <div class="flex items-baseline justify-between mb-2">
+            <span class="text-[11px] font-medium">Events over time</span>
+            <span class="text-[10px] text-base-content/40">peak 3,180/hour</span>
+          </div>
+          <div class="flex items-end gap-[3px] h-16">
+            <div
+              :for={
+                height <- [
+                  31,
+                  26,
+                  38,
+                  44,
+                  39,
+                  57,
+                  66,
+                  61,
+                  74,
+                  69,
+                  82,
+                  95,
+                  100,
+                  88,
+                  76,
+                  81,
+                  93,
+                  72,
+                  64,
+                  58,
+                  49,
+                  55,
+                  43,
+                  36
+                ]
+              }
+              class="flex-1 bg-primary/80 rounded-sm"
+              style={"height: #{height}%"}
+            >
+            </div>
+          </div>
+        </div>
+
+        <div class="grid sm:grid-cols-2 gap-3">
+          <!-- the events themselves -->
+          <div class="rounded-lg border border-base-300 p-3">
+            <div class="text-[11px] font-medium mb-2">Events reported</div>
+            <% events = [
+              {"tool_called", 41_806},
+              {"run_started", 9_142},
+              {"run_completed", 8_795},
+              {"page_view", 6_204},
+              {"error", 347}
+            ] %>
+            <% event_total = events |> Enum.map(&elem(&1, 1)) |> Enum.sum() %>
+            <% event_peak = events |> Enum.map(&elem(&1, 1)) |> Enum.max() %>
+            <div class="space-y-1.5">
+              <div :for={{name, count} <- events} class="flex items-center gap-2">
+                <div class="flex-1 min-w-0 relative h-4">
+                  <div
+                    class="absolute inset-y-0 left-0 bg-primary/15 rounded"
+                    style={"width: #{round(count / event_peak * 100)}%"}
+                  >
+                  </div>
+                  <span class="relative px-1.5 text-[10px] font-mono leading-4 truncate block">
+                    {name}
+                  </span>
+                </div>
+                <span class="text-[10px] tabular-nums text-base-content/60 w-12 text-right">
+                  {thousands(count)}
+                </span>
+                <span class="text-[10px] tabular-nums text-base-content/40 w-9 text-right">
+                  {share(count, event_total)}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- the attributes on one of them -->
+          <div class="rounded-lg border border-base-300 p-3">
+            <div class="text-[11px] font-medium mb-2">
+              Attributes on <code class="font-mono">tool_called</code>
+            </div>
+            <% attrs = [
+              {"tool=web_search", 18_204},
+              {"tool=read_file", 12_460},
+              {"tool=run_tests", 7_118},
+              {"outcome=success", 40_129},
+              {"outcome=error", 1_677}
+            ] %>
+            <% attr_peak = attrs |> Enum.map(&elem(&1, 1)) |> Enum.max() %>
+            <div class="space-y-1.5">
+              <div :for={{label, count} <- attrs} class="flex items-center gap-2">
+                <div class="flex-1 min-w-0 relative h-4">
+                  <div
+                    class="absolute inset-y-0 left-0 bg-base-300/70 rounded"
+                    style={"width: #{round(count / attr_peak * 100)}%"}
+                  >
+                  </div>
+                  <span class="relative px-1.5 text-[10px] font-mono leading-4 truncate block">
+                    {label}
+                  </span>
+                </div>
+                <span class="text-[10px] tabular-nums text-base-content/60 w-12 text-right">
+                  {thousands(count)}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="rounded-lg border border-base-300 p-3">
+          <div class="text-[11px] font-medium mb-2">Event flow, within a run</div>
+          <div class="flex items-center gap-1.5 overflow-hidden text-[10px] font-mono">
+            <span
+              :for={{node, index} <- Enum.with_index(["run_started", "tool_called", "tool_called"])}
+              class="contents"
+            >
+              <span :if={index > 0} class="text-base-content/25">→</span>
+              <span class="px-2 py-1 rounded bg-base-200 whitespace-nowrap">{node}</span>
+            </span>
+            <span class="text-base-content/25">→</span>
+            <span class="px-2 py-1 rounded bg-success/15 text-success whitespace-nowrap">
+              run_completed
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  @doc """
   A dashboard, drawn.
 
   The hero has to answer "what do I get" before anyone reads a word, and a
@@ -275,23 +482,21 @@ defmodule WebAnalyticsWeb.IntegrationComponents do
           <!-- busiest pages -->
           <div class="rounded-lg border border-base-300 p-3">
             <div class="text-[11px] font-medium mb-2">Busiest pages</div>
+            <% pages = [
+              {"/", 9412},
+              {"/pricing", 4806},
+              {"/docs/quickstart", 3271},
+              {"/blog/why-llms-txt", 2118},
+              {"/changelog", 1004}
+            ] %>
+            <% page_total = pages |> Enum.map(&elem(&1, 1)) |> Enum.sum() %>
+            <% page_peak = pages |> Enum.map(&elem(&1, 1)) |> Enum.max() %>
             <div class="space-y-1.5">
-              <div
-                :for={
-                  {path, count, width} <- [
-                    {"/", "9,412", 100},
-                    {"/pricing", "4,806", 51},
-                    {"/docs/quickstart", "3,271", 35},
-                    {"/blog/why-llms-txt", "2,118", 22},
-                    {"/changelog", "1,004", 11}
-                  ]
-                }
-                class="flex items-center gap-2"
-              >
+              <div :for={{path, count} <- pages} class="flex items-center gap-2">
                 <div class="flex-1 min-w-0 relative h-4">
                   <div
                     class="absolute inset-y-0 left-0 bg-primary/15 rounded"
-                    style={"width: #{width}%"}
+                    style={"width: #{round(count / page_peak * 100)}%"}
                   >
                   </div>
                   <span class="relative px-1.5 text-[10px] font-mono leading-4 truncate block">
@@ -299,7 +504,10 @@ defmodule WebAnalyticsWeb.IntegrationComponents do
                   </span>
                 </div>
                 <span class="text-[10px] tabular-nums text-base-content/60 w-10 text-right">
-                  {count}
+                  {thousands(count)}
+                </span>
+                <span class="text-[10px] tabular-nums text-base-content/40 w-9 text-right">
+                  {share(count, page_total)}
                 </span>
               </div>
             </div>
@@ -308,21 +516,23 @@ defmodule WebAnalyticsWeb.IntegrationComponents do
           <!-- crawlers -->
           <div class="rounded-lg border border-base-300 p-3">
             <div class="text-[11px] font-medium mb-2">AI crawlers, named</div>
+            <% bots = [
+              {"ClaudeBot", 1842},
+              {"GPTBot", 1506},
+              {"PerplexityBot", 744},
+              {"Bytespider", 389},
+              {"CCBot", 201}
+            ] %>
+            <% bot_total = bots |> Enum.map(&elem(&1, 1)) |> Enum.sum() %>
             <div class="space-y-1.5">
-              <div
-                :for={
-                  {name, count} <- [
-                    {"ClaudeBot", "1,842"},
-                    {"GPTBot", "1,506"},
-                    {"PerplexityBot", "744"},
-                    {"Bytespider", "389"},
-                    {"CCBot", "201"}
-                  ]
-                }
-                class="flex items-center justify-between gap-2"
-              >
-                <span class="text-[10px] font-mono truncate">{name}</span>
-                <span class="text-[10px] tabular-nums text-base-content/60">{count}</span>
+              <div :for={{name, count} <- bots} class="flex items-center gap-2">
+                <span class="text-[10px] font-mono truncate flex-1">{name}</span>
+                <span class="text-[10px] tabular-nums text-base-content/60 w-10 text-right">
+                  {thousands(count)}
+                </span>
+                <span class="text-[10px] tabular-nums text-base-content/40 w-9 text-right">
+                  {share(count, bot_total)}
+                </span>
               </div>
             </div>
           </div>

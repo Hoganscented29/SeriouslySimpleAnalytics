@@ -27,6 +27,26 @@
       </div>
     </div>
 
+    <!-- what is narrowing the view -->
+    <div
+      :if={Admin.scoped?(@scope)}
+      class="rounded-box border border-primary/40 bg-primary/5 px-4 py-3 flex flex-wrap items-center gap-3"
+    >
+      <span class="badge badge-primary badge-sm">Filtered</span>
+      <span :if={@scope.domain} class="text-sm">
+        domain <code class="font-mono font-medium">{@scope.domain}</code>
+      </span>
+      <span :if={@scope.project} class="text-sm">
+        project <code class="font-mono font-medium">{@scope.project}</code>
+      </span>
+      <span class="text-xs text-base-content/50">
+        Traffic panels below show only this. Users and server facts are deployment-wide and
+        hidden while filtered.
+      </span>
+      <span class="flex-1"></span>
+      <button phx-click="clear_filter" class="btn btn-xs btn-outline">Clear</button>
+    </div>
+
     <!-- live counters -->
     <section>
       <h2 class="text-xs uppercase tracking-wide text-base-content/50 mb-3">Right now</h2>
@@ -52,7 +72,7 @@
     </section>
 
     <!-- host -->
-    <section>
+    <section :if={!Admin.scoped?(@scope)}>
       <h2 class="text-xs uppercase tracking-wide text-base-content/50 mb-3">
         This server
       </h2>
@@ -165,21 +185,29 @@
 
     <!-- totals -->
     <section>
-      <h2 class="text-xs uppercase tracking-wide text-base-content/50 mb-3">All time</h2>
+      <h2 class="text-xs uppercase tracking-wide text-base-content/50 mb-3">
+        {if Admin.scoped?(@scope), do: "All time, within this filter", else: "All time"}
+      </h2>
       <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
         <div
           :for={
-            stat <- [
-              {"Users", @counters.users, "#{num(@counters.users_confirmed)} confirmed"},
-              {"Sites", @counters.sites, "#{num(@counters.sites_claimed)} claimed"},
-              {"Sessions", @counters.sessions, nil},
-              {"Pageviews", @counters.pageviews, nil},
-              {"Events", @counters.events, nil},
-              {"Forms", @counters.forms, nil},
-              {"Crawler sessions", @counters.crawler_sessions,
-               "#{num(@counters.crawler_sessions_24h)} today"},
-              {"Filtered as odd", @counters.anomalous_sessions, "dwell anomalies"}
-            ]
+            stat <-
+              if(Admin.scoped?(@scope),
+                do: [],
+                else: [
+                  {"Users", @counters.users, "#{num(@counters.users_confirmed)} confirmed"},
+                  {"Sites", @counters.sites, "#{num(@counters.sites_claimed)} claimed"}
+                ]
+              ) ++
+                [
+                  {"Sessions", @counters.sessions, nil},
+                  {"Pageviews", @counters.pageviews, nil},
+                  {"Events", @counters.events, nil},
+                  {"Forms", @counters.forms, nil},
+                  {"Crawler sessions", @counters.crawler_sessions,
+                   "#{num(@counters.crawler_sessions_24h)} today"},
+                  {"Filtered as odd", @counters.anomalous_sessions, "dwell anomalies"}
+                ]
           }
           class="rounded-box bg-base-100 border border-base-300 p-4"
         >
@@ -306,7 +334,10 @@
 
     <div class="grid lg:grid-cols-3 gap-6">
       <!-- users -->
-      <section class="rounded-box bg-base-100 border border-base-300 p-5 lg:col-span-2">
+      <section
+        :if={!Admin.scoped?(@scope)}
+        class="rounded-box bg-base-100 border border-base-300 p-5 lg:col-span-2"
+      >
         <h2 class="text-sm font-medium mb-3">Users ({num(length(@detail.users))})</h2>
         <div class="overflow-x-auto max-h-96 overflow-y-auto">
           <table class="table table-xs table-pin-rows">
@@ -388,9 +419,18 @@
               </tr>
             </thead>
             <tbody>
-              <tr :for={row <- @detail.projects}>
+              <tr :for={row <- @detail.projects} class="hover">
                 <td class="max-w-[10rem] truncate font-mono text-[11px]" title={row.project}>
-                  {row.project}
+                  <button
+                    phx-click="filter"
+                    phx-value-project={row.project}
+                    class={[
+                      "link link-hover",
+                      @scope.project == row.project && "text-primary font-semibold"
+                    ]}
+                  >
+                    {row.project}
+                  </button>
                 </td>
                 <td class="text-base-content/50 text-[11px]">{channel_label(row.channel)}</td>
                 <td class="text-right tabular-nums">{num(row.sessions)}</td>
@@ -418,9 +458,18 @@
               </tr>
             </thead>
             <tbody>
-              <tr :for={row <- @detail.domains}>
+              <tr :for={row <- @detail.domains} class="hover">
                 <td class="max-w-[14rem] truncate font-mono text-[11px]" title={row.name}>
-                  {row.name}
+                  <button
+                    phx-click="filter"
+                    phx-value-domain={row.name}
+                    class={[
+                      "link link-hover",
+                      @scope.domain == row.name && "text-primary font-semibold"
+                    ]}
+                  >
+                    {row.name}
+                  </button>
                 </td>
                 <td class="text-right tabular-nums">{num(row.sessions)}</td>
                 <td class="text-right tabular-nums">{num(row.pageviews)}</td>
@@ -546,7 +595,10 @@
     </section>
 
     <!-- system -->
-    <section class="rounded-box bg-base-100 border border-base-300 p-5">
+    <section
+      :if={!Admin.scoped?(@scope)}
+      class="rounded-box bg-base-100 border border-base-300 p-5"
+    >
       <h2 class="text-sm font-medium mb-4">This deployment</h2>
       <dl class="grid sm:grid-cols-2 lg:grid-cols-4 gap-x-8 gap-y-2 text-sm">
         <div

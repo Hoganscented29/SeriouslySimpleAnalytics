@@ -138,6 +138,18 @@ defmodule WebAnalyticsWeb.DashboardLive do
     {:noreply, push_patch(socket, to: path_for(socket, %{"event" => name, "tab" => "events"}))}
   end
 
+  def handle_event("select_domain", %{"domain" => domain}, socket) do
+    # Toggles: clicking the domain you are already filtered to clears it, which
+    # is what a reader expects from a row that is visibly highlighted.
+    next = if socket.assigns.filters.host == domain, do: nil, else: domain
+    {:noreply, push_patch(socket, to: path_for(socket, %{"domain" => next}))}
+  end
+
+  def handle_event("select_project", %{"project" => project}, socket) do
+    next = if socket.assigns.filters.project == project, do: nil, else: project
+    {:noreply, push_patch(socket, to: path_for(socket, %{"project" => next}))}
+  end
+
   def handle_event("clear_event", _params, socket) do
     {:noreply, push_patch(socket, to: path_for(socket, %{"event" => nil}))}
   end

@@ -142,17 +142,28 @@ defmodule WebAnalyticsWeb.LandingControllerTest do
   end
 
   describe "the dashboard illustration" do
+    test "the website page shows website metrics", %{conn: conn} do
+      html = conn |> get(~p"/") |> html_response(200)
+
+      assert html =~ "Sessions over time"
+      assert html =~ "Busiest pages"
+      assert html =~ "AI crawlers, named"
+      # An empty dashboard sells nothing, so the illustration has traffic in it.
+      assert html =~ "12,480"
+    end
+
+    test "the AI page shows what an agent reports, not pageviews", %{conn: conn} do
+      html = conn |> get(~p"/AI-Analytics-llms-txt") |> html_response(200)
+
+      assert html =~ "Events over time"
+      assert html =~ "Events reported"
+      assert html =~ "tool_called"
+      assert html =~ "run_completed"
+      # A page about instrumenting agents should not open on scroll depth.
+      refute html =~ "Busiest pages"
+    end
+
     for {label, path} <- [{"website", "/"}, {"AI", "/AI-Analytics-llms-txt"}] do
-      test "tops the #{label} page, showing a tool in use", %{conn: conn} do
-        html = conn |> get(unquote(path)) |> html_response(200)
-
-        assert html =~ "Sessions over time"
-        assert html =~ "Busiest pages"
-        assert html =~ "AI crawlers, named"
-        # An empty dashboard sells nothing, so the illustration has traffic in it.
-        assert html =~ "12,480"
-      end
-
       test "the #{label} page says it is a picture, not a report", %{conn: conn} do
         html = conn |> get(unquote(path)) |> html_response(200)
 
@@ -161,6 +172,17 @@ defmodule WebAnalyticsWeb.LandingControllerTest do
         assert html =~ ~s|role="img"|
         assert html =~ "An illustration of the dashboard"
       end
+    end
+
+    test "shares are shown beside the raw counts", %{conn: conn} do
+      html = conn |> get(~p"/") |> html_response(200)
+
+      # A count without its share answers half the question: 1,842 means nothing
+      # until you know whether it is most of the traffic or a rounding error.
+      assert html =~ "9,412"
+      assert html =~ "46%"
+      assert html =~ "1,842"
+      assert html =~ "39%"
     end
   end
 
@@ -173,13 +195,14 @@ defmodule WebAnalyticsWeb.LandingControllerTest do
       assert html =~ "/api/ping"
     end
 
-    test "shows a ping URL carrying a real account id", %{conn: conn} do
-      site = site_fixture(%{key: "landing-key"})
+    test "documents the account id as the whole credential", %{conn: conn} do
       html = conn |> get(~p"/AI-Analytics-llms-txt") |> html_response(200)
 
-      assert html =~ "uid=#{site.key}"
-      assert html =~ "project="
-      assert html =~ "event=page_view"
+      # The page no longer prints a sample URL — the prompt at the foot hands
+      # the job to an agent — but the parameter that carries the account has to
+      # stay documented.
+      assert html =~ "uid"
+      assert html =~ "Your account ID"
     end
 
     test "documents the parameters and what to log", %{conn: conn} do
@@ -193,34 +216,41 @@ defmodule WebAnalyticsWeb.LandingControllerTest do
       assert html =~ "tool_called"
     end
 
-    test "states the credential rule prominently", %{conn: conn} do
-      html = conn |> get(~p"/AI-Analytics-llms-txt") |> html_response(200)
+    test "states the credential rule where an agent will read it", %{conn: conn} do
+      # It came off the landing page as off-topic for a human reader. The rule
+      # itself is not optional, and llms.txt is what actually integrates.
+      body = conn |> get(~p"/llms.txt") |> response(200)
 
-      assert html =~ "Never send credentials"
-      assert html =~ "proxy"
+      assert body =~ "Never send credentials"
+      assert body =~ "proxy"
     end
 
     test "shows the required location parameters", %{conn: conn} do
       html = conn |> get(~p"/AI-Analytics-llms-txt") |> html_response(200)
 
-      assert html =~ "c=Austin"
-      assert html =~ "cc=Travis"
-      assert html =~ "s_p=Texas"
+      assert html =~ "c · cc · s_p · n"
       assert html =~ "city, county, state/province and nation"
+      # The reason matters as much as the requirement: a caller that understands
+      # why will not omit them.
+      assert html =~ "where the software is, not where the person is"
     end
 
-    test "documents the self-service accounts endpoint", %{conn: conn} do
-      html = conn |> get(~p"/AI-Analytics-llms-txt") |> html_response(200)
+    test "still documents self-service accounts where an agent will read it", %{conn: conn} do
+      # The pitch came off the page, not the capability. llms.txt is what an
+      # agent reads, and that is where it has to stay documented.
+      body = conn |> get(~p"/llms.txt") |> response(200)
 
-      assert html =~ "/api/v1/accounts"
-      assert html =~ "claim_url"
+      assert body =~ "/api/v1/accounts"
+      assert body =~ "claim_url"
     end
 
     test "cross-links back to the website analytics page", %{conn: conn} do
       html = conn |> get(~p"/AI-Analytics-llms-txt") |> html_response(200)
 
+      # The "got a website too" pitch is gone from this page, but the nav still
+      # has to get a reader to the half of the product they came for.
       assert html =~ ~s|href="/"|
-      assert html =~ "/wa.js"
+      assert html =~ "Website analytics"
     end
   end
 
