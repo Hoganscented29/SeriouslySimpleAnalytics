@@ -89,6 +89,47 @@ defmodule WebAnalyticsWeb.LandingHTML do
     """
   end
 
+  attr :delay, :string, default: nil
+  slot :inner_block, required: true
+
+  @doc """
+  Wraps a call to action in a cursor that drifts onto it and clicks.
+
+  The claim on both pages is that starting takes under a minute, and the button
+  that starts it looks like every other button. Showing the gesture is the
+  shortest way to say "this is the thing to press" — and it is drawn rather
+  than recorded, so it stays sharp and costs no bytes.
+
+  Purely decorative: `aria-hidden`, no pointer events, and it disappears as
+  soon as a real pointer or a keyboard reaches the button underneath. `delay`
+  offsets the loop so two of these on screen at once do not march in step. The
+  header's own button is deliberately left alone — a hint on the thing every
+  reader already knows how to find is just motion.
+  """
+  def nudged_cta(assigns) do
+    ~H"""
+    <span class="wa-nudge">
+      {render_slot(@inner_block)}
+      <span class="wa-cursor" style={@delay && "animation-delay: #{@delay}"} aria-hidden="true">
+        <svg
+          viewBox="0 0 24 24"
+          class="w-[21px] h-[21px] drop-shadow-[0_1px_2px_rgba(0,0,0,0.45)]"
+          aria-hidden="true"
+        >
+          <path
+            d="M4 1.6 L4 18.8 L8.5 14.5 L11.3 21 L14.3 19.7 L11.5 13.4 L17.7 13.4 Z"
+            fill="#fff"
+            stroke="#111"
+            stroke-width="1.1"
+            stroke-linejoin="round"
+          />
+        </svg>
+        <span class="wa-cursor-ring" style={@delay && "animation-delay: #{@delay}"}></span>
+      </span>
+    </span>
+    """
+  end
+
   attr :current_scope, :map, default: nil
   attr :class, :string, default: "btn btn-primary"
 

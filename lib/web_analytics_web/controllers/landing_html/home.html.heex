@@ -6,7 +6,8 @@
     <div class="max-w-3xl">
       <h1 class="badge badge-primary badge-outline mb-4">Free · Website analytics</h1>
       <h2 class="text-4xl sm:text-5xl font-semibold tracking-tight leading-tight">
-        Free Unlimited Website Analytics that<br class="hidden lg:inline" /> Just Works.
+        <span class="underline decoration-primary decoration-4 underline-offset-[6px]">Free Unlimited</span>
+        Website Analytics that<br class="hidden lg:inline" /> Just Works.
       </h2>
       <p class="mt-5 text-lg text-base-content/70 leading-relaxed">
         One <code class="font-mono text-base">&lt;script&gt;</code>
@@ -20,7 +21,9 @@
     <div class="mt-8 rounded-box bg-base-100 border border-base-300 p-5 sm:p-6">
       <.dashboard_preview />
       <div class="mt-4 flex flex-wrap items-center gap-3">
-        <.cta current_scope={@current_scope} class="btn btn-primary btn-sm" />
+        <.nudged_cta>
+          <.cta current_scope={@current_scope} class="btn btn-primary btn-sm" />
+        </.nudged_cta>
         <span class="text-sm text-base-content/50">
           One <code class="font-mono text-xs">&lt;script&gt;</code>
           tag. Everything above, from the first visit.
@@ -47,14 +50,14 @@
           it.
         </p>
       </div>
-      <div class="rounded-box bg-base-100 border border-base-300 p-5">
-        <div class="text-sm font-medium">Bots counted, not blended</div>
+      <div class="wa-pulse rounded-box bg-base-100 border border-base-300 p-5">
+        <div class="text-sm font-medium">Unlimited</div>
         <p class="mt-2 text-sm text-base-content/60">
-          Crawlers and AI agents are identified by name and pulled out of your human numbers —
-          then reported on their own page, because who is scraping you is worth knowing.
+          Throw as much traffic at this analytics as you can! Add all your domains! It's literally
+          <strong class="font-semibold text-base-content">unlimited.</strong>
         </p>
       </div>
-      <div class="rounded-box bg-base-100 border border-base-300 p-5">
+      <div class="wa-pulse wa-pulse-offset rounded-box bg-base-100 border border-base-300 p-5">
         <div class="text-sm font-medium">Free</div>
         <p class="mt-2 text-sm text-base-content/60">
           No plan, no event quota, no sampling above a traffic line. Everything should just work.
@@ -152,7 +155,9 @@
       <.integration_chat base_url={@base_url} />
 
       <div class="mt-6">
-        <a href={ai_path()} class="btn btn-primary btn-lg">AI tool analytics →</a>
+        <.nudged_cta delay="1.3s">
+          <a href={ai_path()} class="btn btn-primary btn-lg">AI tool analytics →</a>
+        </.nudged_cta>
       </div>
     </div>
   </section>
@@ -167,7 +172,9 @@
         Create an account, copy the snippet, paste it in your <code class="font-mono text-xs">&lt;head&gt;</code>.
       </p>
       <div class="mt-6 flex flex-wrap gap-3 justify-center">
-        <.cta current_scope={@current_scope} />
+        <.nudged_cta>
+          <.cta current_scope={@current_scope} />
+        </.nudged_cta>
       </div>
     </div>
   </section>

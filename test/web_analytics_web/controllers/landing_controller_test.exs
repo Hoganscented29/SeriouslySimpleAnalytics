@@ -87,6 +87,27 @@ defmodule WebAnalyticsWeb.LandingControllerTest do
       refute html =~ "Read https://seriouslysimpleanalytics.com/llms.txt and instrument"
     end
 
+    test "marks up the three things worth seeing in the prompt", %{conn: conn} do
+      html = conn |> get(~p"/AI-Analytics-llms-txt") |> html_response(200)
+      bubble = chat_bubble(html)
+
+      assert bubble =~ ~r{<a [^>]*href="https?://[^"]+/llms\.txt"}
+      assert bubble =~ ~r{<code[^>]*>llms\.txt</code>}
+      assert bubble =~ ~r{<strong[^>]*>SeriouslySimpleAnalytics</strong>}
+    end
+
+    test "leaves the copyable prompt as plain text", %{conn: conn} do
+      html = conn |> get(~p"/AI-Analytics-llms-txt") |> html_response(200)
+
+      # Whatever the reader copies has to be what the agent receives, so the
+      # markup stays in the bubble and out of the block with the copy button.
+      [_, block] = Regex.run(~r{<pre id="agent-prompt".*?>(.*?)</pre>}s, html)
+
+      assert block =~ "Read"
+      refute block =~ "<a "
+      refute block =~ "<strong"
+    end
+
     test "is on the website page too, under the AI cross-link", %{conn: conn} do
       html = conn |> get(~p"/") |> html_response(200)
 
@@ -196,6 +217,39 @@ defmodule WebAnalyticsWeb.LandingControllerTest do
       assert html =~ "46%"
       assert html =~ "1,842"
       assert html =~ "39%"
+    end
+  end
+
+  describe "the cursor on the calls to action" do
+    test "the website page nudges every call to action below the header", %{conn: conn} do
+      html = conn |> get(~p"/") |> html_response(200)
+
+      # Hero, the AI cross-link, and the closing call.
+      assert length(Regex.scan(~r{class="wa-nudge"}, html)) == 3
+    end
+
+    test "the AI page nudges every call to action below the header", %{conn: conn} do
+      html = conn |> get(~p"/AI-Analytics-llms-txt") |> html_response(200)
+
+      # Hero and the closing call.
+      assert length(Regex.scan(~r{class="wa-nudge"}, html)) == 2
+    end
+
+    test "leaves the header alone", %{conn: conn} do
+      html = conn |> get(~p"/") |> html_response(200)
+      [header] = Regex.run(~r{<header.*?</header>}s, html)
+
+      # Every reader already knows where the top-right button is. A hint there
+      # is motion without a message, and it would run on every page.
+      refute header =~ "wa-nudge"
+      assert header =~ "Create free account"
+    end
+
+    test "is decorative, and cannot be clicked through", %{conn: conn} do
+      html = conn |> get(~p"/") |> html_response(200)
+
+      assert html =~ ~s|<span class="wa-cursor"|
+      assert html =~ ~s|aria-hidden="true"|
     end
   end
 
@@ -434,5 +488,12 @@ defmodule WebAnalyticsWeb.LandingControllerTest do
       conn = conn |> put_req_header("origin", "https://agent.example") |> get(~p"/llms.txt")
       assert get_resp_header(conn, "access-control-allow-origin") == ["https://agent.example"]
     end
+  end
+
+  # The "you" bubble in the integration conversation, which is the only place
+  # the prompt is rendered as markup rather than as the string to copy.
+  defp chat_bubble(html) do
+    [_, bubble] = Regex.run(~r{rounded-2xl rounded-br[^>]*>(.*?)</div>}s, html)
+    bubble
   end
 end

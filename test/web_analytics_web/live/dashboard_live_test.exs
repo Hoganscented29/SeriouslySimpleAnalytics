@@ -245,8 +245,10 @@ defmodule WebAnalyticsWeb.DashboardLiveTest do
       assert html =~ "Integration Instructions"
       assert html =~ "Your coding agent"
       assert html =~ "Use account id #{site.key}"
-      # The heredoc wraps, so assert a fragment that does not span a line break.
-      assert html =~ "Update our llms.txt with the"
+      # The heredoc wraps and the bubble renders llms.txt as code, so assert the
+      # pieces rather than a span of the sentence.
+      assert html =~ "Update our "
+      assert html =~ ~r{<code[^>]*>llms\.txt</code>}
     end
 
     test "offers the website snippet above the agent instructions", %{conn: conn, site: site} do

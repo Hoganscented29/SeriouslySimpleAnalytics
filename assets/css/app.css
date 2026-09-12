@@ -141,3 +141,110 @@
     animation: none;
   }
 }
+
+/* A cursor that drifts onto a call to action and presses it.
+
+   The page's whole argument is that starting takes a minute, and a still
+   button does not say that. This one shows the gesture instead of describing
+   it: drift in, press, fade, repeat. It is decorative — pointer-events off and
+   aria-hidden — and it gets out of the way the moment a real pointer arrives,
+   because two cursors on one button is a puzzle, not a hint. */
+.wa-nudge {
+  position: relative;
+  display: inline-flex;
+}
+
+.wa-cursor {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  pointer-events: none;
+  z-index: 1;
+  animation: wa-cursor-nudge 4s cubic-bezier(0.3, 0, 0.2, 1) infinite;
+}
+
+.wa-cursor-ring {
+  position: absolute;
+  left: 1px;
+  top: 1px;
+  width: 26px;
+  height: 26px;
+  border-radius: 9999px;
+  border: 2px solid currentColor;
+  color: var(--color-primary, currentColor);
+  animation: wa-cursor-ring 4s cubic-bezier(0.3, 0, 0.2, 1) infinite;
+}
+
+/* Starts low and to the right of the button — where a hand coming from the
+   scrollbar would be — arrives at the label, presses, and leaves. */
+@keyframes wa-cursor-nudge {
+  0%        { opacity: 0; transform: translate(40px, 30px) scale(1); }
+  10%       { opacity: 1; transform: translate(40px, 30px) scale(1); }
+  44%       { opacity: 1; transform: translate(0, 0) scale(1); }
+  52%       { opacity: 1; transform: translate(0, 0) scale(0.8); }
+  60%       { opacity: 1; transform: translate(0, 0) scale(1); }
+  86%       { opacity: 1; transform: translate(0, 0) scale(1); }
+  100%      { opacity: 0; transform: translate(10px, 8px) scale(1); }
+}
+
+@keyframes wa-cursor-ring {
+  0%, 46%   { opacity: 0; transform: translate(-50%, -50%) scale(0.25); }
+  54%       { opacity: 0.65; transform: translate(-50%, -50%) scale(0.55); }
+  74%, 100% { opacity: 0; transform: translate(-50%, -50%) scale(1.6); }
+}
+
+/* A real pointer, or a keyboard, outranks the hint. `display` rather than
+   `opacity`, which the keyframes would overrule. */
+.wa-nudge:hover .wa-cursor,
+.wa-nudge:focus-within .wa-cursor {
+  display: none;
+}
+
+/* Nothing to freeze here — a cursor parked on top of a button reads as broken,
+   so it goes away entirely. */
+@media (prefers-reduced-motion: reduce) {
+  .wa-cursor {
+    display: none;
+  }
+}
+
+/* The two cards carrying the actual offer — no bill, no ceiling — breathe, so
+   the eye lands on them on the way down the page. Half a cycle apart: two
+   claims taking turns reads as emphasis, two in lockstep reads as a fault. */
+@keyframes wa-pulse {
+  0%, 100% {
+    border-color: var(--color-base-300);
+    box-shadow: 0 0 0 0 transparent;
+  }
+  50% {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 4px color-mix(in oklab, var(--color-primary) 15%, transparent);
+  }
+}
+
+.wa-pulse {
+  animation: wa-pulse 3.2s ease-in-out infinite;
+}
+
+.wa-pulse-offset {
+  animation-delay: 1.6s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wa-pulse {
+    animation: none;
+  }
+}
+
+/* The bars in the illustrated charts. They answer to the pointer because the
+   point of drawing the dashboard in markup was that it is not a screenshot,
+   and a reader running along a row is asking which hour they are on. Shifted
+   toward red rather than pinned to a fixed colour, so the dark theme's own
+   primary moves with it. */
+.wa-bar {
+  transition: background-color 140ms ease;
+}
+
+.wa-bar:hover {
+  background-color: color-mix(in oklab, var(--color-primary) 40%, var(--color-error));
+}

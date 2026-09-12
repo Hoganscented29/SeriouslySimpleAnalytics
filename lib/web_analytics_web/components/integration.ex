@@ -318,7 +318,7 @@ defmodule WebAnalyticsWeb.IntegrationComponents do
           <div class="flex items-end gap-[3px] h-16">
             <div
               :for={count <- hourly}
-              class="flex-1 bg-primary/80 rounded-sm"
+              class="wa-bar flex-1 bg-primary/80 rounded-sm"
               style={"height: #{round(count / peak * 100)}%"}
             >
             </div>
@@ -536,7 +536,7 @@ defmodule WebAnalyticsWeb.IntegrationComponents do
           <div class="flex items-end gap-[3px] h-16">
             <div
               :for={count <- hourly}
-              class="flex-1 bg-primary/80 rounded-sm"
+              class="wa-bar flex-1 bg-primary/80 rounded-sm"
               style={"height: #{round(count / peak * 100)}%"}
             >
             </div>
@@ -665,7 +665,10 @@ defmodule WebAnalyticsWeb.IntegrationComponents do
             You
           </span>
           <div class="rounded-2xl rounded-br px-4 py-3 text-sm leading-relaxed border border-primary bg-primary/10">
-            {@prompt || agent_prompt(@base_url)}
+            <.prompt_segment
+              :for={segment <- prompt_segments(@prompt || agent_prompt(@base_url))}
+              segment={segment}
+            />
           </div>
         </div>
 
@@ -776,5 +779,53 @@ defmodule WebAnalyticsWeb.IntegrationComponents do
     instructed changes.
     """
     |> String.trim()
+  end
+
+  # The three things in the prompt a reader's eye should land on: where the
+  # contract lives, the file that has to change, and whose service this is.
+  # Only the chat bubble gets them — the copyable blocks stay the plain string,
+  # because what the agent receives has to be exactly what the page says.
+  @prompt_parts ~r{(?<url>https?://[^\s]+?/llms\.txt)|(?<file>llms\.txt)|(?<name>SeriouslySimpleAnalytics)}
+
+  attr :segment, :any, required: true
+
+  # One clause per kind, written tight against the sigil delimiters: these run
+  # together inside a sentence, so a newline in the template would show up as a
+  # space before a full stop.
+  defp prompt_segment(%{segment: {:link, url}} = assigns) do
+    assigns = assign(assigns, :url, url)
+
+    ~H|<a href={@url} class="link link-primary font-mono break-all">{@url}</a>|
+  end
+
+  defp prompt_segment(%{segment: {:code, file}} = assigns) do
+    assigns = assign(assigns, :file, file)
+
+    ~H|<code class="font-mono">{@file}</code>|
+  end
+
+  defp prompt_segment(%{segment: {:strong, name}} = assigns) do
+    assigns = assign(assigns, :name, name)
+
+    ~H|<strong class="font-semibold">{@name}</strong>|
+  end
+
+  defp prompt_segment(%{segment: {:text, text}} = assigns) do
+    assigns = assign(assigns, :text, text)
+
+    ~H|{@text}|
+  end
+
+  defp prompt_segments(prompt) do
+    @prompt_parts
+    |> Regex.split(prompt, include_captures: true, trim: true)
+    |> Enum.map(fn chunk ->
+      case Regex.named_captures(@prompt_parts, chunk) do
+        %{"url" => url} when url != "" -> {:link, url}
+        %{"file" => file} when file != "" -> {:code, file}
+        %{"name" => name} when name != "" -> {:strong, name}
+        _ -> {:text, chunk}
+      end
+    end)
   end
 end

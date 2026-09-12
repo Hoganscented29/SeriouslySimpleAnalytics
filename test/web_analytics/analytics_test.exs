@@ -172,7 +172,7 @@ defmodule WebAnalytics.AnalyticsTest do
       assert Enum.any?(Analytics.pages(f), &(&1.name == "/agent-screen"))
     end
 
-    test "an AI tool's own telemetry is never hidden by the dwell filter", %{site: site} do
+    test "an AI tool's own telemetry is never hidden by the dwell filter", %{site: _site} do
       session = Repo.one!(from s in Session, where: s.token == "ai-1")
 
       # Zero dwell and zero heartbeats is the shape of a ping, not an anomaly.
