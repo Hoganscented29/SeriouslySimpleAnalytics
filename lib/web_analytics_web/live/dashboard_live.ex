@@ -149,6 +149,42 @@ defmodule WebAnalyticsWeb.DashboardLive do
     {:noreply, push_patch(socket, to: path_for(socket, %{"dmin" => nil, "dmax" => nil}))}
   end
 
+  # A toggle rather than two events: the same row both adds and removes, and
+  # the list it is toggling against is the one already in the URL.
+  def handle_event("toggle_origin", %{"origin" => origin}, socket) do
+    current = socket.assigns.filters.exclude_origins
+
+    next =
+      if origin in current,
+        do: List.delete(current, origin),
+        else: [origin | current]
+
+    {:noreply,
+     push_patch(socket,
+       to: path_for(socket, %{"noip" => if(next == [], do: nil, else: Enum.join(next, ","))})
+     )}
+  end
+
+  def handle_event("exclude_suggested_origins", _params, socket) do
+    suggested =
+      socket.assigns.data
+      |> Map.get(:origins, [])
+      |> Enum.filter(& &1.suggested)
+      |> Enum.map(& &1.ip_hash)
+
+    combined = Enum.uniq(socket.assigns.filters.exclude_origins ++ suggested)
+
+    {:noreply,
+     push_patch(socket,
+       to:
+         path_for(socket, %{"noip" => if(combined == [], do: nil, else: Enum.join(combined, ","))})
+     )}
+  end
+
+  def handle_event("clear_origins", _params, socket) do
+    {:noreply, push_patch(socket, to: path_for(socket, %{"noip" => nil}))}
+  end
+
   @impl true
   def handle_event("navigate", params, socket) do
     {:noreply, push_patch(socket, to: path_for(socket, params))}
@@ -233,6 +269,7 @@ defmodule WebAnalyticsWeb.DashboardLive do
       host: blank_to_nil(params["domain"]),
       dwell_min: params["dmin"] || 0,
       dwell_max: params["dmax"] || last_dwell_bucket(),
+      exclude_origins: origins_param(params["noip"]),
       group_by: if(params["group"] == "title", do: :title, else: :path)
     })
   end
@@ -242,6 +279,21 @@ defmodule WebAnalyticsWeb.DashboardLive do
   end
 
   defp last_dwell_bucket, do: length(Analytics.dwell_bucket_labels()) - 1
+
+  # Hex hashes, so anything else in the parameter is somebody editing the URL
+  # by hand and is dropped rather than sent to the database.
+  defp origins_param(nil), do: []
+
+  defp origins_param(value) when is_binary(value) do
+    value
+    |> String.split(",", trim: true)
+    |> Enum.map(&String.trim/1)
+    |> Enum.filter(&Regex.match?(~r/\A[0-9a-f]{6,64}\z/, &1))
+    |> Enum.uniq()
+    |> Enum.take(50)
+  end
+
+  defp origins_param(_), do: []
 
   # Dropped from the URL when it is at the stop, so a default view does not
   # carry a range that excludes nothing.
@@ -285,7 +337,13 @@ defmodule WebAnalyticsWeb.DashboardLive do
       "flow" => if(socket.assigns.flow_mode == "pages", do: nil, else: "events"),
       "domain" => socket.assigns.filters && socket.assigns.filters.host,
       "dmin" => dwell_param(socket, :dwell_min, 0),
-      "dmax" => dwell_param(socket, :dwell_max, last_dwell_bucket())
+      "dmax" => dwell_param(socket, :dwell_max, last_dwell_bucket()),
+      "noip" =>
+        case socket.assigns.filters && socket.assigns.filters.exclude_origins do
+          nil -> nil
+          [] -> nil
+          origins -> Enum.join(origins, ",")
+        end
     }
 
     query =
@@ -316,7 +374,8 @@ defmodule WebAnalyticsWeb.DashboardLive do
         channels: Analytics.channels(filters),
         # The dwell slider lives in the filter bar above the tabs, so the chart
         # beside it has to be loaded whatever tab is open.
-        dwell: Analytics.dwell_distribution(filters)
+        dwell: Analytics.dwell_distribution(filters),
+        origins: Analytics.origins(filters)
       }
       |> Map.merge(tab_data(socket.assigns.tab, filters, socket.assigns))
 

@@ -32,10 +32,10 @@ defmodule WebAnalytics.Admin do
   — are not narrowed by it, because they do not vary by domain, and the page
   hides them rather than showing a global number beside nine scoped ones.
   """
-  def scope, do: %{domain: nil, project: nil}
+  def scope, do: %{domain: nil, project: nil, origins: []}
 
   @doc "Whether anything is narrowing the view."
-  def scoped?(%{domain: nil, project: nil}), do: false
+  def scoped?(%{domain: nil, project: nil} = scope), do: Map.get(scope, :origins, []) != []
   def scoped?(_scope), do: true
 
   # Session-derived queries take the scope directly.
@@ -54,6 +54,14 @@ defmodule WebAnalytics.Admin do
 
   defp apply_scope(query, scope) do
     query
+    # Spelled out rather than left to `not in`, which yields NULL against a
+    # null hash and would drop every session that arrived without one.
+    |> then(fn q ->
+      case Map.get(scope, :origins, []) do
+        [] -> q
+        origins -> where(q, [session: s], is_nil(s.ip_hash) or s.ip_hash not in ^origins)
+      end
+    end)
     |> then(fn q ->
       case scope[:domain] do
         nil -> q
@@ -197,6 +205,7 @@ defmodule WebAnalytics.Admin do
             entry_path: s.entry_path,
             pageviews: s.pageview_count,
             dwell_ms: s.dwell_ms,
+            ip_hash: s.ip_hash,
             last_seen_at: s.last_seen_at
           }
       )
@@ -482,6 +491,7 @@ defmodule WebAnalytics.Admin do
           pageviews: s.pageview_count,
           dwell_ms: s.dwell_ms,
           anomalous: s.anomalous,
+          ip_hash: s.ip_hash,
           last_seen_at: s.last_seen_at
         }
     )

@@ -583,6 +583,23 @@ defmodule WebAnalyticsWeb.DashboardComponents do
 
   # -- formatting ----------------------------------------------------------
 
+  @doc """
+  Where a visit came from, as far as this product knows it.
+
+  Not an address, and deliberately not labelled as one: no address is stored
+  anywhere in this system. This is the leading bytes of the salted,
+  day-rotating hash the anomaly scorer already keeps — enough to see that a run
+  of sessions shares one origin, and useless for working out where that origin
+  is. Including to us, and including tomorrow, once the salt has rotated.
+  """
+  def origin(nil), do: "—"
+
+  def origin(hash) when is_binary(hash) do
+    binary_part(hash, 0, min(6, byte_size(hash)))
+  end
+
+  def origin(_), do: "—"
+
   @doc "Human-readable duration from milliseconds."
   def duration(nil), do: "—"
   def duration(ms) when not is_integer(ms), do: duration(round(ms))

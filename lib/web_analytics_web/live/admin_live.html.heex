@@ -85,10 +85,21 @@
 
         <.live_sparkline series={@live.series} />
 
+        <div
+          :if={Map.get(@scope, :origins, []) != []}
+          class="flex items-center gap-3 text-xs rounded-box bg-base-200/60 px-3 py-2"
+        >
+          <span class="text-base-content/60">
+            {length(@scope.origins)} origin(s) filtered out
+          </span>
+          <button phx-click="clear_origins" class="btn btn-xs btn-ghost">Remove filter</button>
+        </div>
+
         <div class="overflow-x-auto">
           <table class="table table-xs">
             <thead>
               <tr>
+                <th title="Untick to filter out everything from this origin"></th>
                 <th>Last seen</th>
                 <th>Account</th>
                 <th>Domain</th>
@@ -97,6 +108,7 @@
                 <th class="text-right">Pages</th>
                 <th class="text-right">Dwell</th>
                 <th>Where</th>
+                <th>Origin</th>
               </tr>
             </thead>
             <tbody>
@@ -108,6 +120,17 @@
                   DateTime.compare(session.last_seen_at, cutoff) != :lt && "bg-success/10"
                 ]}
               >
+                <td>
+                  <input
+                    type="checkbox"
+                    checked={session.ip_hash not in Map.get(@scope, :origins, [])}
+                    disabled={is_nil(session.ip_hash)}
+                    phx-click="toggle_origin"
+                    phx-value-origin={session.ip_hash}
+                    class="checkbox checkbox-xs"
+                    aria-label="Include this origin"
+                  />
+                </td>
                 <td class="whitespace-nowrap">{ago(session.last_seen_at)}</td>
                 <td>
                   <.link
@@ -129,9 +152,12 @@
                 <td class="text-[11px] whitespace-nowrap">
                   {session.city || session.country || "—"}
                 </td>
+                <td class="font-mono text-[11px] text-base-content/50">
+                  {origin(session.ip_hash)}
+                </td>
               </tr>
               <tr :if={@live.sessions_list == []}>
-                <td colspan="8" class="text-center py-8 text-base-content/50">
+                <td colspan="10" class="text-center py-8 text-base-content/50">
                   Nobody in the last 30 minutes
                 </td>
               </tr>
@@ -644,11 +670,24 @@
 
     <!-- recent sessions -->
     <section class="rounded-box bg-base-100 border border-base-300 p-5">
-      <h2 class="text-sm font-medium mb-3">Most recent sessions</h2>
+      <div class="flex items-center gap-3 flex-wrap mb-3">
+        <h2 class="text-sm font-medium">Most recent sessions</h2>
+        <span :if={Map.get(@scope, :origins, []) != []} class="text-xs text-base-content/60">
+          {length(@scope.origins)} origin(s) filtered out
+        </span>
+        <button
+          :if={Map.get(@scope, :origins, []) != []}
+          phx-click="clear_origins"
+          class="btn btn-xs btn-ghost"
+        >
+          Remove filter
+        </button>
+      </div>
       <div class="overflow-x-auto max-h-96 overflow-y-auto">
         <table class="table table-xs table-pin-rows">
           <thead>
             <tr>
+              <th title="Untick to filter out everything from this origin"></th>
               <th>Last seen</th>
               <th>Site</th>
               <th>Channel</th>
@@ -660,6 +699,17 @@
           </thead>
           <tbody>
             <tr :for={row <- @detail.recent_sessions}>
+              <td>
+                <input
+                  type="checkbox"
+                  checked={row.ip_hash not in Map.get(@scope, :origins, [])}
+                  disabled={is_nil(row.ip_hash)}
+                  phx-click="toggle_origin"
+                  phx-value-origin={row.ip_hash}
+                  class="checkbox checkbox-xs"
+                  aria-label="Include this origin"
+                />
+              </td>
               <td class="whitespace-nowrap text-base-content/60">{ago(row.last_seen_at)}</td>
               <td class="max-w-[10rem] truncate">{row.site}</td>
               <td>
@@ -679,7 +729,7 @@
               <td class="text-right tabular-nums">{duration(row.dwell_ms)}</td>
             </tr>
             <tr :if={@detail.recent_sessions == []}>
-              <td colspan="7" class="text-center text-base-content/50 py-6">
+              <td colspan="8" class="text-center text-base-content/50 py-6">
                 Nothing has reported yet.
               </td>
             </tr>

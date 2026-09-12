@@ -14,7 +14,7 @@ defmodule WebAnalyticsWeb.AdminLive do
 
   # Only the one component: this module defines its own num/1 and duration/1,
   # and importing the rest would collide with them.
-  import WebAnalyticsWeb.DashboardComponents, only: [live_sparkline: 1]
+  import WebAnalyticsWeb.DashboardComponents, only: [live_sparkline: 1, origin: 1]
 
   alias WebAnalytics.Admin
   alias WebAnalytics.Admin.Host
@@ -57,7 +57,8 @@ defmodule WebAnalyticsWeb.AdminLive do
   def handle_params(params, _uri, socket) do
     scope = %{
       domain: blank_to_nil(params["domain"]),
-      project: blank_to_nil(params["project"])
+      project: blank_to_nil(params["project"]),
+      origins: origins_param(params["noip"])
     }
 
     socket = assign(socket, :scope, scope)
@@ -135,6 +136,21 @@ defmodule WebAnalyticsWeb.AdminLive do
     {:noreply, push_patch(socket, to: ~p"/admin")}
   end
 
+  # Unticking a row filters out that origin, not the one session: a single
+  # session is not something a report can usefully exclude.
+  def handle_event("toggle_origin", %{"origin" => origin}, socket) do
+    current = Map.get(socket.assigns.scope, :origins, [])
+
+    next =
+      if origin in current, do: List.delete(current, origin), else: [origin | current]
+
+    {:noreply, push_patch(socket, to: admin_path(socket.assigns.scope, next))}
+  end
+
+  def handle_event("clear_origins", _params, socket) do
+    {:noreply, push_patch(socket, to: admin_path(socket.assigns.scope, []))}
+  end
+
   def handle_event("site_window", %{"window" => window}, socket) do
     window = parse_window(window)
 
@@ -143,6 +159,33 @@ defmodule WebAnalyticsWeb.AdminLive do
     # in a different order.
     {:noreply, socket |> assign(:site_window, window) |> load_sites()}
   end
+
+  defp admin_path(scope, origins) do
+    query =
+      [
+        {"domain", scope.domain},
+        {"project", scope.project},
+        {"noip", if(origins == [], do: nil, else: Enum.join(origins, ","))}
+      ]
+      |> Enum.reject(&(elem(&1, 1) in [nil, ""]))
+
+    ~p"/admin?#{query}"
+  end
+
+  # Hex hashes only; anything else in the parameter is a hand-edited URL and is
+  # dropped rather than handed to the database.
+  defp origins_param(nil), do: []
+
+  defp origins_param(value) when is_binary(value) do
+    value
+    |> String.split(",", trim: true)
+    |> Enum.map(&String.trim/1)
+    |> Enum.filter(&Regex.match?(~r/\A[0-9a-f]{6,64}\z/, &1))
+    |> Enum.uniq()
+    |> Enum.take(50)
+  end
+
+  defp origins_param(_), do: []
 
   defp blank_to_nil(value) when is_binary(value) do
     case String.trim(value) do

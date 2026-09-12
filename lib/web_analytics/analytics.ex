@@ -73,7 +73,9 @@ defmodule WebAnalytics.Analytics do
       project: Map.get(opts, :project),
       # And one tag can be deployed on several hostnames. Same rule: nil is all.
       host: Map.get(opts, :host),
-      group_by: Map.get(opts, :group_by, :path)
+      group_by: Map.get(opts, :group_by, :path),
+      # Origins to leave out. Hashes, not addresses — see origins/2.
+      exclude_origins: opts |> Map.get(:exclude_origins, []) |> List.wrap() |> Enum.uniq()
     }
     |> put_dwell_range(opts)
   end
@@ -154,6 +156,7 @@ defmodule WebAnalytics.Analytics do
     |> filter_anomalies(f)
     |> filter_crawlers(f)
     |> filter_dwell(f)
+    |> filter_origins(f)
     |> filter_project(f)
     |> filter_host(f)
   end
@@ -192,6 +195,20 @@ defmodule WebAnalytics.Analytics do
     do: where(query, [s], not (s.crawler and coalesce(s.channel, "web") == "web"))
 
   defp filter_crawlers(query, _f), do: query
+
+  # A session with no hash at all — a ping that arrived without a resolvable
+  # address — is not one of the excluded origins and has to survive the filter.
+  # Left to SQL's three-valued logic, `not in` against NULL yields NULL and
+  # drops the row, so the null case is spelled out.
+  defp filter_origins(query, %{exclude_origins: [_ | _] = origins}),
+    do: where(query, [s], is_nil(s.ip_hash) or s.ip_hash not in ^origins)
+
+  defp filter_origins(query, _f), do: query
+
+  defp filter_joined_origins(query, %{exclude_origins: [_ | _] = origins}),
+    do: where(query, [session: s], is_nil(s.ip_hash) or s.ip_hash not in ^origins)
+
+  defp filter_joined_origins(query, _f), do: query
 
   # Open-ended at the top when the reader has the high handle at "1h+": there is
   # no ceiling to compare against, and inventing one would silently drop the
@@ -234,6 +251,7 @@ defmodule WebAnalytics.Analytics do
     |> filter_joined_anomalies(f)
     |> filter_joined_crawlers(f)
     |> filter_joined_dwell(f)
+    |> filter_joined_origins(f)
     |> filter_joined_project(f)
     |> filter_joined_host(f)
   end
@@ -248,6 +266,7 @@ defmodule WebAnalytics.Analytics do
     |> filter_joined_anomalies(f)
     |> filter_joined_crawlers(f)
     |> filter_joined_dwell(f)
+    |> filter_joined_origins(f)
     |> filter_joined_project(f)
     |> filter_joined_host(f)
   end
@@ -262,6 +281,7 @@ defmodule WebAnalytics.Analytics do
     |> filter_joined_anomalies(f)
     |> filter_joined_crawlers(f)
     |> filter_joined_dwell(f)
+    |> filter_joined_origins(f)
     |> filter_joined_project(f)
     |> filter_joined_host(f)
   end
@@ -997,6 +1017,76 @@ defmodule WebAnalytics.Analytics do
 
   defp truncate_minute(%DateTime{} = at) do
     %{at | second: 0, microsecond: {0, 0}}
+  end
+
+  # What makes an origin worth offering to exclude. Both are about one place
+  # generating traffic that is not a person reading the site, and they catch
+  # different shapes of it: a scraper that produces many junk sessions, and a
+  # single origin that has come to dominate the whole report.
+  @origin_min_sessions 5
+  @origin_anomalous_share 0.5
+  @origin_dominant_share 0.2
+  @origin_dominant_floor 10
+
+  @doc """
+  Traffic grouped by origin, with the ones worth excluding flagged.
+
+  These are hashes, never addresses: nothing in this system stores an address.
+  The hash is salted per site and rotated daily, which is the important caveat
+  for this screen — over a range longer than a day one address appears as one
+  origin per day, and an exclusion only matches the day it was made on.
+
+  Deliberately ignores both the anomaly filter and the origin exclusions: the
+  anomalous count is the reason a row is being suggested, and a row you have
+  already excluded still has to be listed so you can put it back.
+  """
+  def origins(f, limit \\ 12) do
+    query =
+      from(s in Session,
+        where: s.site_id == ^f.site_id,
+        where: s.started_at >= ^f.from and s.started_at < ^f.to,
+        where: not is_nil(s.ip_hash)
+      )
+      |> filter_project(f)
+      |> filter_host(f)
+
+    rows =
+      Repo.all(
+        from s in query,
+          group_by: s.ip_hash,
+          order_by: [desc: count(s.id)],
+          limit: ^limit,
+          select: %{
+            ip_hash: s.ip_hash,
+            sessions: count(s.id),
+            anomalous: filter(count(s.id), s.anomalous),
+            crawlers: filter(count(s.id), s.crawler),
+            pageviews: coalesce(sum(s.pageview_count), 0),
+            last_seen_at: max(s.last_seen_at)
+          }
+      )
+
+    total = Enum.reduce(rows, 0, &(&1.sessions + &2))
+
+    Enum.map(rows, fn row -> Map.merge(row, suggestion(row, total)) end)
+  end
+
+  # The reason travels with the flag. A suggestion a reader cannot see the
+  # basis of is a nag, and this one is asking them to throw data away.
+  defp suggestion(row, total) do
+    share = if total > 0, do: row.sessions / total, else: 0.0
+    anomalous_share = if row.sessions > 0, do: row.anomalous / row.sessions, else: 0.0
+
+    cond do
+      row.sessions >= @origin_min_sessions and anomalous_share >= @origin_anomalous_share ->
+        %{suggested: true, reason: "#{round(anomalous_share * 100)}% of its sessions are junk"}
+
+      row.sessions >= @origin_dominant_floor and share >= @origin_dominant_share ->
+        %{suggested: true, reason: "#{round(share * 100)}% of all sessions from one origin"}
+
+      true ->
+        %{suggested: false, reason: nil}
+    end
   end
 
   @doc "How many sessions each anomaly reason accounts for."

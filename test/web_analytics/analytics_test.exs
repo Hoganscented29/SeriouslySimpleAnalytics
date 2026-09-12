@@ -104,6 +104,88 @@ defmodule WebAnalytics.AnalyticsTest do
     end
   end
 
+  describe "origins" do
+    setup %{site: site} do
+      # Set directly, because the hash comes off the request address and a
+      # submit in a test does not carry one. One on the visit that shows up by
+      # default, one on the anomaly, so both halves of this screen have data.
+      sessions = Repo.all(from s in Session, where: s.site_id == ^site.id, order_by: s.id)
+      visible = Enum.find(sessions, &(not &1.anomalous and not &1.crawler))
+      odd = Enum.find(sessions, & &1.anomalous)
+
+      Repo.update_all(from(s in Session, where: s.id == ^visible.id), set: [ip_hash: "aaa111"])
+      Repo.update_all(from(s in Session, where: s.id == ^odd.id), set: [ip_hash: "bbb222"])
+
+      %{visible: "aaa111", odd_origin: "bbb222"}
+    end
+
+    test "groups sessions by origin without hiding the anomalous ones", %{site: site} do
+      rows = Analytics.origins(filters(site))
+
+      # The anomaly filter is off for this list on purpose: the anomalous count
+      # is the reason a row gets suggested, so hiding it would hide the reason.
+      assert Enum.any?(rows, &(&1.anomalous > 0))
+      assert Enum.all?(rows, &is_binary(&1.ip_hash))
+    end
+
+    test "excluding an origin removes its sessions everywhere", %{site: site, visible: visible} do
+      before = Analytics.overview(filters(site)).sessions
+      after_exclusion = Analytics.overview(filters(site, %{exclude_origins: [visible]})).sessions
+
+      assert after_exclusion == before - 1
+    end
+
+    test "a session with no origin survives the filter", %{site: site, visible: visible} do
+      # A visit that arrived with no resolvable address has no hash at all, and
+      # `not in` against NULL yields NULL in SQL — which would drop it.
+      submit(site, [
+        init_event(),
+        pageview_event(1, "/no-origin"),
+        tick_event(1, %{"d" => 30_000, "am" => 20_000})
+      ])
+
+      paths =
+        filters(site, %{exclude_origins: [visible]})
+        |> Analytics.pages()
+        |> Enum.map(& &1.name)
+
+      assert "/no-origin" in paths
+      refute "/pricing" in paths
+    end
+
+    test "suggests an origin whose sessions are mostly junk", %{site: site} do
+      # Six sessions from one place, four of them classified anomalous.
+      for i <- 1..6 do
+        submit(site, [
+          init_event(),
+          pageview_event(1, "/spray-#{i}"),
+          tick_event(1, %{"d" => 1_000, "am" => 0, "a" => 0})
+        ])
+      end
+
+      sprayed =
+        Repo.all(from s in Session, where: like(s.entry_path, "/spray-%"), select: s.id)
+
+      Repo.update_all(from(s in Session, where: s.id in ^sprayed), set: [ip_hash: "ccc333"])
+
+      Repo.update_all(from(s in Session, where: s.id in ^Enum.take(sprayed, 4)),
+        set: [anomalous: true]
+      )
+
+      row = Analytics.origins(filters(site)) |> Enum.find(&(&1.ip_hash == "ccc333"))
+
+      assert row.suggested
+      assert row.reason =~ "junk"
+    end
+
+    test "does not suggest an ordinary origin", %{site: site, visible: visible} do
+      row = Analytics.origins(filters(site)) |> Enum.find(&(&1.ip_hash == visible))
+
+      refute row.suggested
+      assert row.reason == nil
+    end
+  end
+
   describe "the session-length range" do
     # The setup's clean visit dwells 40s (bucket 4, "2-5m" has ceiling 300s, so
     # 40s lands in bucket 2, "10s-1m"). The anomaly is 20 hours, the crawler 3s.

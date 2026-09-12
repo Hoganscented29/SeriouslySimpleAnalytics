@@ -230,6 +230,93 @@
         <span :for={label <- dwell_labels} class="flex-1 text-center truncate">{label}</span>
       </div>
     </div>
+    <%!-- Origins. Hashes, not addresses: nothing here stores an address. The
+    hash is salted per site and rotated daily, which the note below says out
+    loud because it is the one thing that would otherwise mislead — over a
+    range longer than a day, one address is several rows. --%>
+    <% origins = @data[:origins] || [] %>
+    <% suggested = Enum.filter(origins, & &1.suggested) %>
+    <% excluded = @filters.exclude_origins %>
+    <details :if={origins != []} class="rounded-box bg-base-100 border border-base-300">
+      <summary class="px-4 py-3 cursor-pointer flex items-center gap-3 flex-wrap text-xs">
+        <span class="uppercase tracking-wide text-base-content/60">Origins</span>
+        <span class="text-base-content/40">{length(origins)} seen</span>
+        <span :if={suggested != []} class="badge badge-warning badge-sm gap-1">
+          {length(suggested)} worth excluding
+        </span>
+        <span :if={excluded != []} class="badge badge-primary badge-sm">
+          {length(excluded)} excluded
+        </span>
+      </summary>
+
+      <div class="px-4 pb-4 space-y-3">
+        <div class="flex items-center gap-2 flex-wrap">
+          <button
+            :if={suggested != []}
+            phx-click="exclude_suggested_origins"
+            class="btn btn-xs btn-warning btn-outline"
+          >
+            Exclude all {length(suggested)} suggested
+          </button>
+          <button :if={excluded != []} phx-click="clear_origins" class="btn btn-xs btn-ghost">
+            Clear exclusions
+          </button>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="table table-xs">
+            <thead>
+              <tr>
+                <th>Origin</th>
+                <th class="text-right">Sessions</th>
+                <th class="text-right">Junk</th>
+                <th class="text-right">Bots</th>
+                <th class="text-right">Pages</th>
+                <th>Why</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                :for={row <- origins}
+                class={[
+                  "transition-colors",
+                  row.ip_hash in excluded && "opacity-40",
+                  row.suggested && row.ip_hash not in excluded && "bg-warning/10"
+                ]}
+              >
+                <td class="font-mono">{origin(row.ip_hash)}</td>
+                <td class="text-right tabular-nums">{number(row.sessions)}</td>
+                <td class="text-right tabular-nums">{number(row.anomalous)}</td>
+                <td class="text-right tabular-nums">{number(row.crawlers)}</td>
+                <td class="text-right tabular-nums">{number(row.pageviews)}</td>
+                <td class="text-[11px] text-base-content/60">{row.reason}</td>
+                <td class="text-right">
+                  <button
+                    phx-click="toggle_origin"
+                    phx-value-origin={row.ip_hash}
+                    class={[
+                      "btn btn-xs",
+                      row.ip_hash in excluded && "btn-primary",
+                      row.ip_hash not in excluded && "btn-ghost"
+                    ]}
+                  >
+                    {if row.ip_hash in excluded, do: "Excluded", else: "Exclude"}
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p class="text-[10px] text-base-content/40">
+          Not addresses. No address is stored anywhere in this system — this is a salted hash,
+          kept only so a single origin spraying sessions can be spotted, and the salt rotates
+          daily. Over a range longer than a day one address appears as one row per day, so an
+          exclusion made today will not match the same address tomorrow.
+        </p>
+      </div>
+    </details>
     <!-- tabs -->
     <div role="tablist" class="tabs tabs-bordered">
       <button
@@ -282,55 +369,82 @@
         </div>
       </div>
 
-      <div class="rounded-box bg-base-100 border border-base-300 overflow-x-auto">
-        <table class="table table-sm">
-          <thead>
-            <tr>
-              <th>Last seen</th>
-              <th>On</th>
-              <th>Entry</th>
-              <th class="text-right">Pages</th>
-              <th class="text-right">Dwell</th>
-              <th class="text-right">Scroll</th>
-              <th>Where</th>
-              <th>Device</th>
-            </tr>
-          </thead>
-          <tbody>
-            <% cutoff = live[:as_of] && DateTime.add(live[:as_of], -30, :second) %>
-            <tr
-              :for={session <- live[:sessions_list] || []}
-              class={[
-                "hover transition-colors",
-                cutoff && DateTime.compare(session.last_seen_at, cutoff) != :lt &&
-                  "bg-success/10"
-              ]}
-            >
-              <td class="whitespace-nowrap text-xs">{relative(session.last_seen_at)}</td>
-              <td class="max-w-[12rem] truncate" title={session.exit_path}>
-                {display_name(session.exit_path)}
-              </td>
-              <td
-                class="max-w-[10rem] truncate text-xs text-base-content/60"
-                title={session.entry_path}
+      <div class="rounded-box bg-base-100 border border-base-300">
+        <div
+          :if={@filters.exclude_origins != []}
+          class="px-4 py-2 border-b border-base-300 flex items-center gap-3 text-xs"
+        >
+          <span class="text-base-content/60">
+            {length(@filters.exclude_origins)} origin(s) filtered out
+          </span>
+          <button phx-click="clear_origins" class="btn btn-xs btn-ghost">Remove filter</button>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="table table-sm">
+            <thead>
+              <tr>
+                <th title="Untick to filter out everything from this origin"></th>
+                <th>Last seen</th>
+                <th>On</th>
+                <th>Entry</th>
+                <th class="text-right">Pages</th>
+                <th class="text-right">Dwell</th>
+                <th class="text-right">Scroll</th>
+                <th>Where</th>
+                <th>Device</th>
+                <th>Origin</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% cutoff = live[:as_of] && DateTime.add(live[:as_of], -30, :second) %>
+              <tr
+                :for={session <- live[:sessions_list] || []}
+                class={[
+                  "hover transition-colors",
+                  cutoff && DateTime.compare(session.last_seen_at, cutoff) != :lt &&
+                    "bg-success/10"
+                ]}
               >
-                {display_name(session.entry_path)}
-              </td>
-              <td class="text-right tabular-nums">{number(session.pageview_count)}</td>
-              <td class="text-right tabular-nums">{duration(session.dwell_ms)}</td>
-              <td class="text-right tabular-nums">{percent(session.max_scroll_pct)}</td>
-              <td class="text-xs whitespace-nowrap">{display_name(session.city)}</td>
-              <td class="text-xs whitespace-nowrap">
-                {display_name(session.browser)} · {display_name(session.device_type)}
-              </td>
-            </tr>
-            <tr :if={(live[:sessions_list] || []) == []}>
-              <td colspan="8" class="text-center py-8 text-base-content/50">
-                Nobody in the last 30 minutes
-              </td>
-            </tr>
-          </tbody>
-        </table>
+                <td>
+                  <input
+                    type="checkbox"
+                    checked={session.ip_hash not in @filters.exclude_origins}
+                    disabled={is_nil(session.ip_hash)}
+                    phx-click="toggle_origin"
+                    phx-value-origin={session.ip_hash}
+                    class="checkbox checkbox-xs"
+                    aria-label="Include this origin"
+                  />
+                </td>
+                <td class="whitespace-nowrap text-xs">{relative(session.last_seen_at)}</td>
+                <td class="max-w-[12rem] truncate" title={session.exit_path}>
+                  {display_name(session.exit_path)}
+                </td>
+                <td
+                  class="max-w-[10rem] truncate text-xs text-base-content/60"
+                  title={session.entry_path}
+                >
+                  {display_name(session.entry_path)}
+                </td>
+                <td class="text-right tabular-nums">{number(session.pageview_count)}</td>
+                <td class="text-right tabular-nums">{duration(session.dwell_ms)}</td>
+                <td class="text-right tabular-nums">{percent(session.max_scroll_pct)}</td>
+                <td class="text-xs whitespace-nowrap">{display_name(session.city)}</td>
+                <td class="text-xs whitespace-nowrap">
+                  {display_name(session.browser)} · {display_name(session.device_type)}
+                </td>
+                <td class="font-mono text-[11px] text-base-content/60">
+                  {origin(session.ip_hash)}
+                </td>
+              </tr>
+              <tr :if={(live[:sessions_list] || []) == []}>
+                <td colspan="10" class="text-center py-8 text-base-content/50">
+                  Nobody in the last 30 minutes
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -1256,51 +1370,86 @@
         />
       </div>
 
-      <div class="rounded-box bg-base-100 border border-base-300 overflow-x-auto">
-        <table class="table table-sm">
-          <thead>
-            <tr>
-              <th>Started</th>
-              <th>Entry</th>
-              <th>Exit</th>
-              <th class="text-right">Pages</th>
-              <th class="text-right">Dwell</th>
-              <th class="text-right">Active</th>
-              <th class="text-right">Scroll</th>
-              <th class="text-right">Clicks</th>
-              <th>Device</th>
-              <th>Anomaly</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              :for={session <- @data[:sessions] || []}
-              class={["hover", session.anomalous && "opacity-60"]}
-            >
-              <td class="whitespace-nowrap text-xs">{relative(session.started_at)}</td>
-              <td class="max-w-[10rem] truncate" title={session.entry_path}>
-                {display_name(session.entry_path)}
-              </td>
-              <td class="max-w-[10rem] truncate" title={session.exit_path}>
-                {display_name(session.exit_path)}
-              </td>
-              <td class="text-right tabular-nums">{number(session.pageview_count)}</td>
-              <td class="text-right tabular-nums">{duration(session.dwell_ms)}</td>
-              <td class="text-right tabular-nums">{duration(session.active_ms)}</td>
-              <td class="text-right tabular-nums">{percent(session.max_scroll_pct)}</td>
-              <td class="text-right tabular-nums">{number(session.click_count)}</td>
-              <td class="text-xs whitespace-nowrap">
-                {display_name(session.browser)} · {display_name(session.device_type)}
-              </td>
-              <td>
-                <.anomaly_badges reasons={session.anomaly_reasons} score={session.anomaly_score} />
-              </td>
-            </tr>
-            <tr :if={(@data[:sessions] || []) == []}>
-              <td colspan="10" class="text-center py-8 text-base-content/50">No sessions yet</td>
-            </tr>
-          </tbody>
-        </table>
+      <%!-- Unticking a row filters out everything from that origin, not just
+      the one session: a single session is not a thing a report can usefully
+      exclude, and the origin is what "this visitor" means here. --%>
+      <div class="rounded-box bg-base-100 border border-base-300">
+        <div
+          :if={@filters.exclude_origins != []}
+          class="px-4 py-2 border-b border-base-300 flex items-center gap-3 text-xs"
+        >
+          <span class="text-base-content/60">
+            {length(@filters.exclude_origins)} origin(s) filtered out
+          </span>
+          <button phx-click="clear_origins" class="btn btn-xs btn-ghost">Remove filter</button>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="table table-sm">
+            <thead>
+              <tr>
+                <th title="Untick to filter out everything from this origin"></th>
+                <th>Started</th>
+                <th>Entry</th>
+                <th>Exit</th>
+                <th class="text-right">Pages</th>
+                <th class="text-right">Dwell</th>
+                <th class="text-right">Active</th>
+                <th class="text-right">Scroll</th>
+                <th class="text-right">Clicks</th>
+                <th>Device</th>
+                <th>Origin</th>
+                <th>Anomaly</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                :for={session <- @data[:sessions] || []}
+                class={["hover", session.anomalous && "opacity-60"]}
+              >
+                <td>
+                  <input
+                    type="checkbox"
+                    checked={session.ip_hash not in @filters.exclude_origins}
+                    disabled={is_nil(session.ip_hash)}
+                    phx-click="toggle_origin"
+                    phx-value-origin={session.ip_hash}
+                    class="checkbox checkbox-xs"
+                    aria-label="Include this origin"
+                  />
+                </td>
+                <td class="whitespace-nowrap text-xs">{relative(session.started_at)}</td>
+                <td class="max-w-[10rem] truncate" title={session.entry_path}>
+                  {display_name(session.entry_path)}
+                </td>
+                <td class="max-w-[10rem] truncate" title={session.exit_path}>
+                  {display_name(session.exit_path)}
+                </td>
+                <td class="text-right tabular-nums">{number(session.pageview_count)}</td>
+                <td class="text-right tabular-nums">{duration(session.dwell_ms)}</td>
+                <td class="text-right tabular-nums">{duration(session.active_ms)}</td>
+                <td class="text-right tabular-nums">{percent(session.max_scroll_pct)}</td>
+                <td class="text-right tabular-nums">{number(session.click_count)}</td>
+                <td class="text-xs whitespace-nowrap">
+                  {display_name(session.browser)} · {display_name(session.device_type)}
+                </td>
+                <td class="font-mono text-[11px] text-base-content/60">
+                  {origin(session.ip_hash)}
+                </td>
+                <td>
+                  <.anomaly_badges
+                    reasons={session.anomaly_reasons}
+                    score={session.anomaly_score}
+                  />
+                </td>
+              </tr>
+              <tr :if={(@data[:sessions] || []) == []}>
+                <td colspan="12" class="text-center py-8 text-base-content/50">
+                  No sessions yet
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
     <!-- ============================= CRAWLERS ============================ -->
