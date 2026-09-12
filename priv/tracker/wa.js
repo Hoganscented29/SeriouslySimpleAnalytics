@@ -216,6 +216,8 @@
         dwell: 0,
         active: 0,
         ticks: 0,
+        clicks: 0,
+        outbound: 0,
         fromPath: null,
         fromTitle: null
       };
@@ -641,6 +643,11 @@
 
     var x = event && typeof event.clientX === 'number' ? event.clientX : rect ? rect.left : null;
     var y = event && typeof event.clientY === 'number' ? event.clientY : rect ? rect.top : null;
+
+    // Counted on the session so state() can report them without the page having
+    // to watch for clicks a second time.
+    session.clicks = (session.clicks || 0) + 1;
+    if (verdict.outbound) session.outbound = (session.outbound || 0) + 1;
 
     return {
       n: 'click',
@@ -1315,6 +1322,34 @@
         seq: session.seq,
         automation: automation,
         heartbeatMs: heartbeatMs
+      };
+    },
+    // What the tag has recorded about this visit so far. Read-only, and read by
+    // the landing page to show a visitor their own data rather than describing
+    // it — the shortest route to believing an analytics tool is watching it
+    // watch you.
+    state: function () {
+      return {
+        path: page ? page.path : location.pathname,
+        title: page ? page.title : document.title,
+        pageviews: session.seq,
+        dwellMs: session.dwell,
+        activeMs: session.active,
+        pageDwellMs: page ? page.dwell : 0,
+        scrollPct: scrollMax.pct,
+        scrollPx: scrollMax.px,
+        docHeight: scrollMax.docHeight,
+        clicks: session.clicks || 0,
+        outbound: session.outbound || 0,
+        referrer: document.referrer || null,
+        viewport: { w: window.innerWidth, h: window.innerHeight },
+        screen: window.screen ? { w: window.screen.width, h: window.screen.height } : null,
+        timezone: timezone(),
+        language: navigator.language || null,
+        connection: connection(),
+        hints: clientHints(),
+        automation: automation,
+        ticks: session.ticks
       };
     },
     track: function (name, meta) {

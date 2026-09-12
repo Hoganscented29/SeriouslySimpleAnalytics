@@ -10,6 +10,156 @@ defmodule WebAnalyticsWeb.IntegrationComponents do
   use Phoenix.Component
   use WebAnalyticsWeb, :verified_routes
 
+  attr :crawler_summary, :map, default: nil
+
+  @doc """
+  What the tag on this page has recorded about the reader, live, beside what it
+  recorded about the robots.
+
+  Describing dwell time and scroll depth is abstract. Showing someone their own,
+  updating while they read, is the same claim in a form they can check. The
+  left half is read straight out of the tag in the browser — no request, no
+  round trip, just the state the tag already holds. The right half is this
+  site's own crawler traffic over the last day, which the server records
+  because the tag cannot see it.
+  """
+  def live_proof(assigns) do
+    ~H"""
+    <section class="rounded-2xl border border-base-300 bg-base-100 overflow-hidden" id="live-proof">
+      <div class="px-4 py-3 border-b border-base-300 bg-base-200 flex items-center gap-2 flex-wrap">
+        <span class="relative flex h-2 w-2" aria-hidden="true">
+          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-60"></span>
+          <span class="relative inline-flex rounded-full h-2 w-2 bg-success"></span>
+        </span>
+        <span class="text-xs font-semibold">This page is running the tag on you right now</span>
+        <span class="text-[11px] text-base-content/50">
+          — nothing below leaves your browser except what the tag already sends
+        </span>
+      </div>
+
+      <div class="grid md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-base-300">
+        <!-- the reader -->
+        <div class="p-4">
+          <div class="text-[11px] uppercase tracking-wide text-base-content/50 mb-3">
+            Your visit, as recorded
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <div
+              :for={
+                {label, id, hint} <- [
+                  {"Time on page", "wa-dwell", "dwell"},
+                  {"Engaged", "wa-active", "actually reading"},
+                  {"Scroll depth", "wa-scroll", "furthest point"},
+                  {"Clicks", "wa-clicks", "auto-captured"}
+                ]
+              }
+              class="rounded-lg border border-base-300 px-3 py-2"
+            >
+              <div class="text-[10px] text-base-content/50">{label}</div>
+              <div id={id} class="text-lg font-semibold tabular-nums leading-tight">—</div>
+              <div class="text-[10px] text-base-content/40">{hint}</div>
+            </div>
+          </div>
+
+          <dl class="mt-3 space-y-1 text-[11px]">
+            <div
+              :for={
+                {label, id} <- [
+                  {"Page", "wa-path"},
+                  {"Viewport", "wa-viewport"},
+                  {"Time zone", "wa-tz"},
+                  {"Connection", "wa-conn"},
+                  {"Platform", "wa-plat"}
+                ]
+              }
+              class="flex justify-between gap-3 py-1 border-b border-base-200 last:border-0"
+            >
+              <dt class="text-base-content/50 flex-none">{label}</dt>
+              <dd id={id} class="font-mono text-right truncate text-base-content/80">—</dd>
+            </div>
+          </dl>
+
+          <p id="wa-stale" hidden class="text-[10px] text-warning mt-3">
+            Your browser has an older copy of the tag cached, so these are not filling in.
+            A reload in a few minutes will pick up the current one.
+          </p>
+
+          <p class="text-[10px] text-base-content/40 mt-3">
+            No cookies, no address stored. Your IP resolves a city in-request and is then
+            salted, hashed and discarded.
+          </p>
+        </div>
+
+        <!-- the robots -->
+        <div class="p-4">
+          <div class="text-[11px] uppercase tracking-wide text-base-content/50 mb-3">
+            Bots that visited this site — last 24 hours
+          </div>
+
+          <div :if={@crawler_summary}>
+            <div class="grid grid-cols-3 gap-2 mb-3">
+              <div
+                :for={
+                  stat <- [
+                    {"Visits", @crawler_summary.total_sessions},
+                    {"Pages taken", @crawler_summary.total_pageviews},
+                    {"AI crawlers", @crawler_summary.ai_sessions}
+                  ]
+                }
+                class="rounded-lg border border-base-300 px-3 py-2"
+              >
+                <div class="text-[10px] text-base-content/50">{elem(stat, 0)}</div>
+                <div class="text-lg font-semibold tabular-nums leading-tight">
+                  {elem(stat, 1)}
+                </div>
+              </div>
+            </div>
+
+            <div class="space-y-1">
+              <% peak =
+                @crawler_summary.crawlers |> Enum.map(& &1.sessions) |> Enum.max(fn -> 0 end) %>
+              <div
+                :for={crawler <- @crawler_summary.crawlers}
+                class="flex items-center gap-2 text-[11px]"
+              >
+                <div class="flex-1 min-w-0 relative h-5">
+                  <div
+                    class={[
+                      "absolute inset-y-0 left-0 rounded",
+                      crawler.kind == "ai" && "bg-primary/20",
+                      crawler.kind != "ai" && "bg-base-300/60"
+                    ]}
+                    style={"width: #{if peak > 0, do: crawler.sessions * 100 / peak, else: 0}%"}
+                  >
+                  </div>
+                  <span class="relative px-2 font-mono leading-5 truncate block">
+                    {crawler.name}
+                    <span :if={crawler.kind == "ai"} class="text-primary">· AI</span>
+                  </span>
+                </div>
+                <span class="tabular-nums text-base-content/60 w-8 text-right">
+                  {crawler.sessions}
+                </span>
+              </div>
+            </div>
+
+            <p class="text-[10px] text-base-content/40 mt-3">
+              These never ran the tag — they fetch HTML and stop. Our server reports them to our
+              own account, which is the same few lines the crawler pages tell you to run at
+              your origin.
+            </p>
+          </div>
+
+          <div :if={is_nil(@crawler_summary)} class="text-sm text-base-content/50 py-8 text-center">
+            No automated traffic recorded in the last day.
+          </div>
+        </div>
+      </div>
+    </section>
+    """
+  end
+
   @doc """
   A dashboard, drawn.
 
@@ -323,10 +473,10 @@ defmodule WebAnalyticsWeb.IntegrationComponents do
       <!-- composer: decorative, but a chat without one does not read as a chat -->
       <div class="flex items-center gap-2.5 px-4 py-3 border-t border-base-300 bg-base-200">
         <span class="flex-1 min-w-0 bg-base-100 border border-base-300 rounded-full px-4 py-2 text-[13.5px] text-base-content/40 truncate">
-          Ask it what your busiest hour was…
+          Ask it what your busiest hour was<span class="wa-typing" aria-hidden="true"><i class="not-italic inline-block">.</i><i class="not-italic inline-block">.</i><i class="not-italic inline-block">.</i></span>
         </span>
         <span
-          class="flex-none w-8 h-8 rounded-full grid place-items-center bg-primary text-primary-content"
+          class="wa-send flex-none w-8 h-8 rounded-full grid place-items-center bg-primary text-primary-content"
           aria-hidden="true"
         >
           ↑

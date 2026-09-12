@@ -26,6 +26,7 @@ defmodule WebAnalyticsWeb.LandingController do
   def home(conn, _params) do
     conn
     |> assign(:page_title, "Free website analytics")
+    |> assign(:crawler_summary, crawler_summary())
     |> assign(:site_key, demo_site_key())
     |> assign(:base_url, base_url(conn))
     |> render(:home)
@@ -52,6 +53,21 @@ defmodule WebAnalyticsWeb.LandingController do
     |> put_resp_content_type("text/plain")
     |> put_resp_header("cache-control", "public, max-age=3600")
     |> send_resp(200, body)
+  end
+
+  # Real numbers from this deployment's own account, or nil when self-tracking
+  # is not configured. Nil hides the panel rather than filling it with zeros,
+  # since an empty proof is worse than no proof.
+  defp crawler_summary do
+    with key when is_binary(key) <- Application.get_env(:web_analytics, :self_site_key),
+         site when not is_nil(site) <- Sites.fetch_site_by_key(key) do
+      case WebAnalytics.Analytics.recent_crawler_summary(site.id) do
+        %{total_sessions: 0} -> nil
+        summary -> summary
+      end
+    else
+      _ -> nil
+    end
   end
 
   defp base_url(conn) do

@@ -853,6 +853,40 @@ defmodule WebAnalytics.Analytics do
   # -- projects ------------------------------------------------------------
 
   @doc """
+  Automated traffic against one site in the last day, named and counted.
+
+  For the landing page: the crawlers hitting this deployment's own pages, which
+  the server records because the browser tag cannot see them.
+  """
+  def recent_crawler_summary(site_id, hours \\ 24, limit \\ 8) do
+    since = DateTime.add(DateTime.utc_now(), -hours, :hour)
+
+    rows =
+      Repo.all(
+        from s in Session,
+          where: s.site_id == ^site_id and s.crawler and s.started_at > ^since,
+          group_by: [s.crawler_name, s.crawler_kind],
+          order_by: [desc: count(s.id)],
+          select: %{
+            name: s.crawler_name,
+            kind: s.crawler_kind,
+            sessions: count(s.id),
+            pageviews: coalesce(sum(s.pageview_count), 0),
+            last_seen: max(s.last_seen_at)
+          }
+      )
+
+    %{
+      crawlers: Enum.take(rows, limit),
+      total_sessions: rows |> Enum.map(& &1.sessions) |> Enum.sum(),
+      total_pageviews: rows |> Enum.map(& &1.pageviews) |> Enum.sum(),
+      ai_sessions:
+        rows |> Enum.filter(&(&1.kind == "ai")) |> Enum.map(& &1.sessions) |> Enum.sum(),
+      distinct: length(rows)
+    }
+  end
+
+  @doc """
   Hostnames this account has seen traffic on, busiest first.
 
   Populated from the first pageview of each session, so an account whose tag is

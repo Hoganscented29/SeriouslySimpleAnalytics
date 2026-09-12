@@ -11,6 +11,9 @@ defmodule WebAnalyticsWeb.Router do
     plug :protect_from_forgery
     plug :put_secure_browser_headers
     plug :fetch_current_scope_for_user
+    # Last in the pipeline: it only reads, and a page must render whether or not
+    # this records anything.
+    plug WebAnalyticsWeb.Plugs.CrawlerReport
   end
 
   # Public, cross-origin, and cookie-free. No session or CSRF plugs here: the
@@ -45,6 +48,7 @@ defmodule WebAnalyticsWeb.Router do
     pipe_through :public_api
 
     get "/wa.js", TrackerController, :script
+    get "/wa-live.js", TrackerController, :proof
     # Served publicly and cross-origin so an agent can read the integration
     # contract before it ever sends anything.
     get "/llms.txt", LandingController, :llms

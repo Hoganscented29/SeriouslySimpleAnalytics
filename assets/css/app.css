@@ -103,3 +103,33 @@
 [data-phx-session], [data-phx-teleported-src] { display: contents }
 
 /* This file is for your main application CSS */
+
+/* The composer in the integration illustration. It is decorative — the window
+   is role="img" — but a chat that is completely still reads as a screenshot,
+   and the point of drawing it in markup was that it need not be one. */
+@keyframes wa-typing {
+  0%, 60%, 100% { opacity: 0.25; transform: translateY(0); }
+  30%           { opacity: 1;    transform: translateY(-2px); }
+}
+
+/* A pulse, not a jump: it sits in a fake composer and should read as waiting,
+   which is a breath rather than a hop. */
+@keyframes wa-send {
+  0%, 100% { transform: scale(1);    opacity: 1; }
+  50%      { transform: scale(1.08); opacity: 0.82; }
+}
+
+.wa-typing i { animation: wa-typing 1.4s ease-in-out infinite; }
+.wa-typing i:nth-child(2) { animation-delay: 0.2s; }
+.wa-typing i:nth-child(3) { animation-delay: 0.4s; }
+
+.wa-send { animation: wa-send 2s ease-in-out infinite; }
+
+/* This product records whether a visitor asked for reduced motion. Animating
+   anyway would be a poor advertisement for noticing. */
+@media (prefers-reduced-motion: reduce) {
+  .wa-typing i,
+  .wa-send {
+    animation: none;
+  }
+}

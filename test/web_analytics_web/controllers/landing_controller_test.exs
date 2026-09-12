@@ -96,6 +96,51 @@ defmodule WebAnalyticsWeb.LandingControllerTest do
     end
   end
 
+  describe "the live panel" do
+    test "shows the reader their own visit, driven by the tag", %{conn: conn} do
+      html = conn |> get(~p"/") |> html_response(200)
+
+      assert html =~ "This page is running the tag on you right now"
+      assert html =~ "Your visit, as recorded"
+      # The script reads the tag's own state rather than measuring separately.
+      assert html =~ ~s|src="/wa-live.js"|
+      for id <- ~w(wa-dwell wa-active wa-scroll wa-clicks wa-path), do: assert(html =~ id)
+    end
+
+    test "shows this site's own crawler traffic when there is some", %{conn: conn} do
+      site = site_fixture(%{key: "self-proof"})
+      original = Application.get_env(:web_analytics, :self_site_key)
+      Application.put_env(:web_analytics, :self_site_key, site.key)
+      on_exit(fn -> Application.put_env(:web_analytics, :self_site_key, original) end)
+
+      {:ok, _} =
+        WebAnalytics.Ingest.submit_sync(
+          site,
+          payload(site, [
+            init_event(%{"ua" => "Mozilla/5.0 (compatible; ClaudeBot/1.0)"}),
+            pageview_event(1, "/")
+          ]),
+          received_at: DateTime.utc_now()
+        )
+
+      html = conn |> get(~p"/") |> html_response(200)
+
+      assert html =~ "Bots that visited this site"
+      assert html =~ "ClaudeBot"
+    end
+
+    test "hides the bot half rather than showing zeros", %{conn: conn} do
+      original = Application.get_env(:web_analytics, :self_site_key)
+      Application.put_env(:web_analytics, :self_site_key, nil)
+      on_exit(fn -> Application.put_env(:web_analytics, :self_site_key, original) end)
+
+      html = conn |> get(~p"/") |> html_response(200)
+
+      # An empty proof is worse than no proof.
+      assert html =~ "No automated traffic recorded"
+    end
+  end
+
   describe "the dashboard illustration" do
     for {label, path} <- [{"website", "/"}, {"AI", "/AI-Analytics-llms-txt"}] do
       test "tops the #{label} page, showing a tool in use", %{conn: conn} do

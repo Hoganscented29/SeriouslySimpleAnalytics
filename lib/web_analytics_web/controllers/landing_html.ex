@@ -4,7 +4,8 @@ defmodule WebAnalyticsWeb.LandingHTML do
 
   # Before embed_templates, which compiles the templates at that point: an
   # import underneath it is not in scope for them.
-  import WebAnalyticsWeb.IntegrationComponents, only: [integration_chat: 1, dashboard_preview: 1]
+  import WebAnalyticsWeb.IntegrationComponents,
+    only: [integration_chat: 1, dashboard_preview: 1, live_proof: 1]
 
   embed_templates "landing_html/*"
 

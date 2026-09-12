@@ -4,10 +4,10 @@
   <!-- hero -->
   <section class="mx-auto max-w-6xl px-4 sm:px-6 pt-16 pb-10">
     <div class="max-w-3xl">
-      <div class="badge badge-primary badge-outline mb-4">Free · AI tool analytics</div>
-      <h1 class="text-4xl sm:text-5xl font-semibold tracking-tight leading-tight">
-        Analytics for the AI tool you're building. One URL.
-      </h1>
+      <h1 class="badge badge-primary badge-outline mb-4">AI Analytics</h1>
+      <h2 class="text-4xl sm:text-5xl font-semibold tracking-tight leading-tight">
+        llms.txt Analytics — Free AI Data Metrics
+      </h2>
       <p class="mt-5 text-lg text-base-content/70 leading-relaxed">
         You shipped an agent, an MCP server, a CLI, a VS Code extension. You have no idea
         whether anyone runs it twice. Fetch one URL with your account ID and you have usage
@@ -30,39 +30,10 @@
     </div>
   </section>
 
-  <!-- why -->
-  <section class="mx-auto max-w-6xl px-4 sm:px-6 pb-16">
-    <div class="grid md:grid-cols-3 gap-4">
-      <div class="rounded-box bg-base-100 border border-base-300 p-5">
-        <div class="text-sm font-medium">No dependency, in any language</div>
-        <p class="mt-2 text-sm text-base-content/60">
-          If it can make an HTTP request it can report. Python, Go, Rust, bash, a Lambda, a
-          GitHub Action, a shell one-liner. Nothing to install and nothing to keep updated.
-        </p>
-      </div>
-      <div class="rounded-box bg-base-100 border border-base-300 p-5">
-        <div class="text-sm font-medium">Your agent can wire it up itself</div>
-        <p class="mt-2 text-sm text-base-content/60">
-          The complete contract is at <a href={~p"/llms.txt"} class="link font-mono">/llms.txt</a>
-          — parameters, event conventions, rate guidance, and the rules about what must never be
-          sent. Point a coding agent at that URL and it can integrate unattended.
-        </p>
-      </div>
-      <div class="rounded-box bg-base-100 border border-base-300 p-5">
-        <div class="text-sm font-medium">Many projects, one account</div>
-        <p class="mt-2 text-sm text-base-content/60">
-          Pass <code class="font-mono text-xs">project=</code>
-          and each tool you ship reports separately under the same account ID. No new key, no new
-          setup.
-        </p>
-      </div>
-    </div>
-  </section>
-
   <!-- the API -->
   <section id="ping" class="border-y border-base-300 bg-base-100">
     <div class="mx-auto max-w-6xl px-4 sm:px-6 py-16">
-      <h2 class="text-2xl font-semibold tracking-tight">Every parameter there is</h2>
+      <h3 class="text-2xl font-semibold tracking-tight">Every parameter there is</h3>
       <p class="mt-3 text-base-content/70 max-w-2xl">
         Four you will use, a few you might, and anything else you add is kept as an attribute on
         the event. There is no schema to extend.
@@ -158,7 +129,7 @@
 
   <!-- what to log -->
   <section id="events" class="mx-auto max-w-6xl px-4 sm:px-6 py-16">
-    <h2 class="text-2xl font-semibold tracking-tight">What's worth logging</h2>
+    <h3 class="text-2xl font-semibold tracking-tight">What's worth logging</h3>
     <p class="mt-3 text-base-content/70 max-w-2xl">
       Event names are yours to choose. These are the ones that answer the questions you
       actually have about a tool you just shipped.
@@ -203,7 +174,7 @@
   <!-- accounts API -->
   <section id="accounts" class="border-y border-base-300 bg-base-100">
     <div class="mx-auto max-w-6xl px-4 sm:px-6 py-16">
-      <h2 class="text-2xl font-semibold tracking-tight">Your agent can open its own account</h2>
+      <h3 class="text-2xl font-semibold tracking-tight">Your agent can open its own account</h3>
       <p class="mt-3 text-base-content/70 max-w-2xl">
         A signup form is the step most likely to end an integration before it starts. So there
         isn't one in the way: an agent that reads
@@ -252,7 +223,7 @@
   <!-- websites too -->
   <section class="mx-auto max-w-6xl px-4 sm:px-6 py-16">
     <div class="rounded-box bg-base-100 border border-base-300 p-6 sm:p-8">
-      <h2 class="text-2xl font-semibold tracking-tight">Got a website too?</h2>
+      <h3 class="text-2xl font-semibold tracking-tight">Got a website too?</h3>
       <p class="mt-3 text-base-content/70 max-w-2xl">
         The same account covers it, reporting into the same dashboard. One script tag captures
         dwell time, scroll depth, page-to-page flow, outbound clicks and form abandonment, with
@@ -265,7 +236,7 @@
 
   <!-- the integration, as the conversation it is -->
   <section class="mx-auto max-w-6xl px-4 sm:px-6 py-16">
-    <h2 class="text-2xl font-semibold tracking-tight">This is the entire integration</h2>
+    <h3 class="text-2xl font-semibold tracking-tight">This is the entire integration</h3>
     <p class="mt-3 text-base-content/70 max-w-2xl mb-8">
       Hand one line to your coding agent. It reads the contract, opens an account, wires up the
       events, and updates your own llms.txt so the next agent does the same.
@@ -276,7 +247,7 @@
   <!-- cta -->
   <section class="border-t border-base-300 bg-base-100">
     <div class="mx-auto max-w-6xl px-4 sm:px-6 py-16 text-center">
-      <h2 class="text-2xl font-semibold tracking-tight">Send your first event now</h2>
+      <h3 class="text-2xl font-semibold tracking-tight">Send your first event now</h3>
       <p class="mt-3 text-base-content/70">
         Paste the URL at the top into a terminal, then open the dashboard. It will be there.
       </p>
