@@ -241,8 +241,9 @@ defmodule WebAnalyticsWeb.LandingControllerTest do
       assert html =~ "c · cc · s_p · n"
       assert html =~ "city, county, state/province and nation"
       # The reason matters as much as the requirement: a caller that understands
-      # why will not omit them.
-      assert html =~ "where the software is, not where the person is"
+      # why will not omit them. It lives in the table row now that the notes
+      # beside it are gone.
+      assert html =~ "where your software runs, not where the person is"
     end
 
     test "still documents self-service accounts where an agent will read it", %{conn: conn} do

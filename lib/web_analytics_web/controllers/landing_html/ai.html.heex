@@ -55,7 +55,8 @@
               row <- [
                 {"uid", "Your account ID."},
                 {"c · cc · s_p · n",
-                 "Your user's city, county, state/province and nation. Required — see below."},
+                 "Your user's city, county, state/province and nation. Required: a ping's own " <>
+                   "address is where your software runs, not where the person is."},
                 {"event",
                  "What happened — page_view, tool_called, run_completed. Anything you like."},
                 {"project",
@@ -77,55 +78,6 @@
             </tr>
           </tbody>
         </table>
-      </div>
-
-      <div class="mt-10">
-        <div class="space-y-4">
-          <div class="rounded-box border border-base-300 p-5">
-            <div class="text-sm font-medium">
-              Sessions and flow, for free
-            </div>
-            <p class="mt-2 text-sm text-base-content/60">
-              Consecutive pings are grouped into a session automatically, and the server numbers
-              your pageviews and links each to the one before it. Send
-              <code class="font-mono text-xs bg-base-200 rounded px-1 py-0.5">event=page_view&amp;path=/chat</code>
-              each time — you never send a sequence number — and you get a flow graph showing
-              which paths lead where and where runs stop. Pass
-              <code class="font-mono text-xs bg-base-200 rounded px-1 py-0.5">sid</code>
-              when you want exact control.
-            </p>
-          </div>
-          <div class="rounded-box border border-base-300 p-5">
-            <div class="text-sm font-medium">
-              <code class="font-mono text-xs bg-base-200 rounded px-1 py-0.5">event=page_view</code>
-              is special
-            </div>
-            <p class="mt-2 text-sm text-base-content/60">
-              With a <code class="font-mono text-xs bg-base-200 rounded px-1 py-0.5">path</code>, it is recorded as a real
-              pageview rather than a generic event — so it lands in the pages report and the
-              page-to-page flow graph.
-            </p>
-          </div>
-          <div class="rounded-box border border-base-300 p-5">
-            <div class="text-sm font-medium">You send the location; we don't guess it</div>
-            <p class="mt-2 text-sm text-base-content/60">
-              <code class="font-mono text-xs bg-base-200 rounded px-1 py-0.5">c</code>, <code class="font-mono text-xs bg-base-200 rounded px-1 py-0.5">cc</code>,
-              <code class="font-mono text-xs bg-base-200 rounded px-1 py-0.5">s_p</code>
-              and <code class="font-mono text-xs bg-base-200 rounded px-1 py-0.5">n</code>
-              carry your user's city, county, state/province and nation. A ping arrives from
-              wherever your tool runs — a container, a serverless region three countries away —
-              so its address says where the software is, not where the person is. Guessing from
-              it would give a confident, wrong answer.
-            </p>
-          </div>
-          <div class="rounded-box border border-base-300 p-5">
-            <div class="text-sm font-medium">Your account ID is the whole credential</div>
-            <p class="mt-2 text-sm text-base-content/60">
-              It identifies an account and grants nothing else. Unknown IDs get the same empty 204
-              as real ones, so the endpoint cannot be used to test whether an account exists.
-            </p>
-          </div>
-        </div>
       </div>
     </div>
   </section>
