@@ -144,8 +144,11 @@ defmodule WebAnalyticsWeb.LandingControllerTest do
 
       html = conn |> get(~p"/") |> html_response(200)
 
-      # An empty proof is worse than no proof.
-      assert html =~ "No automated traffic recorded"
+      # An empty proof is worse than no proof: the half goes entirely, and the
+      # panel becomes one column rather than one full and one blank.
+      refute html =~ "Bots that visited this site"
+      refute html =~ "md:grid-cols-2 md:divide-x"
+      assert html =~ "Your visit, as recorded"
     end
   end
 

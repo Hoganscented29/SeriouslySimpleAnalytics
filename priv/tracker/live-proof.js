@@ -55,12 +55,42 @@
     set('wa-plat', hints.plat || s.language || 'unknown');
   }
 
+  // Coalesced to one render per frame: scroll and pointer events fire far faster
+  // than anything here changes, and re-reading the tag on each of them would
+  // spend the frame budget to draw the same numbers.
+  var queued = false;
+
+  function scheduleRender() {
+    if (queued) return;
+    queued = true;
+    requestAnimationFrame(function () {
+      queued = false;
+      render();
+    });
+  }
+
+  function watchInteraction() {
+    // Scroll depth and the click count change the moment the reader does
+    // something, and waiting up to a second to show it makes a live panel look
+    // like a static one.
+    var events = ['scroll', 'click', 'keydown', 'pointerdown', 'pointermove', 'wheel', 'touchmove'];
+
+    for (var i = 0; i < events.length; i++) {
+      window.addEventListener(events[i], scheduleRender, { passive: true, capture: true });
+    }
+
+    document.addEventListener('visibilitychange', scheduleRender);
+  }
+
   function startWhenReady(attempt) {
     // The tag is deferred, so the panel may run first. Retry briefly rather
     // than binding to a load event the tag does not publish.
     if (window.__webAnalytics && window.__webAnalytics.state) {
       render();
-      setInterval(render, 1000);
+      watchInteraction();
+      // Dwell and engaged time advance on their own, so they still need a
+      // clock — just a faster one than the second they used to wait for.
+      setInterval(render, 250);
       return;
     }
 

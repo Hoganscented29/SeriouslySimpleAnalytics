@@ -48,16 +48,16 @@
         </p>
       </div>
       <div class="rounded-box bg-base-100 border border-base-300 p-5">
-        <div class="text-sm font-medium">Free</div>
-        <p class="mt-2 text-sm text-base-content/60">
-          No plan, no event quota, no sampling above a traffic line. Everything should just work.
-        </p>
-      </div>
-      <div class="rounded-box bg-base-100 border border-base-300 p-5">
         <div class="text-sm font-medium">Bots counted, not blended</div>
         <p class="mt-2 text-sm text-base-content/60">
           Crawlers and AI agents are identified by name and pulled out of your human numbers —
           then reported on their own page, because who is scraping you is worth knowing.
+        </p>
+      </div>
+      <div class="rounded-box bg-base-100 border border-base-300 p-5">
+        <div class="text-sm font-medium">Free</div>
+        <p class="mt-2 text-sm text-base-content/60">
+          No plan, no event quota, no sampling above a traffic line. Everything should just work.
         </p>
       </div>
     </div>
@@ -85,7 +85,7 @@
                  "By URL or title. Click any page to re-centre the diagram and follow a route."},
                 {"Outbound clicks",
                  "Caught on mousedown, before the browser tears the page down."},
-                {"Every button and link",
+                {{:safe, ~s|Every button and <span class="underline">link</span>|},
                  "Grouped by the id, class and text already on the element. No tagging plan."},
                 {"Forms, field by field",
                  "On submit and on abandonment. Passwords are masked in the browser and never sent."},
@@ -97,13 +97,13 @@
           }
           class={
             [
-              "rounded-box p-5",
+              "rounded-box p-5 transition-colors",
               # The first card answers what it costs. Everything after it describes
               # behaviour, which is a question you only reach once that one is
               # settled — so it carries the emphasis rather than sitting level
               # with the rest.
-              index == 0 && "border-2 border-primary bg-primary/5",
-              index != 0 && "border border-base-300"
+              index == 0 && "border-2 border-primary bg-primary/5 hover:bg-primary/10",
+              index != 0 && "border border-base-300 hover:border-primary/50 hover:bg-base-200/70"
             ]
           }
         >
@@ -134,7 +134,7 @@
     <div class="mt-6 flex flex-wrap gap-2">
       <span
         :for={{name, vendor} <- ai_crawlers()}
-        class="badge badge-outline badge-lg font-mono text-xs"
+        class="badge badge-outline badge-lg font-mono text-xs transition-colors cursor-default hover:badge-primary hover:border-primary"
         title={vendor}
       >
         {name}
@@ -143,7 +143,7 @@
   </section>
 
   <!-- ai analytics cross-link -->
-  <section class="mx-auto max-w-6xl px-4 sm:px-6 py-16">
+  <section class="mx-auto max-w-6xl px-4 sm:px-6 pt-16 pb-8">
     <div class="rounded-box bg-base-100 border border-base-300 p-6 sm:p-8">
       <h3 class="text-2xl font-semibold tracking-tight mb-6">
         Building an AI tool, not just a website?
@@ -159,7 +159,7 @@
 
   <!-- cta -->
   <section class="border-t border-base-300 bg-base-100">
-    <div class="mx-auto max-w-6xl px-4 sm:px-6 py-16 text-center">
+    <div class="mx-auto max-w-6xl px-4 sm:px-6 py-10 text-center">
       <h3 class="text-2xl font-semibold tracking-tight">
         Start <strong class="font-bold">collecting</strong> in less than a minute.
       </h3>

@@ -70,7 +70,10 @@ defmodule WebAnalyticsWeb.IntegrationComponents do
         </p>
       </div>
 
-      <div class="grid md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-base-300">
+      <div class={[
+        "grid divide-y md:divide-y-0 divide-base-300",
+        @crawler_summary && "md:grid-cols-2 md:divide-x"
+      ]}>
         <!-- the reader -->
         <div class="p-4">
           <div class="text-[11px] uppercase tracking-wide text-base-content/50 mb-3">
@@ -87,7 +90,7 @@ defmodule WebAnalyticsWeb.IntegrationComponents do
                   {"Clicks", "wa-clicks", "auto-captured"}
                 ]
               }
-              class="rounded-lg border border-base-300 px-3 py-2"
+              class="rounded-lg border border-base-300 px-3 py-2 transition-colors hover:border-primary/40 hover:bg-base-200/50"
             >
               <div class="text-[10px] text-base-content/50">{label}</div>
               <div id={id} class="text-lg font-semibold tabular-nums leading-tight">—</div>
@@ -125,12 +128,12 @@ defmodule WebAnalyticsWeb.IntegrationComponents do
         </div>
 
         <!-- the robots -->
-        <div class="p-4">
+        <div :if={@crawler_summary} class="p-4">
           <div class="text-[11px] uppercase tracking-wide text-base-content/50 mb-3">
             Bots that visited this site — last 24 hours
           </div>
 
-          <div :if={@crawler_summary}>
+          <div>
             <div class="grid grid-cols-3 gap-2 mb-3">
               <div
                 :for={
@@ -140,7 +143,7 @@ defmodule WebAnalyticsWeb.IntegrationComponents do
                     {"AI crawlers", @crawler_summary.ai_sessions}
                   ]
                 }
-                class="rounded-lg border border-base-300 px-3 py-2"
+                class="rounded-lg border border-base-300 px-3 py-2 transition-colors hover:border-primary/40 hover:bg-base-200/50"
               >
                 <div class="text-[10px] text-base-content/50">{elem(stat, 0)}</div>
                 <div class="text-lg font-semibold tabular-nums leading-tight">
@@ -182,10 +185,6 @@ defmodule WebAnalyticsWeb.IntegrationComponents do
               own account, which is the same few lines the crawler pages tell you to run at
               your origin.
             </p>
-          </div>
-
-          <div :if={is_nil(@crawler_summary)} class="text-sm text-base-content/50 py-8 text-center">
-            No automated traffic recorded in the last day.
           </div>
         </div>
       </div>
@@ -284,10 +283,11 @@ defmodule WebAnalyticsWeb.IntegrationComponents do
             }
             <div
             class={[
-              "rounded-lg px-3 py-2 border",
-              elem(stat, 3) == :good && "border-teal-500/40 bg-teal-500/10",
-              elem(stat, 3) == :slow && "border-rose-500/40 bg-rose-500/10",
-              is_nil(elem(stat, 3)) && "border-base-300"
+              "rounded-lg px-3 py-2 border transition-colors",
+              elem(stat, 3) == :good && "border-teal-500/40 bg-teal-500/10 hover:bg-teal-500/20",
+              elem(stat, 3) == :slow && "border-rose-500/40 bg-rose-500/10 hover:bg-rose-500/20",
+              is_nil(elem(stat, 3)) &&
+                "border-base-300 hover:border-primary/40 hover:bg-base-200/50"
             ]}
           >
             <div class="text-[10px] text-base-content/50">{elem(stat, 0)}</div>
@@ -308,7 +308,7 @@ defmodule WebAnalyticsWeb.IntegrationComponents do
           </div>
         </div>
 
-        <div class="rounded-lg border border-base-300 p-3">
+        <div class="rounded-lg border border-base-300 p-3 transition-colors hover:border-primary/40 hover:bg-base-200/40">
           <div class="flex items-baseline justify-between mb-2">
             <span class="text-[11px] font-medium">Events over time</span>
             <span class="text-[10px] text-base-content/40">
@@ -326,11 +326,14 @@ defmodule WebAnalyticsWeb.IntegrationComponents do
         </div>
 
         <div class="grid sm:grid-cols-2 gap-3">
-          <div class="rounded-lg border border-base-300 p-3">
+          <div class="rounded-lg border border-base-300 p-3 transition-colors hover:border-primary/40 hover:bg-base-200/40">
             <div class="text-[11px] font-medium mb-2">Events reported</div>
             <% event_peak = events |> Enum.map(&elem(&1, 1)) |> Enum.max() %>
             <div class="space-y-1.5">
-              <div :for={{name, count} <- events} class="flex items-center gap-2">
+              <div
+                :for={{name, count} <- events}
+                class="flex items-center gap-2 rounded px-1 -mx-1 transition-colors hover:bg-base-300/40"
+              >
                 <div class="flex-1 min-w-0 relative h-4">
                   <div
                     class="absolute inset-y-0 left-0 bg-primary/15 rounded"
@@ -351,7 +354,7 @@ defmodule WebAnalyticsWeb.IntegrationComponents do
             </div>
           </div>
 
-          <div class="rounded-lg border border-base-300 p-3">
+          <div class="rounded-lg border border-base-300 p-3 transition-colors hover:border-primary/40 hover:bg-base-200/40">
             <div class="text-[11px] font-medium mb-2">
               Attributes on <code class="font-mono">tool_called</code>
             </div>
@@ -363,7 +366,10 @@ defmodule WebAnalyticsWeb.IntegrationComponents do
                 ] %>
             <% attr_peak = attrs |> Enum.map(&elem(&1, 1)) |> Enum.max() %>
             <div class="space-y-1.5">
-              <div :for={{label, count} <- attrs} class="flex items-center gap-2">
+              <div
+                :for={{label, count} <- attrs}
+                class="flex items-center gap-2 rounded px-1 -mx-1 transition-colors hover:bg-base-300/40"
+              >
                 <div class="flex-1 min-w-0 relative h-4">
                   <div
                     class="absolute inset-y-0 left-0 bg-base-300/70 rounded"
@@ -385,7 +391,7 @@ defmodule WebAnalyticsWeb.IntegrationComponents do
           </div>
         </div>
 
-        <div class="rounded-lg border border-base-300 p-3">
+        <div class="rounded-lg border border-base-300 p-3 transition-colors hover:border-primary/40 hover:bg-base-200/40">
           <div class="text-[11px] font-medium mb-2">Event flow, within a run</div>
           <div class="flex items-center gap-1.5 overflow-hidden text-[10px] font-mono">
             <span
@@ -393,7 +399,7 @@ defmodule WebAnalyticsWeb.IntegrationComponents do
               class="contents"
             >
               <span :if={index > 0} class="text-base-content/25">→</span>
-              <span class="px-2 py-1 rounded bg-base-200 whitespace-nowrap">{node}</span>
+              <span class="px-2 py-1 rounded bg-base-200 whitespace-nowrap transition-colors hover:bg-primary/20">{node}</span>
             </span>
             <span class="text-base-content/25">→</span>
             <span class="px-2 py-1 rounded bg-success/15 text-success whitespace-nowrap">
@@ -511,7 +517,7 @@ defmodule WebAnalyticsWeb.IntegrationComponents do
                 {"Avg dwell", "2m 41s", "1m 09s active"}
               ]
             }
-            class="rounded-lg border border-base-300 px-3 py-2"
+            class="rounded-lg border border-base-300 px-3 py-2 transition-colors hover:border-primary/40 hover:bg-base-200/50"
           >
             <div class="text-[10px] text-base-content/50">{elem(stat, 0)}</div>
             <div class="text-base sm:text-lg font-semibold tabular-nums leading-tight">
@@ -522,7 +528,7 @@ defmodule WebAnalyticsWeb.IntegrationComponents do
         </div>
 
         <!-- sessions over time -->
-        <div class="rounded-lg border border-base-300 p-3">
+        <div class="rounded-lg border border-base-300 p-3 transition-colors hover:border-primary/40 hover:bg-base-200/40">
           <div class="flex items-baseline justify-between mb-2">
             <span class="text-[11px] font-medium">Sessions over time</span>
             <span class="text-[10px] text-base-content/40">peak {thousands(peak)}/hour</span>
@@ -539,11 +545,14 @@ defmodule WebAnalyticsWeb.IntegrationComponents do
 
         <div class="grid sm:grid-cols-2 gap-3">
           <!-- busiest pages -->
-          <div class="rounded-lg border border-base-300 p-3">
+          <div class="rounded-lg border border-base-300 p-3 transition-colors hover:border-primary/40 hover:bg-base-200/40">
             <div class="text-[11px] font-medium mb-2">Busiest pages</div>
             <% page_peak = pages |> Enum.map(&elem(&1, 1)) |> Enum.max() %>
             <div class="space-y-1.5">
-              <div :for={{path, count} <- pages} class="flex items-center gap-2">
+              <div
+                :for={{path, count} <- pages}
+                class="flex items-center gap-2 rounded px-1 -mx-1 transition-colors hover:bg-base-300/40"
+              >
                 <div class="flex-1 min-w-0 relative h-4">
                   <div
                     class="absolute inset-y-0 left-0 bg-primary/15 rounded"
@@ -565,13 +574,16 @@ defmodule WebAnalyticsWeb.IntegrationComponents do
           </div>
 
           <!-- crawlers -->
-          <div class="rounded-lg border border-base-300 p-3">
+          <div class="rounded-lg border border-base-300 p-3 transition-colors hover:border-primary/40 hover:bg-base-200/40">
             <div class="flex items-baseline justify-between mb-2">
               <span class="text-[11px] font-medium">AI crawlers, named</span>
               <span class="text-[10px] text-base-content/40">{thousands(bot_total)} visits</span>
             </div>
             <div class="space-y-1.5">
-              <div :for={{name, count} <- bots} class="flex items-center gap-2">
+              <div
+                :for={{name, count} <- bots}
+                class="flex items-center gap-2 rounded px-1 -mx-1 transition-colors hover:bg-base-300/40"
+              >
                 <span class="text-[10px] font-mono truncate flex-1">{name}</span>
                 <span class="text-[10px] tabular-nums text-base-content/60 w-10 text-right">
                   {thousands(count)}
@@ -585,7 +597,7 @@ defmodule WebAnalyticsWeb.IntegrationComponents do
         </div>
 
         <!-- flow -->
-        <div class="rounded-lg border border-base-300 p-3">
+        <div class="rounded-lg border border-base-300 p-3 transition-colors hover:border-primary/40 hover:bg-base-200/40">
           <div class="text-[11px] font-medium mb-2">Page-to-page flow</div>
           <div class="flex items-center gap-1.5 overflow-hidden text-[10px] font-mono">
             <span
@@ -593,7 +605,7 @@ defmodule WebAnalyticsWeb.IntegrationComponents do
               class="contents"
             >
               <span :if={index > 0} class="text-base-content/25">→</span>
-              <span class="px-2 py-1 rounded bg-base-200 whitespace-nowrap">{node}</span>
+              <span class="px-2 py-1 rounded bg-base-200 whitespace-nowrap transition-colors hover:bg-primary/20">{node}</span>
             </span>
             <span class="text-base-content/25">→</span>
             <span class="px-2 py-1 rounded bg-success/15 text-success whitespace-nowrap">
