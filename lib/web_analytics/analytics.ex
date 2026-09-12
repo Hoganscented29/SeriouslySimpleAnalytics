@@ -75,7 +75,12 @@ defmodule WebAnalytics.Analytics do
       host: Map.get(opts, :host),
       group_by: Map.get(opts, :group_by, :path),
       # Origins to leave out. Hashes, not addresses — see origins/2.
-      exclude_origins: opts |> Map.get(:exclude_origins, []) |> List.wrap() |> Enum.uniq()
+      exclude_origins: opts |> Map.get(:exclude_origins, []) |> List.wrap() |> Enum.uniq(),
+      # Individual sessions struck out by hand, from the row checkboxes. Cast
+      # here, once, because these arrive from a query string and the column is
+      # a bigint: a string in this list is a database error, not a filter.
+      exclude_sessions:
+        opts |> Map.get(:exclude_sessions, []) |> List.wrap() |> Enum.flat_map(&session_id/1)
     }
     |> put_dwell_range(opts)
   end
@@ -102,6 +107,17 @@ defmodule WebAnalytics.Analytics do
     |> Map.put(:dwell_from_ms, bucket_floor(min))
     |> Map.put(:dwell_to_ms, bucket_ceiling(max))
   end
+
+  defp session_id(id) when is_integer(id) and id > 0, do: [id]
+
+  defp session_id(id) when is_binary(id) do
+    case Integer.parse(id) do
+      {parsed, ""} when parsed > 0 -> [parsed]
+      _ -> []
+    end
+  end
+
+  defp session_id(_), do: []
 
   defp clamp_bucket(value, low, high) when is_integer(value),
     do: value |> max(low) |> min(high)
@@ -157,6 +173,7 @@ defmodule WebAnalytics.Analytics do
     |> filter_crawlers(f)
     |> filter_dwell(f)
     |> filter_origins(f)
+    |> filter_sessions(f)
     |> filter_project(f)
     |> filter_host(f)
   end
@@ -195,6 +212,19 @@ defmodule WebAnalytics.Analytics do
     do: where(query, [s], not (s.crawler and coalesce(s.channel, "web") == "web"))
 
   defp filter_crawlers(query, _f), do: query
+
+  # Struck out one row at a time. No null case to worry about here: a session
+  # always has an id, which is the whole reason the row checkbox works on this
+  # rather than on the origin — unticking one row should remove one row.
+  defp filter_sessions(query, %{exclude_sessions: [_ | _] = ids}),
+    do: where(query, [s], s.id not in ^ids)
+
+  defp filter_sessions(query, _f), do: query
+
+  defp filter_joined_sessions(query, %{exclude_sessions: [_ | _] = ids}),
+    do: where(query, [session: s], s.id not in ^ids)
+
+  defp filter_joined_sessions(query, _f), do: query
 
   # A session with no hash at all — a ping that arrived without a resolvable
   # address — is not one of the excluded origins and has to survive the filter.
@@ -252,6 +282,7 @@ defmodule WebAnalytics.Analytics do
     |> filter_joined_crawlers(f)
     |> filter_joined_dwell(f)
     |> filter_joined_origins(f)
+    |> filter_joined_sessions(f)
     |> filter_joined_project(f)
     |> filter_joined_host(f)
   end
@@ -267,6 +298,7 @@ defmodule WebAnalytics.Analytics do
     |> filter_joined_crawlers(f)
     |> filter_joined_dwell(f)
     |> filter_joined_origins(f)
+    |> filter_joined_sessions(f)
     |> filter_joined_project(f)
     |> filter_joined_host(f)
   end
@@ -282,6 +314,7 @@ defmodule WebAnalytics.Analytics do
     |> filter_joined_crawlers(f)
     |> filter_joined_dwell(f)
     |> filter_joined_origins(f)
+    |> filter_joined_sessions(f)
     |> filter_joined_project(f)
     |> filter_joined_host(f)
   end
@@ -908,15 +941,19 @@ defmodule WebAnalytics.Analytics do
 
   @doc "Recent sessions. Ignores the anomaly filter so the toggle can reveal them."
   def recent_sessions(f, limit \\ 40) do
-    query =
-      from s in Session,
-        where: s.site_id == ^f.site_id,
-        where: s.started_at >= ^f.from and s.started_at < ^f.to,
+    # The full scope, minus the row checkboxes. Built from sessions_scope rather
+    # than its own query so this table cannot disagree with the numbers above
+    # it — it was ignoring the session-length range and the origin exclusions,
+    # which meant dragging the slider moved every figure on the page except the
+    # list of the very rows being filtered.
+    #
+    # The one exception is exclude_sessions: a row struck out by hand stays
+    # visible, because this list is the only place to untick it again.
+    Repo.all(
+      from s in sessions_scope(%{f | exclude_sessions: []}),
         order_by: [desc: s.last_seen_at],
         limit: ^limit
-
-    query = query |> filter_anomalies(f) |> filter_crawlers(f)
-    Repo.all(query)
+    )
   end
 
   # Two windows, because they answer different questions. Thirty minutes is the
@@ -946,6 +983,7 @@ defmodule WebAnalytics.Analytics do
       )
       |> filter_anomalies(f)
       |> filter_crawlers(f)
+      |> filter_origins(f)
       |> filter_project(f)
       |> filter_host(f)
 

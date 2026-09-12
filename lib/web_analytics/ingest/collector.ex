@@ -156,6 +156,7 @@ defmodule WebAnalytics.Ingest.Collector do
               | events: existing.events ++ batch.events,
                 visitor_token: batch.visitor_token || existing.visitor_token,
                 ip_hash: batch.ip_hash || existing.ip_hash,
+                ip_masked: batch.ip_masked || existing.ip_masked,
                 received_at: batch.received_at
             }
 

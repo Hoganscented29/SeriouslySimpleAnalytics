@@ -123,8 +123,10 @@ defmodule WebAnalyticsWeb.IntegrationComponents do
           </p>
 
           <p class="text-[10px] text-base-content/40 mt-3">
-            No cookies, no address stored. Your IP resolves a city in-request and is then
-            salted, hashed and discarded.
+            No cookies. Your IP resolves a city in-request, and what is kept looks like
+            <code class="font-mono">203.•••.•••.42</code>
+            — first and last group only — alongside a salted hash that rotates daily. The
+            full address is never written down.
           </p>
         </div>
 

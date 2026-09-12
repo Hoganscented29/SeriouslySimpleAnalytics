@@ -49,8 +49,9 @@ defmodule WebAnalytics.Ingest do
   @doc """
   Salted, day-rotating hash of a client IP.
 
-  Raw addresses are never stored — this exists only so anomaly scoring can spot
-  a single origin spraying sessions, and it stops being linkable after a day.
+  Full addresses are never stored. This exists so anomaly scoring can spot a
+  single origin spraying sessions, and it stops being linkable after a day. See
+  `mask_ip/1` for the other, human-readable thing kept about an address.
   """
   def hash_ip(nil, _site), do: nil
 
@@ -65,6 +66,51 @@ defmodule WebAnalytics.Ingest do
   end
 
   def hash_ip(_, _), do: nil
+
+  @doc """
+  An address with everything between its first and last group masked out.
+
+  `203.0.113.42` becomes `203.•••.•••.42`. This is the one piece of address
+  data the system stores, and it is masked in the request that carried it — the
+  full value is never written anywhere, so there is nothing to unmask later.
+
+  The mask is a fixed width rather than one dot per digit, so it does not leak
+  how long the hidden groups were. Worth being straight about what it does not
+  conceal: the last group is the most identifying part of an address, and
+  keeping it reveals more than the usual /24 anonymisation, which throws the
+  tail away instead.
+  """
+  def mask_ip(nil), do: nil
+
+  def mask_ip(ip) when is_binary(ip) do
+    case String.trim(ip) do
+      "" -> nil
+      trimmed -> mask_groups(trimmed)
+    end
+  end
+
+  def mask_ip(_), do: nil
+
+  # IPv4 is dot-separated and IPv6 colon-separated, and the rule is the same
+  # either way: keep the ends, hide the middle, keep the separators so it still
+  # reads as an address.
+  defp mask_groups(ip) do
+    separator = if String.contains?(ip, ":"), do: ":", else: "."
+
+    case String.split(ip, separator) do
+      # Nothing to hide between the ends, so hide everything past the first
+      # group. Storing an address whole is the one outcome this prevents.
+      [only] ->
+        String.slice(only, 0, 1) <> "•••"
+
+      [first, _last] ->
+        first <> separator <> "•••"
+
+      [first | rest] ->
+        middle = rest |> Enum.drop(-1) |> Enum.map(fn _ -> "•••" end)
+        Enum.join([first | middle] ++ [List.last(rest)], separator)
+    end
+  end
 
   defp put_settings(site, opts) do
     Keyword.put_new_lazy(opts, :settings, fn -> Sites.settings_for(site) end)

@@ -53,6 +53,7 @@ defmodule WebAnalyticsWeb.PingController do
         Ingest.submit(site, payload(params, received_at, session_token(params, site, ip_hash)),
           received_at: received_at,
           ip_hash: ip_hash,
+          ip_masked: Ingest.mask_ip(ip),
           location: location(params, conn, ip),
           project: param(params, ~w(project app)),
           channel: param(params, ~w(type channel)) || "ai",

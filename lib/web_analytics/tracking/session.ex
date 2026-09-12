@@ -87,6 +87,7 @@ defmodule WebAnalytics.Tracking.Session do
     field :language, :string
     field :timezone, :string
     field :ip_hash, :string
+    field :ip_masked, :string
 
     field :country_code, :string
     field :country, :string

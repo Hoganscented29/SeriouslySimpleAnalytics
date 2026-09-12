@@ -185,6 +185,28 @@ defmodule WebAnalyticsWeb.DashboardLive do
     {:noreply, push_patch(socket, to: path_for(socket, %{"noip" => nil}))}
   end
 
+  # One row, one session. The origin filter is a different control with a
+  # different scope, and it lives in the Origins panel.
+  def handle_event("toggle_session", %{"session" => id}, socket) do
+    current = socket.assigns.filters.exclude_sessions
+    id = String.to_integer(id)
+
+    next =
+      if id in current, do: List.delete(current, id), else: [id | current]
+
+    {:noreply,
+     push_patch(socket,
+       to: path_for(socket, %{"nosess" => if(next == [], do: nil, else: Enum.join(next, ","))})
+     )}
+  end
+
+  # The one obvious way back: clears both kinds of exclusion, because a reader
+  # looking at a filtered table wants the table back, not a lesson in which
+  # control did it.
+  def handle_event("clear_row_filters", _params, socket) do
+    {:noreply, push_patch(socket, to: path_for(socket, %{"nosess" => nil, "noip" => nil}))}
+  end
+
   @impl true
   def handle_event("navigate", params, socket) do
     {:noreply, push_patch(socket, to: path_for(socket, params))}
@@ -270,6 +292,7 @@ defmodule WebAnalyticsWeb.DashboardLive do
       dwell_min: params["dmin"] || 0,
       dwell_max: params["dmax"] || last_dwell_bucket(),
       exclude_origins: origins_param(params["noip"]),
+      exclude_sessions: sessions_param(params["nosess"]),
       group_by: if(params["group"] == "title", do: :title, else: :path)
     })
   end
@@ -294,6 +317,29 @@ defmodule WebAnalyticsWeb.DashboardLive do
   end
 
   defp origins_param(_), do: []
+
+  # Sifted to digits here and cast to integers by Analytics.filters/2, so a
+  # hand-edited URL cannot put a string where the query wants a bigint.
+  defp sessions_param(nil), do: []
+
+  defp sessions_param(value) when is_binary(value) do
+    value
+    |> String.split(",", trim: true)
+    |> Enum.map(&String.trim/1)
+    |> Enum.filter(&Regex.match?(~r/\A[0-9]{1,19}\z/, &1))
+    |> Enum.uniq()
+    |> Enum.take(200)
+  end
+
+  defp sessions_param(_), do: []
+
+  defp list_param(socket, key) do
+    case socket.assigns.filters && Map.get(socket.assigns.filters, key) do
+      nil -> nil
+      [] -> nil
+      values -> Enum.join(values, ",")
+    end
+  end
 
   # Dropped from the URL when it is at the stop, so a default view does not
   # carry a range that excludes nothing.
@@ -338,12 +384,8 @@ defmodule WebAnalyticsWeb.DashboardLive do
       "domain" => socket.assigns.filters && socket.assigns.filters.host,
       "dmin" => dwell_param(socket, :dwell_min, 0),
       "dmax" => dwell_param(socket, :dwell_max, last_dwell_bucket()),
-      "noip" =>
-        case socket.assigns.filters && socket.assigns.filters.exclude_origins do
-          nil -> nil
-          [] -> nil
-          origins -> Enum.join(origins, ",")
-        end
+      "noip" => list_param(socket, :exclude_origins),
+      "nosess" => list_param(socket, :exclude_sessions)
     }
 
     query =

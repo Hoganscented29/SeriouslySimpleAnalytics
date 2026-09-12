@@ -14,7 +14,7 @@ defmodule WebAnalyticsWeb.AdminLive do
 
   # Only the one component: this module defines its own num/1 and duration/1,
   # and importing the rest would collide with them.
-  import WebAnalyticsWeb.DashboardComponents, only: [live_sparkline: 1, origin: 1]
+  import WebAnalyticsWeb.DashboardComponents, only: [live_sparkline: 1, masked_ip: 1]
 
   alias WebAnalytics.Admin
   alias WebAnalytics.Admin.Host
@@ -58,7 +58,8 @@ defmodule WebAnalyticsWeb.AdminLive do
     scope = %{
       domain: blank_to_nil(params["domain"]),
       project: blank_to_nil(params["project"]),
-      origins: origins_param(params["noip"])
+      origins: origins_param(params["noip"]),
+      sessions: sessions_param(params["nosess"])
     }
 
     socket = assign(socket, :scope, scope)
@@ -144,11 +145,28 @@ defmodule WebAnalyticsWeb.AdminLive do
     next =
       if origin in current, do: List.delete(current, origin), else: [origin | current]
 
-    {:noreply, push_patch(socket, to: admin_path(socket.assigns.scope, next))}
+    {:noreply,
+     push_patch(socket, to: admin_path(socket.assigns.scope, next, socket.assigns.scope.sessions))}
   end
 
   def handle_event("clear_origins", _params, socket) do
-    {:noreply, push_patch(socket, to: admin_path(socket.assigns.scope, []))}
+    {:noreply,
+     push_patch(socket, to: admin_path(socket.assigns.scope, [], socket.assigns.scope.sessions))}
+  end
+
+  # One row, one session — the origin filter is a different control.
+  def handle_event("toggle_session", %{"session" => id}, socket) do
+    current = Map.get(socket.assigns.scope, :sessions, [])
+    id = String.to_integer(id)
+
+    next = if id in current, do: List.delete(current, id), else: [id | current]
+
+    {:noreply,
+     push_patch(socket, to: admin_path(socket.assigns.scope, socket.assigns.scope.origins, next))}
+  end
+
+  def handle_event("clear_row_filters", _params, socket) do
+    {:noreply, push_patch(socket, to: admin_path(socket.assigns.scope, [], []))}
   end
 
   def handle_event("site_window", %{"window" => window}, socket) do
@@ -160,12 +178,13 @@ defmodule WebAnalyticsWeb.AdminLive do
     {:noreply, socket |> assign(:site_window, window) |> load_sites()}
   end
 
-  defp admin_path(scope, origins) do
+  defp admin_path(scope, origins, sessions) do
     query =
       [
         {"domain", scope.domain},
         {"project", scope.project},
-        {"noip", if(origins == [], do: nil, else: Enum.join(origins, ","))}
+        {"noip", if(origins == [], do: nil, else: Enum.join(origins, ","))},
+        {"nosess", if(sessions == [], do: nil, else: Enum.join(sessions, ","))}
       ]
       |> Enum.reject(&(elem(&1, 1) in [nil, ""]))
 
@@ -186,6 +205,23 @@ defmodule WebAnalyticsWeb.AdminLive do
   end
 
   defp origins_param(_), do: []
+
+  defp sessions_param(nil), do: []
+
+  defp sessions_param(value) when is_binary(value) do
+    value
+    |> String.split(",", trim: true)
+    |> Enum.flat_map(fn part ->
+      case Integer.parse(String.trim(part)) do
+        {id, ""} when id > 0 -> [id]
+        _ -> []
+      end
+    end)
+    |> Enum.uniq()
+    |> Enum.take(200)
+  end
+
+  defp sessions_param(_), do: []
 
   defp blank_to_nil(value) when is_binary(value) do
     case String.trim(value) do

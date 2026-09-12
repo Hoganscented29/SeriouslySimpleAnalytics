@@ -25,6 +25,7 @@ defmodule WebAnalyticsWeb.CollectController do
         Ingest.submit(site, params,
           received_at: received_at,
           ip_hash: Ingest.hash_ip(ip, site),
+          ip_masked: Ingest.mask_ip(ip),
           location: Ingest.locate(conn.req_headers, ip)
         )
 

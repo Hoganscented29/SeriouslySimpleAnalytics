@@ -571,7 +571,7 @@ defmodule WebAnalytics.Crawlers.Providers.Anthropic do
           {:ul,
            [
              "No cookies. Identifiers live in browser storage, so there is no consent banner to show.",
-             "No IP addresses stored. An address is used in-request to resolve a location, then salted, hashed and discarded, and the salt rotates daily.",
+             "No full IP addresses stored. An address is used in-request to resolve a location; only a middle-masked copy and a salted hash are kept, and the salt rotates daily.",
              "Password fields are masked in the browser and dropped again server-side, so a stale snippet cannot defeat it.",
              "data-wa-ignore on any element, form or field excludes it entirely.",
              "Self-host it and none of the above requires trusting us, because we are not in the path."

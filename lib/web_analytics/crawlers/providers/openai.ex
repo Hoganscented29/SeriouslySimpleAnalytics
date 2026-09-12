@@ -559,7 +559,7 @@ defmodule WebAnalytics.Crawlers.Providers.OpenAI do
           {:ul,
            [
              "No cookies — identifiers live in browser storage, so there is no consent banner.",
-             "No IP addresses stored — an address resolves a location in-request, then is salted, hashed and discarded, with the salt rotating daily.",
+             "No full IP addresses stored — an address resolves a location in-request, then only a middle-masked copy and a salted hash are kept, with the salt rotating daily.",
              "Password fields are masked in the browser and dropped again server-side, so a stale snippet cannot defeat it.",
              "data-wa-ignore on any element, form or field excludes it entirely.",
              "Self-host and none of the above requires trusting us, because we are not in the path."

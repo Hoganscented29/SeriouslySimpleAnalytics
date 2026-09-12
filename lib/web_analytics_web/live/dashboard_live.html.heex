@@ -371,19 +371,22 @@
 
       <div class="rounded-box bg-base-100 border border-base-300">
         <div
-          :if={@filters.exclude_origins != []}
-          class="px-4 py-2 border-b border-base-300 flex items-center gap-3 text-xs"
+          :if={@filters.exclude_sessions != [] or @filters.exclude_origins != []}
+          class="px-4 py-2 border-b border-base-300 flex items-center gap-3 flex-wrap text-xs"
         >
-          <span class="text-base-content/60">
+          <span :if={@filters.exclude_sessions != []} class="text-base-content/60">
+            {length(@filters.exclude_sessions)} session(s) filtered out
+          </span>
+          <span :if={@filters.exclude_origins != []} class="text-base-content/60">
             {length(@filters.exclude_origins)} origin(s) filtered out
           </span>
-          <button phx-click="clear_origins" class="btn btn-xs btn-ghost">Remove filter</button>
+          <button phx-click="clear_row_filters" class="btn btn-xs btn-ghost">Remove filter</button>
         </div>
         <div class="overflow-x-auto">
           <table class="table table-sm">
             <thead>
               <tr>
-                <th title="Untick to filter out everything from this origin"></th>
+                <th title="Untick to leave this session out of the report"></th>
                 <th>Last seen</th>
                 <th>On</th>
                 <th>Entry</th>
@@ -392,7 +395,7 @@
                 <th class="text-right">Scroll</th>
                 <th>Where</th>
                 <th>Device</th>
-                <th>Origin</th>
+                <th>IP</th>
               </tr>
             </thead>
             <tbody>
@@ -408,12 +411,11 @@
                 <td>
                   <input
                     type="checkbox"
-                    checked={session.ip_hash not in @filters.exclude_origins}
-                    disabled={is_nil(session.ip_hash)}
-                    phx-click="toggle_origin"
-                    phx-value-origin={session.ip_hash}
+                    checked={session.id not in @filters.exclude_sessions}
+                    phx-click="toggle_session"
+                    phx-value-session={session.id}
                     class="checkbox checkbox-xs"
-                    aria-label="Include this origin"
+                    aria-label="Include this session"
                   />
                 </td>
                 <td class="whitespace-nowrap text-xs">{relative(session.last_seen_at)}</td>
@@ -434,7 +436,7 @@
                   {display_name(session.browser)} · {display_name(session.device_type)}
                 </td>
                 <td class="font-mono text-[11px] text-base-content/60">
-                  {origin(session.ip_hash)}
+                  {masked_ip(session)}
                 </td>
               </tr>
               <tr :if={(live[:sessions_list] || []) == []}>
@@ -1375,19 +1377,22 @@
       exclude, and the origin is what "this visitor" means here. --%>
       <div class="rounded-box bg-base-100 border border-base-300">
         <div
-          :if={@filters.exclude_origins != []}
-          class="px-4 py-2 border-b border-base-300 flex items-center gap-3 text-xs"
+          :if={@filters.exclude_sessions != [] or @filters.exclude_origins != []}
+          class="px-4 py-2 border-b border-base-300 flex items-center gap-3 flex-wrap text-xs"
         >
-          <span class="text-base-content/60">
+          <span :if={@filters.exclude_sessions != []} class="text-base-content/60">
+            {length(@filters.exclude_sessions)} session(s) filtered out
+          </span>
+          <span :if={@filters.exclude_origins != []} class="text-base-content/60">
             {length(@filters.exclude_origins)} origin(s) filtered out
           </span>
-          <button phx-click="clear_origins" class="btn btn-xs btn-ghost">Remove filter</button>
+          <button phx-click="clear_row_filters" class="btn btn-xs btn-ghost">Remove filter</button>
         </div>
         <div class="overflow-x-auto">
           <table class="table table-sm">
             <thead>
               <tr>
-                <th title="Untick to filter out everything from this origin"></th>
+                <th title="Untick to leave this session out of the report"></th>
                 <th>Started</th>
                 <th>Entry</th>
                 <th>Exit</th>
@@ -1397,7 +1402,7 @@
                 <th class="text-right">Scroll</th>
                 <th class="text-right">Clicks</th>
                 <th>Device</th>
-                <th>Origin</th>
+                <th>IP</th>
                 <th>Anomaly</th>
               </tr>
             </thead>
@@ -1409,12 +1414,11 @@
                 <td>
                   <input
                     type="checkbox"
-                    checked={session.ip_hash not in @filters.exclude_origins}
-                    disabled={is_nil(session.ip_hash)}
-                    phx-click="toggle_origin"
-                    phx-value-origin={session.ip_hash}
+                    checked={session.id not in @filters.exclude_sessions}
+                    phx-click="toggle_session"
+                    phx-value-session={session.id}
                     class="checkbox checkbox-xs"
-                    aria-label="Include this origin"
+                    aria-label="Include this session"
                   />
                 </td>
                 <td class="whitespace-nowrap text-xs">{relative(session.started_at)}</td>
@@ -1433,7 +1437,7 @@
                   {display_name(session.browser)} · {display_name(session.device_type)}
                 </td>
                 <td class="font-mono text-[11px] text-base-content/60">
-                  {origin(session.ip_hash)}
+                  {masked_ip(session)}
                 </td>
                 <td>
                   <.anomaly_badges

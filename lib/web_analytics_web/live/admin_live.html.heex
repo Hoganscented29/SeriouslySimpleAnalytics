@@ -86,20 +86,23 @@
         <.live_sparkline series={@live.series} />
 
         <div
-          :if={Map.get(@scope, :origins, []) != []}
-          class="flex items-center gap-3 text-xs rounded-box bg-base-200/60 px-3 py-2"
+          :if={Map.get(@scope, :origins, []) != [] or Map.get(@scope, :sessions, []) != []}
+          class="flex items-center gap-3 flex-wrap text-xs rounded-box bg-base-200/60 px-3 py-2"
         >
-          <span class="text-base-content/60">
+          <span :if={@scope.sessions != []} class="text-base-content/60">
+            {length(@scope.sessions)} session(s) filtered out
+          </span>
+          <span :if={@scope.origins != []} class="text-base-content/60">
             {length(@scope.origins)} origin(s) filtered out
           </span>
-          <button phx-click="clear_origins" class="btn btn-xs btn-ghost">Remove filter</button>
+          <button phx-click="clear_row_filters" class="btn btn-xs btn-ghost">Remove filter</button>
         </div>
 
         <div class="overflow-x-auto">
           <table class="table table-xs">
             <thead>
               <tr>
-                <th title="Untick to filter out everything from this origin"></th>
+                <th title="Untick to leave this session out of the report"></th>
                 <th>Last seen</th>
                 <th>Account</th>
                 <th>Domain</th>
@@ -108,7 +111,7 @@
                 <th class="text-right">Pages</th>
                 <th class="text-right">Dwell</th>
                 <th>Where</th>
-                <th>Origin</th>
+                <th>IP</th>
               </tr>
             </thead>
             <tbody>
@@ -123,12 +126,11 @@
                 <td>
                   <input
                     type="checkbox"
-                    checked={session.ip_hash not in Map.get(@scope, :origins, [])}
-                    disabled={is_nil(session.ip_hash)}
-                    phx-click="toggle_origin"
-                    phx-value-origin={session.ip_hash}
+                    checked={session.id not in Map.get(@scope, :sessions, [])}
+                    phx-click="toggle_session"
+                    phx-value-session={session.id}
                     class="checkbox checkbox-xs"
-                    aria-label="Include this origin"
+                    aria-label="Include this session"
                   />
                 </td>
                 <td class="whitespace-nowrap">{ago(session.last_seen_at)}</td>
@@ -153,7 +155,7 @@
                   {session.city || session.country || "—"}
                 </td>
                 <td class="font-mono text-[11px] text-base-content/50">
-                  {origin(session.ip_hash)}
+                  {masked_ip(session)}
                 </td>
               </tr>
               <tr :if={@live.sessions_list == []}>
@@ -672,12 +674,15 @@
     <section class="rounded-box bg-base-100 border border-base-300 p-5">
       <div class="flex items-center gap-3 flex-wrap mb-3">
         <h2 class="text-sm font-medium">Most recent sessions</h2>
-        <span :if={Map.get(@scope, :origins, []) != []} class="text-xs text-base-content/60">
+        <span :if={@scope.sessions != []} class="text-xs text-base-content/60">
+          {length(@scope.sessions)} session(s) filtered out
+        </span>
+        <span :if={@scope.origins != []} class="text-xs text-base-content/60">
           {length(@scope.origins)} origin(s) filtered out
         </span>
         <button
-          :if={Map.get(@scope, :origins, []) != []}
-          phx-click="clear_origins"
+          :if={@scope.origins != [] or @scope.sessions != []}
+          phx-click="clear_row_filters"
           class="btn btn-xs btn-ghost"
         >
           Remove filter
@@ -687,7 +692,7 @@
         <table class="table table-xs table-pin-rows">
           <thead>
             <tr>
-              <th title="Untick to filter out everything from this origin"></th>
+              <th title="Untick to leave this session out of the report"></th>
               <th>Last seen</th>
               <th>Site</th>
               <th>Channel</th>
@@ -702,12 +707,11 @@
               <td>
                 <input
                   type="checkbox"
-                  checked={row.ip_hash not in Map.get(@scope, :origins, [])}
-                  disabled={is_nil(row.ip_hash)}
-                  phx-click="toggle_origin"
-                  phx-value-origin={row.ip_hash}
+                  checked={row.id not in Map.get(@scope, :sessions, [])}
+                  phx-click="toggle_session"
+                  phx-value-session={row.id}
                   class="checkbox checkbox-xs"
-                  aria-label="Include this origin"
+                  aria-label="Include this session"
                 />
               </td>
               <td class="whitespace-nowrap text-base-content/60">{ago(row.last_seen_at)}</td>

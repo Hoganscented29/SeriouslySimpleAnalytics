@@ -41,6 +41,7 @@ defmodule WebAnalytics.Ingest.Normalizer do
   def normalize(site, payload, opts) when is_map(payload) do
     received_at = Keyword.get(opts, :received_at, DateTime.utc_now())
     ip_hash = Keyword.get(opts, :ip_hash)
+    ip_masked = Keyword.get(opts, :ip_masked)
     settings = Keyword.get(opts, :settings, %{})
 
     case token(payload) do
@@ -63,6 +64,7 @@ defmodule WebAnalytics.Ingest.Normalizer do
            token: token,
            visitor_token: string(payload["v"], @s),
            ip_hash: ip_hash,
+           ip_masked: ip_masked,
            project: string(Keyword.get(opts, :project), @s),
            channel: string(Keyword.get(opts, :channel), @s) || "web",
            agent_name: string(Keyword.get(opts, :agent_name), @s),

@@ -584,21 +584,29 @@ defmodule WebAnalyticsWeb.DashboardComponents do
   # -- formatting ----------------------------------------------------------
 
   @doc """
-  Where a visit came from, as far as this product knows it.
+  A visitor's address with its middle masked out.
 
-  Not an address, and deliberately not labelled as one: no address is stored
-  anywhere in this system. This is the leading bytes of the salted,
-  day-rotating hash the anomaly scorer already keeps — enough to see that a run
-  of sessions shares one origin, and useless for working out where that origin
-  is. Including to us, and including tomorrow, once the salt has rotated.
+  Masked in the request that carried it, so the value shown here is the only
+  form that was ever written — there is no unmasked column behind this one.
+  Sessions recorded before the column existed have nothing to show, and fall
+  back to the origin hash so the column is not simply blank for them.
+  """
+  def masked_ip(%{ip_masked: masked}) when is_binary(masked) and masked != "", do: masked
+  def masked_ip(%{ip_hash: hash}) when is_binary(hash), do: origin_hash(hash)
+  def masked_ip(_), do: "—"
+
+  @doc """
+  The leading bytes of the salted, day-rotating origin hash.
+
+  Not an address: this is the identifier the anomaly scorer keeps to spot one
+  place spraying sessions, and it is what the origin filters group and exclude
+  on. It stops being linkable once the salt rotates.
   """
   def origin(nil), do: "—"
-
-  def origin(hash) when is_binary(hash) do
-    binary_part(hash, 0, min(6, byte_size(hash)))
-  end
-
+  def origin(hash) when is_binary(hash), do: origin_hash(hash)
   def origin(_), do: "—"
+
+  defp origin_hash(hash), do: binary_part(hash, 0, min(6, byte_size(hash)))
 
   @doc "Human-readable duration from milliseconds."
   def duration(nil), do: "—"

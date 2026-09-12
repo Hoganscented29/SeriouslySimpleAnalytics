@@ -104,6 +104,70 @@ defmodule WebAnalytics.AnalyticsTest do
     end
   end
 
+  describe "excluding sessions one row at a time" do
+    test "unticking one row removes one row, not every row sharing its origin",
+         %{site: site} do
+      # The bug this replaced: the row checkbox toggled the origin, and on real
+      # traffic every session shares one, so unticking one unticked all of them.
+      sessions = Repo.all(from s in Session, where: s.site_id == ^site.id, order_by: s.id)
+      Repo.update_all(from(s in Session, where: s.site_id == ^site.id), set: [ip_hash: "same"])
+
+      visible = Enum.filter(sessions, &(not &1.anomalous and not &1.crawler))
+      assert length(visible) >= 1
+
+      before = Analytics.overview(filters(site)).sessions
+      one = hd(visible)
+
+      after_one = Analytics.overview(filters(site, %{exclude_sessions: [one.id]})).sessions
+
+      assert after_one == before - 1
+    end
+
+    test "the sessions table answers to the same filters as the numbers above it",
+         %{site: site} do
+      # It used to build its own query and apply only the anomaly and crawler
+      # toggles, so dragging the session-length slider changed every figure on
+      # the page except the list of rows being filtered.
+      wide = Analytics.recent_sessions(filters(site))
+      narrow = Analytics.recent_sessions(filters(site, %{dwell_max: 1}))
+
+      assert wide != []
+      assert narrow == []
+    end
+
+    test "a row struck out by hand stays listed, so it can be put back", %{site: site} do
+      [one | _] =
+        Repo.all(from s in Session, where: not s.anomalous and not s.crawler, order_by: s.id)
+
+      listed =
+        filters(site, %{exclude_sessions: [one.id]})
+        |> Analytics.recent_sessions()
+        |> Enum.map(& &1.id)
+
+      # Excluded from the report, still on the screen: this list is the only
+      # place the checkbox can be unticked again.
+      assert one.id in listed
+      assert Analytics.overview(filters(site, %{exclude_sessions: [one.id]})).sessions == 0
+    end
+
+    test "ids arrive from a query string, so strings and rubbish are handled", %{site: site} do
+      assert filters(site, %{exclude_sessions: ["12", 34]}).exclude_sessions == [12, 34]
+      assert filters(site, %{exclude_sessions: ["banana", "-1", "0", nil]}).exclude_sessions == []
+    end
+
+    test "reaches pageviews as well as the session list", %{site: site} do
+      [session | _] =
+        Repo.all(from s in Session, where: like(s.entry_path, "/"), order_by: s.id)
+
+      paths =
+        filters(site, %{exclude_sessions: [session.id]})
+        |> Analytics.pages()
+        |> Enum.map(& &1.name)
+
+      refute "/pricing" in paths
+    end
+  end
+
   describe "origins" do
     setup %{site: site} do
       # Set directly, because the hash comes off the request address and a

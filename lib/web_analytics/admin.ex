@@ -32,10 +32,12 @@ defmodule WebAnalytics.Admin do
   — are not narrowed by it, because they do not vary by domain, and the page
   hides them rather than showing a global number beside nine scoped ones.
   """
-  def scope, do: %{domain: nil, project: nil, origins: []}
+  def scope, do: %{domain: nil, project: nil, origins: [], sessions: []}
 
   @doc "Whether anything is narrowing the view."
-  def scoped?(%{domain: nil, project: nil} = scope), do: Map.get(scope, :origins, []) != []
+  def scoped?(%{domain: nil, project: nil} = scope),
+    do: Map.get(scope, :origins, []) != [] or Map.get(scope, :sessions, []) != []
+
   def scoped?(_scope), do: true
 
   # Session-derived queries take the scope directly.
@@ -60,6 +62,12 @@ defmodule WebAnalytics.Admin do
       case Map.get(scope, :origins, []) do
         [] -> q
         origins -> where(q, [session: s], is_nil(s.ip_hash) or s.ip_hash not in ^origins)
+      end
+    end)
+    |> then(fn q ->
+      case Map.get(scope, :sessions, []) do
+        [] -> q
+        ids -> where(q, [session: s], s.id not in ^ids)
       end
     end)
     |> then(fn q ->
@@ -193,6 +201,7 @@ defmodule WebAnalytics.Admin do
           order_by: [desc: s.last_seen_at],
           limit: 25,
           select: %{
+            id: s.id,
             site: site.name,
             key: site.key,
             host: s.host,
@@ -481,6 +490,7 @@ defmodule WebAnalytics.Admin do
         order_by: [desc: s.last_seen_at],
         limit: 25,
         select: %{
+          id: s.id,
           site: site.name,
           channel: s.channel,
           project: s.project,

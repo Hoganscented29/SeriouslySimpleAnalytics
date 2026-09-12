@@ -357,6 +357,42 @@ defmodule WebAnalytics.IngestTest do
       assert session.host == "old-tag.example.com"
     end
 
+    test "an address is masked to its first and last group, and never stored whole" do
+      # The masked form is the only address data written anywhere, so these are
+      # the values that end up in the database.
+      assert WebAnalytics.Ingest.mask_ip("203.0.113.42") == "203.•••.•••.42"
+      assert WebAnalytics.Ingest.mask_ip("192.168.100.254") == "192.•••.•••.254"
+
+      # Colon-separated addresses get the same treatment.
+      assert WebAnalytics.Ingest.mask_ip("2001:db8:85a3::8a2e:370:7334") ==
+               "2001:•••:•••:•••:•••:•••:7334"
+
+      # A fixed-width mask, so the length of what is hidden does not leak.
+      assert WebAnalytics.Ingest.mask_ip("8.8.8.8") == "8.•••.•••.8"
+
+      # Nothing gets through unmasked, whatever shape it arrives in.
+      for input <- ["203.0.113.42", "8.8.8.8", "127.0.0.1", "localhost", "::1"] do
+        refute WebAnalytics.Ingest.mask_ip(input) == input
+      end
+
+      assert WebAnalytics.Ingest.mask_ip(nil) == nil
+      assert WebAnalytics.Ingest.mask_ip("") == nil
+    end
+
+    test "the session records the masked address the request arrived with" do
+      site = site_fixture(%{key: "masked"})
+
+      {:ok, _} =
+        Ingest.submit_sync(site, payload(site, [init_event(), pageview_event(1, "/")]),
+          received_at: DateTime.utc_now(),
+          ip_masked: WebAnalytics.Ingest.mask_ip("203.0.113.42")
+        )
+
+      session = Repo.one(from s in Session, where: s.site_id == ^site.id)
+
+      assert session.ip_masked == "203.•••.•••.42"
+    end
+
     test "a session that resumes without its entry pageview still gets a host" do
       site = site_fixture(%{key: "resumed"})
 

@@ -547,7 +547,7 @@ defmodule WebAnalytics.Crawlers.Providers.Perplexity do
           {:ul,
            [
              "No cookies — identifiers live in browser storage, so there is no consent banner.",
-             "No IP addresses stored — used in-request to resolve a location, then salted, hashed and discarded, with the salt rotating daily.",
+             "No full IP addresses stored — used in-request to resolve a location, after which only a middle-masked copy and a salted hash are kept, with the salt rotating daily.",
              "Password fields are masked in the browser and dropped again server-side.",
              "data-wa-ignore on any element, form or field excludes it entirely.",
              "Self-host and none of this requires trusting us, because we are not in the path."

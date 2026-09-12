@@ -42,6 +42,7 @@ defmodule WebAnalytics.Ingest.Processor do
       token: batch.token,
       visitor_token: batch.visitor_token,
       ip_hash: batch.ip_hash,
+      ip_masked: batch.ip_masked,
       project: Map.get(batch, :project),
       channel: Map.get(batch, :channel),
       agent_name: Map.get(batch, :agent_name),
@@ -307,6 +308,7 @@ defmodule WebAnalytics.Ingest.Processor do
       }
       |> put_unless_nil(:visitor_token, plan.visitor_token)
       |> put_unless_nil(:ip_hash, plan.ip_hash)
+      |> put_unless_nil(:ip_masked, plan.ip_masked)
       |> put_unless_nil(:project, plan.project)
       |> put_unless_nil(:channel, plan.channel)
       |> put_unless_nil(:agent_name, plan.agent_name)
@@ -400,6 +402,7 @@ defmodule WebAnalytics.Ingest.Processor do
           last_seen_at: fragment("GREATEST(EXCLUDED.last_seen_at, ?)", s.last_seen_at),
           visitor_token: fragment("COALESCE(?, EXCLUDED.visitor_token)", s.visitor_token),
           ip_hash: fragment("COALESCE(?, EXCLUDED.ip_hash)", s.ip_hash),
+          ip_masked: fragment("COALESCE(?, EXCLUDED.ip_masked)", s.ip_masked),
           project: fragment("COALESCE(?, EXCLUDED.project)", s.project),
           channel: fragment("COALESCE(?, EXCLUDED.channel)", s.channel),
           agent_name: fragment("COALESCE(?, EXCLUDED.agent_name)", s.agent_name),

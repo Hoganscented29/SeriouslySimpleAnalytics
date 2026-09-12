@@ -102,6 +102,7 @@ defmodule WebAnalyticsWeb.Plugs.CrawlerReport do
     Ingest.submit(site, payload,
       received_at: now,
       ip_hash: ip_hash,
+      ip_masked: Ingest.mask_ip(ip),
       location: Ingest.locate(conn.req_headers, ip),
       agent_name: verdict.name
     )

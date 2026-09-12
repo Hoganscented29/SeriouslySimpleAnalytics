@@ -95,7 +95,7 @@
                 {"Forms, field by field",
                  "On submit and on abandonment. Passwords are masked in the browser and never sent."},
                 {"City, county, state, country",
-                 "Resolved at ingest; the address is used for the lookup and then discarded."},
+                 "Resolved at ingest. The address is masked to its first and last group before anything is written; the full value never reaches the database."},
                 {"Junk filtered, not hidden",
                  "Impossible dwell times are held back by default, with the reason shown and a toggle to see them."}
               ])
