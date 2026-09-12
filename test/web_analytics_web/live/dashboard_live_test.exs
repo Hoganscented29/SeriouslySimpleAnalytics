@@ -2,6 +2,7 @@ defmodule WebAnalyticsWeb.DashboardLiveTest do
   use WebAnalyticsWeb.ConnCase, async: true
 
   import Phoenix.LiveViewTest
+  import Ecto.Query
   import WebAnalytics.Fixtures
 
   alias WebAnalytics.Analytics.AnomalyWorker
@@ -123,6 +124,45 @@ defmodule WebAnalyticsWeb.DashboardLiveTest do
       live,
       ~p"/dashboard?anomalies=exclude&clicks=class&crawlers=exclude&group=title&loc=country&range=24h&site=dash&tab=clicks"
     )
+  end
+
+  describe "the filter bar is not rebuilt on the refresh timer" do
+    test "the session-length chart and origins list survive a refresh", %{conn: conn, site: site} do
+      {:ok, live, _html} = live(conn, ~p"/dashboard?site=dash&range=30d")
+
+      # These feed controls, not metrics. Rebuilding them every five seconds
+      # snapped the Origins panel shut while it was open and fought a slider
+      # being dragged, which looked like the page reloading itself.
+      before = :sys.get_state(live.pid).socket.assigns
+      assert before.origins == []
+
+      # Change what the controls would show, so equality afterwards means they
+      # were not rebuilt rather than merely that the query is deterministic.
+      WebAnalytics.Repo.update_all(
+        from(sess in WebAnalytics.Tracking.Session, where: sess.site_id == ^site.id),
+        set: [ip_hash: "abc123"]
+      )
+
+      send(live.pid, :refresh)
+      _ = render(live)
+
+      state = :sys.get_state(live.pid).socket.assigns
+
+      assert state.origins == []
+      assert state.dwell == before.dwell
+
+      # The metrics did refresh — it is only the controls that hold still.
+      assert state.data[:overview]
+
+      # And a params change picks the new origin up, so it is deferred rather
+      # than never loaded.
+      {:ok, reloaded, _html} = live(conn, ~p"/dashboard?site=dash&range=30d")
+
+      assert Enum.any?(
+               :sys.get_state(reloaded.pid).socket.assigns.origins,
+               &(&1.ip_hash == "abc123")
+             )
+    end
   end
 
   describe "locations" do

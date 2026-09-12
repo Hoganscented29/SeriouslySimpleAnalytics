@@ -147,7 +147,7 @@
     control's own legend — it shows the whole distribution, with the part the
     handles keep in colour and the part they cut greyed out, so the reader can
     see what a drag is about to remove before letting go. --%>
-    <% dwell = @data[:dwell] || [] %>
+    <% dwell = @dwell %>
     <% dwell_labels = Analytics.dwell_bucket_labels() %>
     <% dwell_peak =
       dwell |> Enum.map(&((&1.kept || 0) + (&1.filtered || 0))) |> Enum.max(fn -> 0 end) %>
@@ -234,7 +234,7 @@
     hash is salted per site and rotated daily, which the note below says out
     loud because it is the one thing that would otherwise mislead — over a
     range longer than a day, one address is several rows. --%>
-    <% origins = @data[:origins] || [] %>
+    <% origins = @origins %>
     <% suggested = Enum.filter(origins, & &1.suggested) %>
     <% excluded = @filters.exclude_origins %>
     <details :if={origins != []} class="rounded-box bg-base-100 border border-base-300">
@@ -393,6 +393,7 @@
                 <th>On</th>
                 <th>Entry</th>
                 <th class="text-right">Pages</th>
+                <th class="text-right">Duration</th>
                 <th class="text-right">Dwell</th>
                 <th class="text-right">Scroll</th>
                 <th>Where</th>
@@ -431,6 +432,7 @@
                   {display_name(session.entry_path)}
                 </td>
                 <td class="text-right tabular-nums">{number(session.pageview_count)}</td>
+                <td class="text-right tabular-nums">{duration(session_duration(session))}</td>
                 <td class="text-right tabular-nums">{duration(session.dwell_ms)}</td>
                 <td class="text-right tabular-nums">{percent(session.max_scroll_pct)}</td>
                 <td class="text-xs whitespace-nowrap">{display_name(session.city)}</td>
@@ -442,7 +444,7 @@
                 </td>
               </tr>
               <tr :if={(live[:sessions_list] || []) == []}>
-                <td colspan="10" class="text-center py-8 text-base-content/50">
+                <td colspan="11" class="text-center py-8 text-base-content/50">
                   Nobody in the last 30 minutes
                 </td>
               </tr>
@@ -529,7 +531,7 @@
 
       <.histogram
         title="Dwell time distribution"
-        buckets={@data[:dwell] || []}
+        buckets={@dwell}
         primary_key={:kept}
         secondary_key={:filtered}
       />
@@ -621,7 +623,7 @@
               </td>
             </tr>
             <tr :if={(@data[:pages] || []) == []}>
-              <td colspan="10" class="text-center py-8 text-base-content/50">No pageviews yet</td>
+              <td colspan="11" class="text-center py-8 text-base-content/50">No pageviews yet</td>
             </tr>
           </tbody>
         </table>
@@ -957,63 +959,10 @@
             else: "Click any page to follow its traffic."}
         </div>
 
-        <%!-- Three steps, not two. A pair says which page follows which; three
-        says what the route actually was — whether the people who reached
-        checkout came through teams, or got there some other way. --%>
-        <div class="rounded-box bg-base-100 border border-base-300 overflow-hidden">
-          <div class="px-4 py-3 border-b border-base-300 flex items-baseline justify-between gap-3 flex-wrap">
-            <span class="text-sm font-medium">Three-step journeys</span>
-            <span class="text-xs text-base-content/40">most travelled first</span>
-          </div>
-
-          <% journeys = @data[:journeys] || [] %>
-          <% busiest = journeys |> Enum.map(& &1.count) |> Enum.max(fn -> 0 end) %>
-
-          <div :if={journeys == []} class="px-4 py-8 text-center text-sm text-base-content/50">
-            No visit in this range reached a third page.
-          </div>
-
-          <div
-            :for={journey <- journeys}
-            class="px-4 py-2.5 border-b border-base-200 last:border-0 transition-colors hover:bg-base-200/50"
-          >
-            <div class="flex items-center gap-2 flex-wrap text-xs">
-              <span
-                :for={
-                  {step, index} <- Enum.with_index([journey.first, journey.second, journey.third])
-                }
-                class="contents"
-              >
-                <span :if={index > 0} class="text-base-content/30" aria-hidden="true">→</span>
-                <button
-                  phx-click="select_page"
-                  phx-value-page={step}
-                  class="font-mono px-2 py-1 rounded bg-base-200 hover:bg-primary/20 transition-colors max-w-[14rem] truncate"
-                  title={step}
-                >
-                  {display_name(step)}
-                </button>
-              </span>
-              <span class="flex-1"></span>
-              <span class="tabular-nums font-medium">{number(journey.count)}</span>
-              <span class="text-base-content/40">
-                {journey.sessions} session{if journey.sessions == 1, do: "", else: "s"}
-              </span>
-            </div>
-
-            <div class="mt-1.5 h-1 rounded-full bg-base-200 overflow-hidden">
-              <div
-                class="h-full bg-primary/60 rounded-full"
-                style={"width: #{if busiest > 0, do: round(journey.count * 100 / busiest), else: 0}%"}
-              >
-              </div>
-            </div>
-          </div>
-        </div>
-
         <div id="flow-diagram">
           <.flow_diagram
             transitions={@data[:flow] || []}
+            journeys={if nav, do: [], else: @data[:journeys] || []}
             focus={nav}
             click="select_page"
             title={
@@ -1423,7 +1372,7 @@
         />
         <.histogram
           title="Dwell distribution"
-          buckets={@data[:dwell] || []}
+          buckets={@dwell}
           primary_key={:kept}
           secondary_key={:filtered}
         />
@@ -1456,6 +1405,7 @@
                 <th>Entry</th>
                 <th>Exit</th>
                 <th class="text-right">Pages</th>
+                <th class="text-right">Duration</th>
                 <th class="text-right">Dwell</th>
                 <th class="text-right">Active</th>
                 <th class="text-right">Scroll</th>
@@ -1488,6 +1438,7 @@
                   {display_name(session.exit_path)}
                 </td>
                 <td class="text-right tabular-nums">{number(session.pageview_count)}</td>
+                <td class="text-right tabular-nums">{duration(session_duration(session))}</td>
                 <td class="text-right tabular-nums">{duration(session.dwell_ms)}</td>
                 <td class="text-right tabular-nums">{duration(session.active_ms)}</td>
                 <td class="text-right tabular-nums">{percent(session.max_scroll_pct)}</td>

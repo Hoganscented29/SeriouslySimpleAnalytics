@@ -119,7 +119,7 @@ defmodule WebAnalyticsWeb.DashboardLive do
       |> assign(:filters, build_filters(site, params))
       |> assign_new(:live, fn -> nil end)
 
-    socket = load(socket)
+    socket = socket |> load() |> load_controls()
 
     # Loaded on arrival as well as on the interval, so opening the tab shows
     # numbers rather than ten seconds of nothing.
@@ -167,8 +167,7 @@ defmodule WebAnalyticsWeb.DashboardLive do
 
   def handle_event("exclude_suggested_origins", _params, socket) do
     suggested =
-      socket.assigns.data
-      |> Map.get(:origins, [])
+      socket.assigns.origins
       |> Enum.filter(& &1.suggested)
       |> Enum.map(& &1.ip_hash)
 
@@ -413,11 +412,7 @@ defmodule WebAnalyticsWeb.DashboardLive do
         overview: Analytics.overview(filters),
         projects: Analytics.projects(filters),
         domains: Analytics.domains(filters),
-        channels: Analytics.channels(filters),
-        # The dwell slider lives in the filter bar above the tabs, so the chart
-        # beside it has to be loaded whatever tab is open.
-        dwell: Analytics.dwell_distribution(filters),
-        origins: Analytics.origins(filters)
+        channels: Analytics.channels(filters)
       }
       |> Map.merge(tab_data(socket.assigns.tab, filters, socket.assigns))
 
@@ -531,6 +526,24 @@ defmodule WebAnalyticsWeb.DashboardLive do
   defp tab_data("live", _filters, _assigns), do: %{}
 
   defp tab_data(_tab, _filters, _assigns), do: %{}
+
+  # The filter bar's own data, kept out of the five second refresh.
+  #
+  # These two feed controls rather than metrics: the session-length chart and
+  # the origins list. Rebuilding them on the timer re-rendered the filter bar
+  # every five seconds, which snapped the Origins panel shut while it was open
+  # and fought a slider being dragged — the page looked like it was reloading
+  # itself. They change when the range or a filter changes, which is exactly
+  # when handle_params runs, so that is when they are loaded.
+  defp load_controls(%{assigns: %{filters: nil}} = socket) do
+    socket |> assign(:dwell, []) |> assign(:origins, [])
+  end
+
+  defp load_controls(socket) do
+    socket
+    |> assign(:dwell, Analytics.dwell_distribution(socket.assigns.filters))
+    |> assign(:origins, Analytics.origins(socket.assigns.filters))
+  end
 
   defp assign_live(socket) do
     assign(socket, :live, Analytics.active_now(socket.assigns.filters))

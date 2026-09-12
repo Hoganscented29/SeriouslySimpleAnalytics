@@ -170,6 +170,7 @@ defmodule WebAnalyticsWeb.DashboardComponents do
   # -- flow diagram --------------------------------------------------------
 
   attr :transitions, :list, default: []
+  attr :journeys, :list, default: [], doc: "three-step rows; drawn as three columns when present"
   attr :focus, :map, default: nil, doc: "a navigation summary; switches to the focused view"
   attr :title, :string, default: "Page flow"
   attr :subtitle, :string, default: nil
@@ -190,9 +191,11 @@ defmodule WebAnalyticsWeb.DashboardComponents do
   """
   def flow_diagram(assigns) do
     layout =
-      if assigns.focus,
-        do: focused_layout(assigns.focus),
-        else: sankey_layout(assigns.transitions)
+      cond do
+        assigns.focus -> focused_layout(assigns.focus)
+        assigns.journeys != [] -> journey_layout(assigns.journeys)
+        true -> sankey_layout(assigns.transitions)
+      end
 
     assigns = assign(assigns, :layout, layout)
 
@@ -246,10 +249,10 @@ defmodule WebAnalyticsWeb.DashboardComponents do
             </rect>
             <text
               :if={node.side != :focus}
-              x={if node.side == :source, do: node.x - 8, else: node.x + 20}
-              y={node.y + node.height / 2}
-              text-anchor={if node.side == :source, do: "end", else: "start"}
-              dominant-baseline="middle"
+              x={label_x(node)}
+              y={label_y(node)}
+              text-anchor={label_anchor(node)}
+              dominant-baseline={label_baseline(node)}
               class={[
                 "text-[11px] fill-current",
                 node.clickable && "text-base-content/80",
@@ -270,6 +273,13 @@ defmodule WebAnalyticsWeb.DashboardComponents do
   @node_width 12
   @left_x 260
   @right_x 620
+
+  # Three columns, spaced so a right-anchored label fits before the first and a
+  # left-anchored one after the last. The middle column's label goes above its
+  # node, because to either side it would sit under the ribbons.
+  @step_one_x 200
+  @step_two_x 450
+  @step_three_x 700
   # The focused view needs a third column, so its two outer columns sit further
   # out to leave the centre free.
   @focus_left_x 220
@@ -286,7 +296,25 @@ defmodule WebAnalyticsWeb.DashboardComponents do
   defp node_color(%{side: :focus}), do: "text-accent"
   defp node_color(%{clickable: false}), do: "text-base-content/25"
   defp node_color(%{side: :source}), do: "text-primary"
+  defp node_color(%{side: :middle}), do: "text-accent"
   defp node_color(_node), do: "text-secondary"
+
+  # Where a node's label sits, which is the whole reason the middle column
+  # needs its own case: left of the first column, right of the last, above the
+  # one in between.
+  defp label_x(%{side: :source} = node), do: node.x - 8
+  defp label_x(%{side: :middle} = node), do: node.x + @node_width / 2
+  defp label_x(node), do: node.x + 20
+
+  defp label_y(%{side: :middle} = node), do: node.y - 5
+  defp label_y(node), do: node.y + node.height / 2
+
+  defp label_anchor(%{side: :source}), do: "end"
+  defp label_anchor(%{side: :middle}), do: "middle"
+  defp label_anchor(_node), do: "start"
+
+  defp label_baseline(%{side: :middle}), do: "auto"
+  defp label_baseline(_node), do: "middle"
 
   @doc false
   # Three columns centred on one page: inbound on the left, the page itself in
@@ -439,6 +467,73 @@ defmodule WebAnalyticsWeb.DashboardComponents do
       end)
 
     %{height: height, nodes: source_nodes ++ target_nodes, links: Enum.reverse(links)}
+  end
+
+  # Three steps across three columns. The middle column is consumed from both
+  # sides — ribbons land on its left edge and leave from its right — so each
+  # layer keeps its own offsets rather than sharing one accumulator.
+  # Only reached with rows in hand: the caller falls back to the two-column
+  # layout when there are none, so an empty clause here would be dead.
+  defp journey_layout(journeys) do
+    firsts = totals_by(journeys, :first)
+    seconds = totals_by(journeys, :second)
+    thirds = totals_by(journeys, :third)
+
+    grand = journeys |> Enum.map(& &1.count) |> Enum.sum()
+    rows = [firsts, seconds, thirds] |> Enum.map(&length/1) |> Enum.max()
+    # Taller per row than the two-column view: the middle labels sit above
+    # their nodes and need somewhere to go.
+    height = max(rows * 32, 150)
+    usable = height - max(rows - 1, 0) * @row_gap
+
+    first_nodes = place(firsts, @step_one_x, grand, usable, :source)
+    second_nodes = place(seconds, @step_two_x, grand, usable, :middle)
+    third_nodes = place(thirds, @step_three_x, grand, usable, :target)
+
+    links =
+      link_layer(journeys, :first, :second, first_nodes, second_nodes, grand, usable) ++
+        link_layer(journeys, :second, :third, second_nodes, third_nodes, grand, usable)
+
+    %{
+      height: height,
+      nodes: first_nodes ++ second_nodes ++ third_nodes,
+      links: links
+    }
+  end
+
+  defp link_layer(rows, from_key, to_key, from_nodes, to_nodes, grand, usable) do
+    from_index = Map.new(from_nodes, &{&1.name, &1})
+    to_index = Map.new(to_nodes, &{&1.name, &1})
+
+    {links, _, _} =
+      rows
+      |> Enum.sort_by(& &1.count, :desc)
+      |> Enum.reduce({[], %{}, %{}}, fn row, {acc, from_used, to_used} ->
+        from_name = Map.fetch!(row, from_key)
+        to_name = Map.fetch!(row, to_key)
+        from = Map.fetch!(from_index, from_name)
+        to = Map.fetch!(to_index, to_name)
+
+        thickness = max(row.count / max(grand, 1) * usable, 1.0)
+
+        y0 = from.y + Map.get(from_used, from_name, 0.0)
+        y1 = to.y + Map.get(to_used, to_name, 0.0)
+
+        link = %{
+          from: from_name,
+          to: to_name,
+          count: row.count,
+          path: ribbon(from.x + @node_width, y0, to.x, y1, thickness)
+        }
+
+        {
+          [link | acc],
+          Map.update(from_used, from_name, thickness, &(&1 + thickness)),
+          Map.update(to_used, to_name, thickness, &(&1 + thickness))
+        }
+      end)
+
+    Enum.reverse(links)
   end
 
   defp totals_by(transitions, key) do
@@ -607,6 +702,20 @@ defmodule WebAnalyticsWeb.DashboardComponents do
   def origin(_), do: "—"
 
   defp origin_hash(hash), do: binary_part(hash, 0, min(6, byte_size(hash)))
+
+  @doc """
+  How long a visit lasted by the clock, start to last sign of life.
+
+  Not the same as dwell, and the difference is the point of showing both: dwell
+  is time accumulated on pages, so a visit that sat idle between two of them
+  has a duration longer than its dwell. Dwell says how much was read; duration
+  says how long they were around.
+  """
+  def session_duration(%{started_at: %DateTime{} = started, last_seen_at: %DateTime{} = last}) do
+    max(DateTime.diff(last, started, :millisecond), 0)
+  end
+
+  def session_duration(_), do: nil
 
   @doc "Human-readable duration from milliseconds."
   def duration(nil), do: "—"
