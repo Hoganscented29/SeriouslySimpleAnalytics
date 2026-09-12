@@ -6,7 +6,9 @@
 
 **[Get your free account ID → SeriouslySimpleAnalytics.com](https://SeriouslySimpleAnalytics.com/)**
 
-*Free. No credit card. No SDK. No cookie banner.*
+*Free. No credit card. No SDK.*
+
+[![CI](https://github.com/lbesecker195/SeriouslySimpleAnalytics/actions/workflows/ci.yml/badge.svg)](https://github.com/lbesecker195/SeriouslySimpleAnalytics/actions/workflows/ci.yml)
 
 </div>
 

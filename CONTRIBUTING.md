@@ -22,6 +22,18 @@ code.
 `mix precommit` must pass before you open a pull request — it compiles with
 warnings as errors, checks formatting, and runs the tests.
 
+CI runs the same four checks on every push and pull request, in the forms that
+fail rather than fix: `mix format` and `mix deps.unlock --unused` both edit
+files, so CI uses `--check-formatted` and `--check-unused` instead. It also
+parses the two tracker scripts with `node --check`, since those ship to
+customers' pages as plain files with no bundler in front of them, and runs the
+asset build a deploy would run.
+
+The test job runs twice, against the Elixir the deploy box has and the newer
+one development happens on. That pairing is the point of it: anything newer
+than the older version compiles cleanly on a laptop and then fails on the
+server, where nobody finds out until a deploy.
+
 Tests are the fastest way to get a change accepted. If you are fixing a bug,
 a test that fails before your change and passes after it makes the review
 trivial.
