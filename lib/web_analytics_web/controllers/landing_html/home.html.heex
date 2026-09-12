@@ -10,7 +10,8 @@
         Website Analytics that<br class="hidden lg:inline" /> Just Works.
       </h2>
       <p class="mt-5 text-lg text-base-content/70 leading-relaxed">
-        One <code class="font-mono text-base">&lt;script&gt;</code>
+        One
+        <code class="font-mono text-[0.92em] bg-base-300 rounded px-1.5 py-0.5">&lt;script&gt;</code>
         tag: <strong class="font-semibold text-base-content">Dwell Time</strong>
         separated from engaged time, how far down each page anyone scrolled, easy
         page-to-page flow charts, every button/link clicked, and every form someone started
@@ -21,11 +22,12 @@
     <div class="mt-8 rounded-box bg-base-100 border border-base-300 p-5 sm:p-6">
       <.dashboard_preview />
       <div class="mt-4 flex flex-wrap items-center gap-3">
-        <.nudged_cta>
-          <.cta current_scope={@current_scope} class="btn btn-primary btn-sm" />
-        </.nudged_cta>
+        <%!-- No cursor on this one: the live panel sits directly beneath it and
+        is already the moving thing on this part of the page. --%>
+        <.cta current_scope={@current_scope} class="btn btn-primary btn-sm" />
         <span class="text-sm text-base-content/50">
-          One <code class="font-mono text-xs">&lt;script&gt;</code>
+          One
+          <code class="font-mono text-[0.92em] bg-base-300 rounded px-1.5 py-0.5">&lt;script&gt;</code>
           tag. Everything above, from the first visit.
         </span>
       </div>
@@ -169,7 +171,7 @@
         Start <strong class="font-bold">collecting</strong> in less than a minute.
       </h3>
       <p class="mt-3 text-base-content/70">
-        Create an account, copy the snippet, paste it in your <code class="font-mono text-xs">&lt;head&gt;</code>.
+        Create an account, copy the snippet, paste it in your <code class="font-mono text-[0.92em] bg-base-300 rounded px-1.5 py-0.5">&lt;head&gt;</code>.
       </p>
       <div class="mt-6 flex flex-wrap gap-3 justify-center">
         <.nudged_cta>

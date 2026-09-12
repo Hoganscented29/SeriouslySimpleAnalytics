@@ -55,23 +55,27 @@
             </tr>
           </thead>
           <tbody>
-            <tr :for={
-              row <- [
-                {"uid", "Your account ID."},
-                {"c · cc · s_p · n",
-                 "Your user's city, county, state/province and nation. Required: a ping's own " <>
-                   "address is where your software runs, not where the person is."},
-                {"event",
-                 "What happened — page_view, tool_called, run_completed. Anything you like."},
-                {"project",
-                 "Which of your tools this is. Keeps them separate under one account."},
-                {"type", "Channel. ai for an AI tool; that is the default here."},
-                {"sid",
-                 "Session ID. Pings that share one are grouped into a run or conversation."},
-                {"path", "A screen or step. With event=page_view it becomes a real pageview."},
-                {"…anything", "Kept as an attribute: &tool=search&latency_ms=420&outcome=success"}
-              ]
-            }>
+            <tr
+              :for={
+                row <- [
+                  {"uid", "Your account ID."},
+                  {"c · cc · s_p · n",
+                   "Your user's city, county, state/province and nation. Required: a ping's own " <>
+                     "address is where your software runs, not where the person is."},
+                  {"event",
+                   "What happened — page_view, tool_called, run_completed. Anything you like."},
+                  {"project",
+                   "Which of your tools this is. Keeps them separate under one account."},
+                  {"type", "Channel. ai for an AI tool; that is the default here."},
+                  {"sid",
+                   "Session ID. Pings that share one are grouped into a run or conversation."},
+                  {"path", "A screen or step. With event=page_view it becomes a real pageview."},
+                  {"…anything",
+                   "Kept as an attribute: &tool=search&latency_ms=420&outcome=success"}
+                ]
+              }
+              class="transition-colors hover:bg-base-200"
+            >
               <td class="font-mono text-xs whitespace-nowrap">
                 <span :if={elem(row, 0) == "…anything"} class="font-bold">
                   <span class="wa-ellipsis" aria-hidden="true"><i class="not-italic">.</i><i class="not-italic">.</i><i class="not-italic">.</i></span>anything
@@ -95,23 +99,45 @@
     </p>
 
     <div class="mt-8 grid md:grid-cols-2 gap-4">
+      <%!-- The third element is the accent. Two of the six carry one: the call
+      that answers which of the things you built anyone actually uses, and the
+      one that tells you what is breaking — the question you want answered
+      before you are told, and the only one worth a different colour. --%>
       <div
         :for={
-          item <- [
+          {name, blurb, accent} <- [
             {"install · first_run · upgraded",
-             "Is anyone adopting it, and are they staying current? Pass version=."},
+             "Is anyone adopting it, and are they staying current? Pass version=.", nil},
             {"run_started · run_completed",
-             "How many runs finish. Pass outcome=success|error|cancelled."},
-            {"tool_called", "Which capabilities actually get used. Pass tool= and latency_ms=."},
-            {"page_view", "Which screens or steps people reach, with path=."},
-            {"error", "What breaks in the wild. Pass kind= — never the message text."},
-            {"feedback", "Whether it helped. Pass rating=up|down."}
+             "How many runs finish. Pass outcome=success|error|cancelled.", nil},
+            {"tool_called", "Which capabilities actually get used. Pass tool= and latency_ms=.",
+             :success},
+            {"page_view", "Which screens or steps people reach, with path=.", nil},
+            {"error", "What breaks in the wild. Pass kind= — never the message text.", :error},
+            {"feedback", "Whether it helped. Pass rating=up|down.", nil}
           ]
         }
-        class="rounded-box bg-base-100 border border-base-300 p-5 transition-colors hover:border-primary/50 hover:bg-base-200/70"
+        class={[
+          "rounded-box bg-base-100 p-5 transition-colors",
+          accent == :success && "border-2 border-success bg-success/5 hover:bg-success/10",
+          accent == :error && "border-2 border-error bg-error/5 hover:bg-error/10",
+          is_nil(accent) && "border border-base-300 hover:border-primary/50 hover:bg-base-200/70"
+        ]}
       >
-        <div class="text-sm font-mono">{elem(item, 0)}</div>
-        <p class="mt-2 text-sm text-base-content/60">{elem(item, 1)}</p>
+        <div class={[
+          "text-sm font-mono",
+          accent == :success && "text-success",
+          accent == :error && "text-error"
+        ]}>
+          {name}
+        </div>
+        <p class={[
+          "mt-2 text-sm",
+          accent && "text-base-content/80",
+          is_nil(accent) && "text-base-content/60"
+        ]}>
+          {blurb}
+        </p>
       </div>
     </div>
   </section>

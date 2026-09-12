@@ -224,8 +224,9 @@ defmodule WebAnalyticsWeb.LandingControllerTest do
     test "the website page nudges every call to action below the header", %{conn: conn} do
       html = conn |> get(~p"/") |> html_response(200)
 
-      # Hero, the AI cross-link, and the closing call.
-      assert length(Regex.scan(~r{class="wa-nudge"}, html)) == 3
+      # The AI cross-link and the closing call. Not the hero: the live panel
+      # sits directly under it and is already the moving thing there.
+      assert length(Regex.scan(~r{class="wa-nudge"}, html)) == 2
     end
 
     test "the AI page nudges every call to action below the header", %{conn: conn} do

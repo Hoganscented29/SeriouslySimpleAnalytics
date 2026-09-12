@@ -82,15 +82,21 @@
     document.addEventListener('visibilitychange', scheduleRender);
   }
 
+  function start() {
+    render();
+    watchInteraction();
+    // Dwell and engaged time advance on their own, so they still need a clock —
+    // just a faster one than the second they used to wait for.
+    setInterval(render, 250);
+  }
+
   function startWhenReady(attempt) {
-    // The tag is deferred, so the panel may run first. Retry briefly rather
-    // than binding to a load event the tag does not publish.
+    // Both scripts are deferred and the tag comes first in the document, so the
+    // usual case is that it is already here and the panel fills in on the same
+    // frame. Retry briefly for the case where it is not, rather than binding to
+    // a load event the tag does not publish.
     if (window.__webAnalytics && window.__webAnalytics.state) {
-      render();
-      watchInteraction();
-      // Dwell and engaged time advance on their own, so they still need a
-      // clock — just a faster one than the second they used to wait for.
-      setInterval(render, 250);
+      start();
       return;
     }
 
@@ -99,10 +105,11 @@
       return;
     }
 
-    // The tag is cached for an hour, so a visitor who was here before it last
-    // changed can be running a copy with no state() on it. Say that, rather
-    // than leaving a row of dashes that reads as a broken page.
-    var note = el('wa-stale');
+    // Two different failures, and telling a reader the wrong one is worse than
+    // telling them nothing: the tag is cached for an hour, so someone who was
+    // here before it last changed runs a copy with no state() on it — but a tag
+    // that never arrived at all was blocked or never reached the network.
+    var note = el(window.__webAnalytics ? 'wa-stale' : 'wa-blocked');
     if (note) note.hidden = false;
   }
 

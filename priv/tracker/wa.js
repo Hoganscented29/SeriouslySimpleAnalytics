@@ -70,10 +70,15 @@
     capturePasswords: flag('capture-passwords', false),
     captureSensitive: flag('capture-sensitive', false),
     hashMode: flag('hash-mode', false),
+    // Every measurement, no sends. Our own pages show a reader their visit as
+    // the tag records it, and a deployment with no account configured still has
+    // to be able to do that — otherwise the one page that claims to be running
+    // the tag on you is the one page not running it.
+    measureOnly: flag('measure-only', false),
     debug: flag('debug', false)
   };
 
-  if (!config.site || !config.api) {
+  if (!config.api || (!config.site && !config.measureOnly)) {
     log('disabled: missing data-site or endpoint');
     return;
   }
@@ -243,6 +248,13 @@
   }
 
   function flush(useBeacon) {
+    // Dropped rather than accumulated: measure-only runs for the whole visit,
+    // and a queue nobody drains is a leak.
+    if (config.measureOnly) {
+      queue = [];
+      return;
+    }
+
     if (!queue.length || sending) return;
 
     var events = queue;
@@ -1329,13 +1341,19 @@
     // it — the shortest route to believing an analytics tool is watching it
     // watch you.
     state: function () {
+      // Dwell is banked on the heartbeat, which backs off to fifteen seconds
+      // once a visit runs long. Anything reading this wants the number now, so
+      // the time since the last tick is added rather than waited for.
+      var sinceTick = Math.max(0, Date.now() - lastTickAt);
+      var activeNow = isActive();
+
       return {
         path: page ? page.path : location.pathname,
         title: page ? page.title : document.title,
         pageviews: session.seq,
-        dwellMs: session.dwell,
-        activeMs: session.active,
-        pageDwellMs: page ? page.dwell : 0,
+        dwellMs: session.dwell + sinceTick,
+        activeMs: session.active + (activeNow ? sinceTick : 0),
+        pageDwellMs: page ? page.dwell + sinceTick : 0,
         scrollPct: scrollMax.pct,
         scrollPx: scrollMax.px,
         docHeight: scrollMax.docHeight,

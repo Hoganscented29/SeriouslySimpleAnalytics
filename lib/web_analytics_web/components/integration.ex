@@ -121,6 +121,11 @@ defmodule WebAnalyticsWeb.IntegrationComponents do
             A reload in a few minutes will pick up the current one.
           </p>
 
+          <p id="wa-blocked" hidden class="text-[10px] text-warning mt-3">
+            The tag never loaded — something in this browser blocked it. That is the tag
+            working as designed from your side, and the reason these rows are empty.
+          </p>
+
           <p class="text-[10px] text-base-content/40 mt-3">
             No cookies, no address stored. Your IP resolves a city in-request and is then
             salted, hashed and discarded.

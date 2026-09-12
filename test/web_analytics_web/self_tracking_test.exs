@@ -7,14 +7,27 @@ defmodule WebAnalyticsWeb.SelfTrackingTest do
     :ok
   end
 
-  test "renders nothing when no account is configured", %{conn: conn} do
+  test "reports nowhere when no account is configured", %{conn: conn} do
     Application.put_env(:web_analytics, :self_site_key, nil)
 
     html = conn |> get(~p"/") |> html_response(200)
 
-    # A clone or a self-hosted copy must not report into somebody else's
-    # account by inheriting a default.
-    refute html =~ "/wa.js"
+    # The tag still runs, because the landing page shows a reader their own
+    # visit as the tag records it and cannot be the one page with no tag on it.
+    assert html =~ ~s|src="/wa.js"|
+    assert html =~ ~s|data-measure-only="true"|
+
+    # But it names no account, so a clone or a self-hosted copy cannot report
+    # into somebody else's by inheriting a default.
+    refute html =~ "data-site="
+  end
+
+  test "stops measuring-only once an account is configured", %{conn: conn} do
+    Application.put_env(:web_analytics, :self_site_key, "acct_selftest")
+
+    html = conn |> get(~p"/") |> html_response(200)
+
+    refute html =~ "data-measure-only"
   end
 
   test "renders the tag on every page once an account is configured", %{conn: conn} do

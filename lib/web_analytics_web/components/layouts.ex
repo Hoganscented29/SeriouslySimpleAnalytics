@@ -15,15 +15,23 @@ defmodule WebAnalyticsWeb.Layouts do
   This site's own tracking tag.
 
   An analytics product that does not measure itself is taking its customers'
-  word for whether it works. Rendered only when SSA_SELF_SITE_KEY names an
-  account, so a clone or a self-hosted copy reports nowhere by default rather
-  than into ours.
+  word for whether it works. SSA_SELF_SITE_KEY names the account it reports to;
+  without one the tag still runs, measuring and sending nothing, because the
+  landing page shows a reader their own visit as the tag records it and that
+  page cannot be the one page with no tag on it. A clone or a self-hosted copy
+  therefore reports nowhere by default rather than into ours, and still has a
+  working demo.
   """
   def self_tracking(assigns) do
     assigns = assign(assigns, :key, Application.get_env(:web_analytics, :self_site_key))
 
     ~H"""
-    <script :if={@key} src={~p"/wa.js"} data-site={@key} defer>
+    <script
+      src={~p"/wa.js"}
+      data-site={@key}
+      data-measure-only={is_nil(@key) && "true"}
+      defer
+    >
     </script>
     """
   end
