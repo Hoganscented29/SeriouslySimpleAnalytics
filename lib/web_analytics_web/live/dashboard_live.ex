@@ -16,7 +16,7 @@ defmodule WebAnalyticsWeb.DashboardLive do
   alias WebAnalytics.Ingest.Crawler
   alias WebAnalytics.Sites
 
-  @tabs ~w(live overview pages events flow locations clicks forms sessions crawlers)
+  @tabs ~w(live overview pages events flow locations clicks forms sessions anomalies crawlers)
   @click_groups ~w(name id class text selector tag)
   @location_levels ~w(country region county city)
   @flow_modes ~w(pages events)
@@ -516,6 +516,14 @@ defmodule WebAnalyticsWeb.DashboardLive do
     %{
       sessions: Analytics.recent_sessions(filters, 60),
       anomalies: Analytics.anomaly_breakdown(filters)
+    }
+  end
+
+  defp tab_data("anomalies", filters, _assigns) do
+    %{
+      anomalies: Analytics.anomaly_breakdown(filters),
+      anomaly_explanations: Anomaly.explanations(),
+      dwell: Analytics.dwell_distribution(filters)
     }
   end
 

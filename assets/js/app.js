@@ -38,6 +38,30 @@ window.addEventListener("phx:page-loading-start", _info => topbar.show(300))
 window.addEventListener("phx:page-loading-stop", _info => topbar.hide())
 
 // connect if there are any LiveViews on the page
+// Click to hold a highlight until the pointer leaves.
+//
+// No markup to change: the elements that should respond to this are exactly
+// the ones that already declare a hover style, and that is readable off the
+// class list. A table row counts too — daisyUI puts its hover on the row
+// rather than in a utility class.
+const holdable = (el) =>
+  el.tagName === "TR" || /(^|\s)hover:/.test(el.getAttribute("class") || "")
+
+document.addEventListener("click", (event) => {
+  let el = event.target instanceof Element ? event.target : null
+
+  while (el && el !== document.body && !holdable(el)) {
+    el = el.parentElement
+  }
+
+  if (!el || el === document.body) { return }
+
+  el.classList.add("wa-held")
+  // `once`, so a row clicked twice does not accumulate listeners, and the
+  // class is gone the moment the pointer leaves rather than on the next click.
+  el.addEventListener("mouseleave", () => el.classList.remove("wa-held"), {once: true})
+})
+
 // The server was redeployed while this tab was open. Tell the tag first, so
 // the reload does not book a second pageview against the visit or throw away
 // the dwell time already measured, then reload.

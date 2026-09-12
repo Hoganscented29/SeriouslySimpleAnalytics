@@ -25,6 +25,40 @@ defmodule WebAnalytics.Analytics.AnomalyTest do
     Anomaly.classify(session(overrides), baseline, @config)
   end
 
+  describe "explanations" do
+    test "there is one for every reason the classifier can store" do
+      # A reason with a count and no explanation is the state this tab exists
+      # to fix: "Parked idle tab: 41" tells a reader that 41 visits were thrown
+      # away without telling them what was thrown away or why.
+      assert Map.keys(Anomaly.explanations()) |> Enum.sort() ==
+               Map.keys(Anomaly.labels()) |> Enum.sort()
+    end
+
+    test "each one says what it is, what trips it and why that matters" do
+      for {code, explanation} <- Anomaly.explanations() do
+        assert is_binary(explanation.why), code
+        assert is_binary(explanation.rule), code
+        assert is_binary(explanation.because), code
+      end
+    end
+
+    test "the numbers come from the config rather than being typed in" do
+      # Otherwise a threshold changed in the defaults leaves the dashboard
+      # explaining a rule the classifier no longer applies.
+      tightened =
+        Anomaly.config()
+        |> Map.put(:max_dwell_ms, 3_600_000)
+        |> Map.put(:stale_tick_count, 999)
+
+      explanations = Anomaly.explanations(tightened)
+
+      assert explanations["extreme_dwell"].rule =~ "1 hours"
+      assert explanations["no_engagement"].rule =~ "999"
+
+      refute Anomaly.explanations()["extreme_dwell"].rule =~ "1 hours"
+    end
+  end
+
   test "an ordinary visit is not flagged" do
     assert %{anomalous: false, anomaly_reasons: []} = classify(%{})
   end

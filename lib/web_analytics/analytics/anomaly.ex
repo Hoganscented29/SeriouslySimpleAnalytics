@@ -56,6 +56,81 @@ defmodule WebAnalytics.Analytics.Anomaly do
     "dwell_outlier" => "Dwell time is a statistical outlier"
   }
 
+  @doc """
+  What each reason means, and what it took to trip it.
+
+  Written against `config/0` rather than as prose with numbers typed into it,
+  so a threshold changed in the defaults cannot leave the dashboard explaining
+  a rule the classifier no longer applies. The dashboard shows these beside the
+  counts, because "Parked idle tab: 41" tells a reader that 41 visits were
+  thrown away without telling them what was thrown away or why.
+  """
+  def explanations(config \\ config()) do
+    %{
+      "no_dwell" => %{
+        why: "Arrived and left without the tag recording any time on the page.",
+        rule: "Dwell under #{ms(config.min_dwell_ms)}.",
+        because:
+          "Nobody read anything, so counting it as a visit would dilute every " <>
+            "average on the page."
+      },
+      "too_fast" => %{
+        why: "Moved between pages faster than a person can read one.",
+        rule: "More than one page, averaging under #{ms(config.fast_page_ms)} each.",
+        because:
+          "This is the shape of a preview fetch, a link checker or a scraper " <>
+            "running JavaScript — a client that renders the page without " <>
+            "anyone looking at it."
+      },
+      "hyper_navigation" => %{
+        why: "Opened pages at a rate no hand can click.",
+        rule: "More than #{config.hyper_pages_per_second} pages a second, sustained.",
+        because: "A human cannot do this. Something is walking the site."
+      },
+      "idle_tab" => %{
+        why: "Left open for hours with almost nothing happening in it.",
+        rule:
+          "Open longer than #{ms(config.idle_tab_ms)} with under " <>
+            "#{round(config.idle_active_ratio * 100)}% of that time engaged.",
+        because:
+          "A tab forgotten in a background window is real, but its dwell is " <>
+            "the length of someone's afternoon rather than of their reading, " <>
+            "and one of them drags the average for a whole day."
+      },
+      "extreme_dwell" => %{
+        why: "Recorded more time on one visit than a day can hold.",
+        rule: "Dwell over #{ms(config.max_dwell_ms)}.",
+        because:
+          "Usually a machine that slept and woke, or a clock that moved. " <>
+            "Either way the number is not time anyone spent."
+      },
+      "no_engagement" => %{
+        why: "Kept reporting for a long stretch without a scroll, click or keypress.",
+        rule: "More than #{config.stale_tick_count} heartbeats with no engagement at all.",
+        because:
+          "The page was open and the tag was talking, but nothing in the " <>
+            "window moved. That is a screen nobody was in front of."
+      },
+      "dwell_outlier" => %{
+        why: "Far outside the spread of every other visit to this site.",
+        rule:
+          "More than #{config.z_threshold} robust deviations from the median, " <>
+            "once at least #{config.min_sample} visits exist to compare against.",
+        because:
+          "The only rule here with no fixed number in it: it learns what " <>
+            "normal looks like for your traffic rather than assuming. Dwell " <>
+            "is log-normal in practice, so it works on the median and median " <>
+            "absolute deviation of ln(dwell) — mean and standard deviation are " <>
+            "themselves wrecked by the outliers being looked for."
+      }
+    }
+  end
+
+  defp ms(value) when value < 1_000, do: "#{value}ms"
+  defp ms(value) when value < 60_000, do: "#{Float.round(value / 1_000, 1)}s"
+  defp ms(value) when value < 3_600_000, do: "#{div(value, 60_000)} minutes"
+  defp ms(value), do: "#{div(value, 3_600_000)} hours"
+
   @doc "Merged anomaly configuration."
   def config do
     @defaults

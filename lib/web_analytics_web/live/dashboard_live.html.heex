@@ -1597,6 +1597,92 @@
         </div>
       </div>
     </div>
+    <!-- ============================ ANOMALIES ============================ -->
+    <div :if={@tab == "anomalies"} class="space-y-6">
+      <div class="rounded-box bg-base-100 border border-base-300 px-4 py-4">
+        <h2 class="text-sm font-medium">Why visits get held back</h2>
+        <p class="text-sm text-base-content/70 mt-1">
+          A visit is held back when its dwell time makes it unusable for reporting — not
+          because it was suspicious, but because counting it would move every average on
+          this dashboard away from what your readers actually did. Nothing is deleted:
+          the toggle above shows the excluded traffic at any time, and these rows are what
+          it consists of.
+        </p>
+        <p class="text-xs text-base-content/50 mt-2">
+          Crawlers are judged separately, on their own axis. A bot trips almost every rule
+          below by design, so classifying it here would hide it twice and mean un-hiding
+          crawler traffic still left it hidden. Only browser visits are judged at all — an
+          AI tool reporting through the API has no dwell to measure.
+        </p>
+      </div>
+
+      <% breakdown = Map.new(@data[:anomalies] || [], &{&1.reason, &1.count}) %>
+      <% explanations = @data[:anomaly_explanations] || %{} %>
+      <% held = breakdown |> Map.values() |> Enum.sum() %>
+
+      <div
+        :if={held == 0}
+        class="rounded-box bg-base-100 border border-base-300 px-4 py-8 text-center text-sm text-base-content/60"
+      >
+        Nothing has been held back in this range.
+      </div>
+
+      <%!-- Ordered by how much each rule actually removed, so the one costing
+      you traffic is first rather than alphabetically wherever it lands. A rule
+      that caught nothing is still listed, because "this never fires on your
+      traffic" is the answer to a question a reader will otherwise keep
+      asking. --%>
+      <div class="grid md:grid-cols-2 gap-4">
+        <div
+          :for={
+            {code, explanation} <-
+              Enum.sort_by(explanations, fn {code, _} -> -Map.get(breakdown, code, 0) end)
+          }
+          class={[
+            "rounded-box bg-base-100 border p-4 transition-colors",
+            Map.get(breakdown, code, 0) > 0 && "border-warning/50 hover:border-warning",
+            Map.get(breakdown, code, 0) == 0 && "border-base-300 hover:border-primary/40"
+          ]}
+        >
+          <div class="flex items-baseline justify-between gap-3">
+            <span class="text-sm font-medium">{Map.get(@anomaly_labels, code, code)}</span>
+            <span class={[
+              "badge badge-sm tabular-nums",
+              Map.get(breakdown, code, 0) > 0 && "badge-warning",
+              Map.get(breakdown, code, 0) == 0 && "badge-ghost"
+            ]}>
+              {number(Map.get(breakdown, code, 0))}
+            </span>
+          </div>
+
+          <p class="text-sm text-base-content/70 mt-2">{explanation.why}</p>
+
+          <dl class="mt-3 space-y-1.5 text-xs">
+            <div>
+              <dt class="text-base-content/50 uppercase tracking-wide text-[10px]">
+                What trips it
+              </dt>
+              <dd class="text-base-content/80">{explanation.rule}</dd>
+            </div>
+            <div>
+              <dt class="text-base-content/50 uppercase tracking-wide text-[10px]">
+                Why that matters
+              </dt>
+              <dd class="text-base-content/70">{explanation.because}</dd>
+            </div>
+          </dl>
+
+          <p class="font-mono text-[10px] text-base-content/30 mt-3">{code}</p>
+        </div>
+      </div>
+
+      <.histogram
+        title="Dwell distribution — what was kept against what was held back"
+        buckets={@dwell}
+        primary_key={:kept}
+        secondary_key={:filtered}
+      />
+    </div>
     <!-- ============================= CRAWLERS ============================ -->
     <div :if={@tab == "crawlers"} class="space-y-6">
       <% bots = @data[:crawler_overview] || %{} %>

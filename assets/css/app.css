@@ -412,3 +412,28 @@
     color: var(--color-base-content);
   }
 }
+
+/* Hover feedback should read as a response, not an animation.
+   Tailwind's transition-colors defaults to 150ms and daisyUI's buttons to
+   200ms. Both are fine on a page you read slowly; sweeping a pointer across a
+   dense table they lag behind it, and the highlight arrives after the eye has
+   already moved on. */
+.transition-colors {
+  transition-duration: 75ms;
+}
+
+.btn {
+  transition-duration: 100ms;
+}
+
+/* Click to hold a highlight until the pointer leaves.
+   A wide table is read across, not down, and losing which row you were on
+   halfway along is the whole problem. Deliberately not the same tint as the
+   hover: held and passed-over are different states, and making them identical
+   would leave a reader unable to tell whether the thing under the pointer is
+   the one they pinned. */
+.wa-held {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+  background-color: color-mix(in oklab, var(--color-primary) 9%, transparent) !important;
+}
