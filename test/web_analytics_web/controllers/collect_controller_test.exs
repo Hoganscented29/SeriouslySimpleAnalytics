@@ -83,6 +83,68 @@ defmodule WebAnalyticsWeb.CollectControllerTest do
     assert session.client_signal == "webdriver"
   end
 
+  describe "behind a reverse proxy" do
+    setup do
+      original = Application.get_env(:web_analytics, :trust_proxy_headers)
+      on_exit(fn -> Application.put_env(:web_analytics, :trust_proxy_headers, original) end)
+      :ok
+    end
+
+    test "records the forwarded address when the deployment trusts the proxy",
+         %{conn: conn, site: site} do
+      Application.put_env(:web_analytics, :trust_proxy_headers, true)
+
+      conn
+      |> put_req_header("x-forwarded-for", "203.0.113.42")
+      |> post_beacon(payload(site, [init_event(), pageview_event(1, "/")], token: "fwd-on"))
+      |> response(204)
+
+      Collector.flush_sync()
+
+      session = Repo.one!(from s in Session, where: s.token == "fwd-on")
+
+      # Without this, every visitor behind the proxy is the loopback address:
+      # one origin for the whole site and no city on any session.
+      assert session.ip_masked == "203.•••.•••.42"
+    end
+
+    test "ignores the header when the deployment does not", %{conn: conn, site: site} do
+      Application.put_env(:web_analytics, :trust_proxy_headers, false)
+
+      conn
+      |> put_req_header("x-forwarded-for", "203.0.113.42")
+      |> post_beacon(payload(site, [init_event(), pageview_event(1, "/")], token: "fwd-off"))
+      |> response(204)
+
+      Collector.flush_sync()
+
+      session = Repo.one!(from s in Session, where: s.token == "fwd-off")
+
+      # A deployment reachable directly must not believe a header the client
+      # sets, so the socket address wins.
+      refute session.ip_masked == "203.•••.•••.42"
+    end
+
+    test "takes the first entry, which the proxy must therefore overwrite",
+         %{conn: conn, site: site} do
+      Application.put_env(:web_analytics, :trust_proxy_headers, true)
+
+      conn
+      |> put_req_header("x-forwarded-for", "203.0.113.42, 10.0.0.1")
+      |> post_beacon(payload(site, [init_event(), pageview_event(1, "/")], token: "fwd-chain"))
+      |> response(204)
+
+      Collector.flush_sync()
+
+      session = Repo.one!(from s in Session, where: s.token == "fwd-chain")
+
+      # This is why deploy/setup.sh sets the header to $remote_addr rather than
+      # $proxy_add_x_forwarded_for: appending would put the client's own claim
+      # first, and the client's claim would win.
+      assert session.ip_masked == "203.•••.•••.42"
+    end
+  end
+
   test "answers unknown site keys exactly like known ones", %{conn: conn, site: site} do
     unknown = post_beacon(conn, %{"k" => "no-such-site", "s" => "x", "e" => []})
     known = post_beacon(build_conn(), payload(site, [], token: "beacon-2"))

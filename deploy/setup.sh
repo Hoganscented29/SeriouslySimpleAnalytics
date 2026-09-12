@@ -202,6 +202,12 @@ set_env() {
 set_env PHX_HOST "$DOMAIN"
 set_env PHX_SCHEME https
 set_env PHX_PORT 443
+# This script puts nginx in front, so the socket address the application sees
+# is nginx's. Without this every visitor is recorded as 127.0.0.1: one origin
+# for the whole site, no city on any session, and the "single origin spraying
+# sessions" anomaly signal firing on all traffic. Safe to trust here because
+# the vhost above overwrites the header rather than appending to it.
+set_env SSA_TRUST_PROXY 1
 ok "PHX_HOST=$DOMAIN, https, 443"
 
 # -- keep it running -------------------------------------------------------
@@ -470,7 +476,11 @@ server {
 
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        # Overwritten, not appended. \$proxy_add_x_forwarded_for puts the real
+        # address *after* anything the client sent, and the application reads
+        # the first entry — so a visitor could name any address they liked and
+        # be believed. Nothing behind this proxy needs the original chain.
+        proxy_set_header X-Forwarded-For \$remote_addr;
 
         # The application has force_ssl with rewrite_on: [:x_forwarded_proto].
         # Without this header it cannot tell the request already arrived over

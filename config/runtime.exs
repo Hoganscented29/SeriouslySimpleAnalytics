@@ -29,6 +29,24 @@ config :web_analytics, WebAnalyticsWeb.Endpoint,
 # means no tag is rendered at all.
 config :web_analytics, :self_site_key, System.get_env("SSA_SELF_SITE_KEY")
 
+# Whether to believe `x-forwarded-for`.
+#
+# Behind a reverse proxy the socket address is the proxy's, so without this
+# every visitor in the world is recorded as 127.0.0.1: one origin for the whole
+# site, one city, and an anomaly signal that fires on all traffic because it
+# looks like a single machine spraying sessions.
+#
+# Off by default, because the header is client-controlled and a deployment
+# reachable directly must not believe it. On requires a proxy in front that
+# *overwrites* the header rather than appending to it — the value used is the
+# first entry, and nginx's `$proxy_add_x_forwarded_for` appends the real address
+# after anything the client sent, which would make the client's own claim win.
+# deploy/setup.sh writes `proxy_set_header X-Forwarded-For $remote_addr` for
+# exactly this reason.
+config :web_analytics,
+       :trust_proxy_headers,
+       System.get_env("SSA_TRUST_PROXY") in ~w(1 true yes on)
+
 if config_env() == :dev do
   # Reload browser tabs when matching files change.
   config :web_analytics, WebAnalyticsWeb.Endpoint,
