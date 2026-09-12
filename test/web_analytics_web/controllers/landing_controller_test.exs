@@ -357,6 +357,27 @@ defmodule WebAnalyticsWeb.LandingControllerTest do
       refute body =~ "you can pass this integration downstream"
     end
 
+    test "shows how to instrument a command without editing it", %{conn: conn} do
+      body = conn |> get(~p"/llms.txt") |> response(200)
+
+      # Plenty of what people want measured is a command, not a function: a
+      # CLI, a build step, a deploy script. There is no dispatch point to hook
+      # in any of those, and an agent told only to "add a call where it happens"
+      # has nowhere to put one.
+      assert body =~ "Instrumenting a command by hand"
+      assert body =~ "ssa_run"
+      assert body =~ "command_ran"
+
+      # The wrapper must be transparent. Swallowing the exit status turns a
+      # failing build into a passing one under `set -e`, which is a far worse
+      # bug than missing analytics.
+      assert body =~ "return $code"
+
+      # Argument lists carry tokens, passwords and customer file paths, and
+      # every parameter here ends up in a URL that proxies log.
+      assert body =~ "never `$@`"
+    end
+
     test "carries a block the reader can paste into their own llms.txt", %{conn: conn} do
       body = conn |> get(~p"/llms.txt") |> response(200)
 
@@ -375,6 +396,12 @@ defmodule WebAnalyticsWeb.LandingControllerTest do
       assert block =~ "sid"
       assert block =~ "NEVER send credentials"
       assert block =~ "ONE account per project"
+
+      # A project whose interesting surface is a command, not a function, has
+      # to be able to integrate from the block alone.
+      assert block =~ "ssa_run"
+      assert block =~ "command_ran"
+      assert block =~ "return $code"
 
       # The block carries its own propagation step, so the chain does not stop
       # at the first project that integrates.

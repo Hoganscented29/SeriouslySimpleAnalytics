@@ -269,6 +269,80 @@ a goroutine, a thread, a queued job — with a short timeout. Analytics that can
 fail a user's request, or add latency to it, is worse than no analytics. See
 "Failure" below.
 
+## Instrumenting a command by hand
+
+Sometimes there is no dispatch point to hook: the thing worth measuring is a
+command, not a function. A CLI you ship, a build step, a deploy script, a
+Makefile target, a cron job. You can report those without touching any
+application code, by wrapping the command in the shell.
+
+Paste these two functions into the script, the entrypoint, or the shell profile
+that already runs the command:
+
+```bash
+# Set once, where your project keeps configuration.
+SSA_UID="acct_123"
+SSA_PROJECT="my-tool"
+SSA_LOCATION="c=Austin&cc=Travis&s_p=Texas&n=United%20States"
+# One sid per shell session, so every command in it groups into one run.
+SSA_SID="${SSA_SID:-$$-$(date +%s)}"
+
+ssa_ping() {
+  event="$1"; shift
+  url="https://seriouslysimpleanalytics.com/api/ping?uid=$SSA_UID&type=ai"
+  url="$url&project=$SSA_PROJECT&sid=$SSA_SID&event=$event&$SSA_LOCATION"
+  for kv in "$@"; do url="$url&$kv"; done
+  # Backgrounded and capped: a command must never wait on analytics.
+  curl -s -m 2 -o /dev/null "$url" >/dev/null 2>&1 &
+}
+
+ssa_run() {
+  name="$1"; shift
+  start=$(date +%s)
+  "$@"
+  code=$?
+  if [ "$code" -eq 0 ]; then outcome=success; else outcome=error; fi
+  ssa_ping command_ran \
+    "command=$name" \
+    "outcome=$outcome" \
+    "exit_code=$code" \
+    "duration_ms=$(( ($(date +%s) - start) * 1000 ))"
+  return $code
+}
+```
+
+Then run the command through the wrapper:
+
+```bash
+ssa_run build make release
+ssa_run deploy ./scripts/deploy.sh production
+```
+
+Four things that matter more than they look:
+
+**Return the exit code.** `ssa_run` ends with `return $code` for a reason. A
+wrapper that swallows the status turns a failing build into a passing one under
+`set -e` and in CI, which is a far worse bug than missing analytics.
+
+**Never pass the command's arguments.** Send the command's *name*, never `$@`.
+Argument lists carry `--token`, `--password`, connection strings, customer file
+paths and user data, and every parameter here ends up in a URL that proxies
+log. Name the command, not the invocation.
+
+**Report the outcome from outside the command, not inside it.** The wrapper sees
+the exit status of a crash, a timeout and a `kill` alike. A line added inside
+the script only reports when the script gets to the end, which is the case you
+least need to hear about.
+
+**Keep the `sid` for the life of the shell.** Exported from a parent process, it
+groups every command in one CI job, one deploy or one terminal session into a
+single run, and the flow report then shows you the order people actually run
+things in.
+
+If these commands are the capabilities of an AI tool rather than chores around
+it, use `tool_called` with `tool=` instead of `command_ran` with `command=`, so
+they land with everything else in that report.
+
 ## What not to send
 
 - **Never send credentials.** API keys, tokens, passwords, session secrets. The
@@ -426,6 +500,34 @@ service. No SDK, no API key exchange, no JSON body. Follow these steps in order.
 
    Report `run_completed` only on the success path and your completion rate is
    100% and means nothing. Any extra parameter you add is kept as an attribute.
+
+   If what you want to measure is a command rather than a function — a CLI, a
+   build step, a deploy script, a cron job — there may be no dispatch point to
+   hook. Wrap it in the shell instead of editing it:
+
+   ```bash
+   ssa_run() {
+     name="$1"; shift
+     start=$(date +%s)
+     "$@"
+     code=$?
+     if [ "$code" -eq 0 ]; then outcome=success; else outcome=error; fi
+     url="https://seriouslysimpleanalytics.com/api/ping?uid=$SSA_UID&type=ai"
+     url="$url&project=$SSA_PROJECT&sid=$SSA_SID&event=command_ran"
+     url="$url&command=$name&outcome=$outcome"
+     url="$url&duration_ms=$(( ($(date +%s) - start) * 1000 ))&$SSA_LOCATION"
+     curl -s -m 2 -o /dev/null "$url" >/dev/null 2>&1 &
+     return $code
+   }
+
+   ssa_run build make release
+   ```
+
+   Send the command's name, never `$@`: argument lists carry tokens, passwords
+   and customer file paths, and every parameter here ends up in a URL. Keep the
+   `return $code` — a wrapper that swallows the exit status turns a failing
+   build into a passing one under `set -e`. Export `SSA_SID` from the parent
+   process so every command in one job groups into a single run.
 
 5. Send the end user's location as `c`, `cc`, `s_p` and `n`. A ping arrives from
    wherever this software runs, so its network address says where the code is,
