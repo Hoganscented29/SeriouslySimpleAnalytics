@@ -1587,43 +1587,14 @@
       </div>
     </div>
 
-    <!-- website install, above the agent instructions: it is one line and most
-         accounts want it, so it should not sit under something longer -->
-    <div class="rounded-box bg-base-100 border border-base-300 px-4 py-4">
-      <div class="text-sm font-medium">Website Integration Instructions</div>
-      <p class="text-sm text-base-content/70 mt-1 mb-3">
-        Paste this into the <code class="font-mono text-xs">&lt;head&gt;</code>
-        of every page you want tracked. Nothing else to configure.
-      </p>
-      <div class="relative">
-        <pre
-          id="script-tag"
-          class="bg-base-200 rounded p-3 pr-24 text-xs overflow-x-auto"
-        ><code>{snippet(@site, base_url())}</code></pre>
-        <button
-          type="button"
-          data-copy="script-tag"
-          class="btn btn-xs btn-primary absolute top-2 right-2"
-        >
-          Copy
-        </button>
-      </div>
-    </div>
-
-    <!-- integration -->
-    <div class="rounded-box bg-base-100 border border-base-300 px-4 py-4 space-y-4">
-      <div>
-        <div class="text-sm font-medium">AI Integration Instructions</div>
-        <p class="text-sm text-base-content/70 mt-1 mb-3">
-          Hand this to your coding agent. It reads the contract, wires up the events, and
-          updates your llms.txt so the next agent does the same.
-        </p>
-        <.integration_chat
-          base_url={base_url()}
-          prompt={agent_prompt(@site, base_url())}
-          creates_account={false}
-        />
-      </div>
+    <%!-- The instructions live on /getting-started now. An account with traffic
+    scrolled past them on every visit, and an account with none had to scroll
+    past every empty chart to reach the only thing it needed. --%>
+    <div class="rounded-box bg-base-100 border border-base-300 px-4 py-3 flex flex-wrap items-center gap-3">
+      <span class="text-sm">Need the snippet, or the line to hand a coding agent?</span>
+      <.link navigate={~p"/getting-started?site=#{@site.key}"} class="btn btn-sm btn-outline">
+        Getting started
+      </.link>
     </div>
   </div>
 

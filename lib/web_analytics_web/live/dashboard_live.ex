@@ -9,7 +9,6 @@ defmodule WebAnalyticsWeb.DashboardLive do
   use WebAnalyticsWeb, :live_view
 
   import WebAnalyticsWeb.DashboardComponents
-  import WebAnalyticsWeb.IntegrationComponents, only: [integration_chat: 1]
 
   alias WebAnalytics.Analytics
   alias WebAnalytics.Analytics.Anomaly
@@ -557,17 +556,13 @@ defmodule WebAnalyticsWeb.DashboardLive do
 
   defp base_url, do: url(~p"/") |> String.trim_trailing("/")
 
-  defp snippet(site, endpoint) do
-    ~s|<script src="#{endpoint}/wa.js" data-site="#{site.key}" defer></script>|
-  end
-
   @doc """
-  The prompt to hand a coding agent, naming this account.
+  The line to hand a coding agent, naming this account.
 
-  A prompt rather than a description, because the reader's next move is to paste
-  it. Naming what to report matters more than it looks: an agent told only to
-  "add analytics" chooses its own events, and every integration then measures
-  something different.
+  Called from GettingStartedLive, which is where the instructions live now. It
+  stays here because the account-id variant of the prompt belongs beside the
+  dashboard's own idea of a site, and moving it would leave two nearly
+  identical prompts in two modules.
   """
   def agent_prompt(site, endpoint) do
     """

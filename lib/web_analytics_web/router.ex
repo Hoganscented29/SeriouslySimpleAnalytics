@@ -97,6 +97,7 @@ defmodule WebAnalyticsWeb.Router do
       # The dashboard shows one account's data, so it lives behind the session
       # rather than picking a site out of everything on the box.
       live "/dashboard", DashboardLive, :index
+      live "/getting-started", GettingStartedLive, :index
       live "/users/settings", UserLive.Settings, :edit
       live "/users/settings/confirm-email/:token", UserLive.Settings, :confirm_email
     end

@@ -276,39 +276,15 @@ defmodule WebAnalyticsWeb.DashboardLiveTest do
       assert html =~ "Account ID"
     end
 
-    test "leads with the prompt to hand an agent, naming this account", %{
-      conn: conn,
-      site: site
-    } do
+    test "sends the reader to the instructions rather than carrying them", %{conn: conn} do
       {:ok, _live, html} = live(conn, ~p"/dashboard?site=dash")
 
-      assert html =~ "Integration Instructions"
-      assert html =~ "Your coding agent"
-      assert html =~ "Use account id #{site.key}"
-      # The heredoc wraps and the bubble renders llms.txt as code, so assert the
-      # pieces rather than a span of the sentence.
-      assert html =~ "Update our "
-      assert html =~ ~r{<code[^>]*>llms\.txt</code>}
-    end
-
-    test "offers the website snippet above the agent instructions", %{conn: conn, site: site} do
-      {:ok, _live, html} = live(conn, ~p"/dashboard?site=dash")
-
-      assert html =~ "Website Integration Instructions"
-      assert html =~ "data-site=&quot;#{site.key}&quot;"
-      assert html =~ "AI Integration Instructions"
-
-      # One line, and most accounts want it, so it comes first.
-      {website, _} = :binary.match(html, "Website Integration Instructions")
-      {ai, _} = :binary.match(html, "AI Integration Instructions")
-      assert website < ai
-    end
-
-    test "both snippets can be copied", %{conn: conn} do
-      {:ok, _live, html} = live(conn, ~p"/dashboard?site=dash")
-
-      assert html =~ ~s|data-copy="script-tag"|
-      assert html =~ ~s|src="/wa-live.js"|
+      # They used to sit at the bottom of this page, where an account with
+      # traffic scrolled past them every visit and an account with none had to
+      # scroll past every empty chart to reach the only thing it needed.
+      refute html =~ "Website Integration Instructions"
+      refute html =~ "AI Integration Instructions"
+      assert html =~ ~s|href="/getting-started?site=dash"|
     end
 
     test "does not claim it just created an account for someone who has one", %{conn: conn} do

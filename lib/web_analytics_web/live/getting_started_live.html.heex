@@ -1,0 +1,70 @@
+<Layouts.app flash={@flash} current_scope={@current_scope}>
+  <div class="space-y-6 max-w-4xl">
+    <div class="flex flex-wrap items-baseline justify-between gap-3">
+      <div>
+        <h1 class="text-2xl font-semibold tracking-tight">Getting started</h1>
+        <p class="text-sm text-base-content/60 mt-1">
+          Two ways in. Do either, or both — they report into the same dashboard.
+        </p>
+      </div>
+      <.link navigate={~p"/dashboard"} class="btn btn-sm btn-primary">
+        Open your dashboard
+      </.link>
+    </div>
+
+    <div class="rounded-box bg-base-100 border border-base-300 px-4 py-3 flex flex-wrap items-center gap-3">
+      <span class="text-xs uppercase tracking-wide text-base-content/50">Account ID</span>
+      <code class="font-mono font-medium">{@site.key}</code>
+      <span class="text-xs text-base-content/50">
+        Public — it ships inside the snippet, and grants nothing but the right to send events.
+      </span>
+    </div>
+
+    <!-- the website tag, first: it is one line and most accounts want it -->
+    <div class="rounded-box bg-base-100 border border-base-300 px-4 py-4">
+      <div class="text-sm font-medium">Website Integration Instructions</div>
+      <p class="text-sm text-base-content/70 mt-1 mb-3">
+        Paste this into the <code class="font-mono text-xs">&lt;head&gt;</code>
+        of every page you want tracked. Nothing else to configure.
+      </p>
+      <div class="relative">
+        <pre
+          id="script-tag"
+          class="bg-base-200 rounded p-3 pr-24 text-xs overflow-x-auto"
+        ><code>{snippet(@site, base_url())}</code></pre>
+        <button
+          type="button"
+          data-copy="script-tag"
+          class="btn btn-xs btn-primary absolute top-2 right-2"
+        >
+          Copy
+        </button>
+      </div>
+    </div>
+
+    <div class="rounded-box bg-base-100 border border-base-300 px-4 py-4 space-y-4">
+      <div>
+        <div class="text-sm font-medium">AI Integration Instructions</div>
+        <p class="text-sm text-base-content/70 mt-1 mb-3">
+          Hand this to your coding agent. It reads the contract, wires up the events, and
+          updates your llms.txt so the next agent does the same.
+        </p>
+        <.integration_chat
+          base_url={base_url()}
+          prompt={agent_prompt(@site, base_url())}
+          creates_account={false}
+        />
+      </div>
+    </div>
+
+    <p class="text-xs text-base-content/50">
+      The full contract an agent reads is at <a
+        href={~p"/llms.txt"}
+        class="link link-hover font-mono"
+      >llms.txt</a>.
+    </p>
+  </div>
+
+  <script src={~p"/wa-live.js"} defer>
+  </script>
+</Layouts.app>
