@@ -140,6 +140,96 @@
         </button>
       </div>
     </div>
+
+    <%!-- Session length, as a range over the dwell buckets rather than over raw
+    milliseconds: dwell runs from a few hundred ms to hours, and a linear
+    slider would spend most of its travel above an hour. The chart is the
+    control's own legend — it shows the whole distribution, with the part the
+    handles keep in colour and the part they cut greyed out, so the reader can
+    see what a drag is about to remove before letting go. --%>
+    <% dwell = @data[:dwell] || [] %>
+    <% dwell_labels = Analytics.dwell_bucket_labels() %>
+    <% dwell_peak =
+      dwell |> Enum.map(&((&1.kept || 0) + (&1.filtered || 0))) |> Enum.max(fn -> 0 end) %>
+    <div class="rounded-box bg-base-100 border border-base-300 px-4 py-3">
+      <div class="flex items-baseline justify-between gap-3 flex-wrap mb-2">
+        <span class="text-xs uppercase tracking-wide text-base-content/60">Session length</span>
+        <div class="flex items-center gap-2">
+          <span class={[
+            "text-xs font-medium tabular-nums",
+            Analytics.dwell_filtered?(@filters) && "text-primary"
+          ]}>
+            {Enum.at(dwell_labels, @filters.dwell_min)} – {Enum.at(
+              dwell_labels,
+              @filters.dwell_max
+            )}
+          </span>
+          <button
+            :if={Analytics.dwell_filtered?(@filters)}
+            phx-click="reset_dwell"
+            class="btn btn-ghost btn-xs"
+          >
+            Reset
+          </button>
+        </div>
+      </div>
+
+      <div class="flex items-end gap-[3px] h-12" role="img" aria-label="Sessions by length">
+        <div
+          :for={{bucket, index} <- Enum.with_index(dwell)}
+          class="flex-1 min-w-0 flex items-end h-full"
+          title={"#{Enum.at(dwell_labels, index)} · #{number((bucket.kept || 0) + (bucket.filtered || 0))} sessions"}
+        >
+          <% total = (bucket.kept || 0) + (bucket.filtered || 0) %>
+          <% inside = index >= @filters.dwell_min and index <= @filters.dwell_max %>
+          <div
+            class={[
+              "w-full rounded-sm transition-colors",
+              inside && total > 0 && "bg-primary/70",
+              inside && total == 0 && "bg-primary/20",
+              !inside && "bg-base-300"
+            ]}
+            style={"height: #{if dwell_peak > 0 and total > 0, do: max(round(total * 100 / dwell_peak), 4), else: 3}%"}
+          >
+          </div>
+        </div>
+      </div>
+
+      <%!-- Two native inputs stacked in one track: HTML has no dual-range
+      control and this project takes no new dependencies. Both report together
+      on every drag, so the server never has to work out which one moved. --%>
+      <% last = length(dwell_labels) - 1 %>
+      <form phx-change="dwell_range" class="wa-range-pair mt-1">
+        <span class="wa-range-track" aria-hidden="true">
+          <span
+            class="wa-range-fill"
+            style={"left: #{@filters.dwell_min * 100 / last}%; right: #{100 - @filters.dwell_max * 100 / last}%"}
+          ></span>
+        </span>
+        <input
+          type="range"
+          name="dmin"
+          min="0"
+          max={last}
+          value={@filters.dwell_min}
+          step="1"
+          aria-label="Shortest session to include"
+        />
+        <input
+          type="range"
+          name="dmax"
+          min="0"
+          max={last}
+          value={@filters.dwell_max}
+          step="1"
+          aria-label="Longest session to include"
+        />
+      </form>
+
+      <div class="flex justify-between text-[10px] text-base-content/40">
+        <span :for={label <- dwell_labels} class="flex-1 text-center truncate">{label}</span>
+      </div>
+    </div>
     <!-- tabs -->
     <div role="tablist" class="tabs tabs-bordered">
       <button

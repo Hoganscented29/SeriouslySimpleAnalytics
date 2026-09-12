@@ -104,6 +104,71 @@ defmodule WebAnalytics.AnalyticsTest do
     end
   end
 
+  describe "the session-length range" do
+    # The setup's clean visit dwells 40s (bucket 4, "2-5m" has ceiling 300s, so
+    # 40s lands in bucket 2, "10s-1m"). The anomaly is 20 hours, the crawler 3s.
+    test "everything is included by default", %{site: site} do
+      f = filters(site)
+
+      refute Analytics.dwell_filtered?(f)
+      assert Analytics.overview(f).sessions == 1
+    end
+
+    test "a floor drops the visits below it", %{site: site} do
+      # Nothing in the setup dwells longer than a minute except the anomaly,
+      # which the default filter already hides.
+      above_a_minute = filters(site, %{dwell_min: 3})
+
+      assert Analytics.dwell_filtered?(above_a_minute)
+      assert Analytics.overview(above_a_minute).sessions == 0
+
+      # And the same range keeps it once the short visit is inside.
+      assert Analytics.overview(filters(site, %{dwell_min: 2})).sessions == 1
+    end
+
+    test "a ceiling drops the visits above it", %{site: site} do
+      under_ten_seconds = filters(site, %{dwell_max: 1})
+
+      assert Analytics.dwell_filtered?(under_ten_seconds)
+      assert Analytics.overview(under_ten_seconds).sessions == 0
+    end
+
+    test "handles dragged past each other read as a range, not an empty set", %{site: site} do
+      swapped = filters(site, %{dwell_min: 5, dwell_max: 1})
+
+      assert swapped.dwell_min == 1
+      assert swapped.dwell_max == 5
+    end
+
+    test "the top bucket has no ceiling, so the longest visits stay in", %{site: site} do
+      top = filters(site, %{dwell_min: 8})
+
+      assert top.dwell_to_ms == nil
+
+      # The twenty hour session is the only thing up there, and it is only
+      # visible with the anomaly filter off.
+      shown = filters(site, %{dwell_min: 8, exclude_anomalies: false})
+      assert Analytics.overview(shown).sessions == 1
+    end
+
+    test "out-of-range and unparseable values fall back rather than crashing", %{site: site} do
+      assert filters(site, %{dwell_min: -4, dwell_max: 99}).dwell_min == 0
+      assert filters(site, %{dwell_min: -4, dwell_max: 99}).dwell_max == 8
+      assert filters(site, %{dwell_min: "3"}).dwell_min == 3
+      assert filters(site, %{dwell_min: "banana"}).dwell_min == 0
+    end
+
+    test "reaches pageviews and events too, not just the session list", %{site: site} do
+      # One filter, applied everywhere: a range that excludes a session must
+      # also exclude its pages, or the tabs disagree with each other.
+      wide = filters(site)
+      narrow = filters(site, %{dwell_max: 1})
+
+      assert Analytics.pages(wide) != []
+      assert Analytics.pages(narrow) == []
+    end
+  end
+
   describe "the live series" do
     test "keeps every minute of the window, including the quiet ones", %{site: site} do
       series = Analytics.active_now(filters(site)).series

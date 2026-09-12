@@ -138,6 +138,17 @@ defmodule WebAnalyticsWeb.DashboardLive do
 
   def handle_info(:live_tick, socket), do: {:noreply, socket}
 
+  # Both handles come from one input event, so a drag of either sends the pair
+  # and the server never has to guess which one moved.
+  @impl true
+  def handle_event("dwell_range", %{"dmin" => min, "dmax" => max}, socket) do
+    {:noreply, push_patch(socket, to: path_for(socket, %{"dmin" => min, "dmax" => max}))}
+  end
+
+  def handle_event("reset_dwell", _params, socket) do
+    {:noreply, push_patch(socket, to: path_for(socket, %{"dmin" => nil, "dmax" => nil}))}
+  end
+
   @impl true
   def handle_event("navigate", params, socket) do
     {:noreply, push_patch(socket, to: path_for(socket, params))}
@@ -220,12 +231,26 @@ defmodule WebAnalyticsWeb.DashboardLive do
       exclude_crawlers: params["crawlers"] != "include",
       project: blank_to_nil(params["project"]),
       host: blank_to_nil(params["domain"]),
+      dwell_min: params["dmin"] || 0,
+      dwell_max: params["dmax"] || last_dwell_bucket(),
       group_by: if(params["group"] == "title", do: :title, else: :path)
     })
   end
 
   defp range(value) do
     if value in Analytics.ranges(), do: value, else: "7d"
+  end
+
+  defp last_dwell_bucket, do: length(Analytics.dwell_bucket_labels()) - 1
+
+  # Dropped from the URL when it is at the stop, so a default view does not
+  # carry a range that excludes nothing.
+  defp dwell_param(socket, key, default) do
+    case socket.assigns.filters && Map.get(socket.assigns.filters, key) do
+      nil -> nil
+      ^default -> nil
+      value -> to_string(value)
+    end
   end
 
   # Keeps every control additive: changing the range preserves the tab, the
@@ -258,7 +283,9 @@ defmodule WebAnalyticsWeb.DashboardLive do
       # Omitted at its default, like every other control: a shared URL carrying
       # each default is longer and says less.
       "flow" => if(socket.assigns.flow_mode == "pages", do: nil, else: "events"),
-      "domain" => socket.assigns.filters && socket.assigns.filters.host
+      "domain" => socket.assigns.filters && socket.assigns.filters.host,
+      "dmin" => dwell_param(socket, :dwell_min, 0),
+      "dmax" => dwell_param(socket, :dwell_max, last_dwell_bucket())
     }
 
     query =
@@ -286,7 +313,10 @@ defmodule WebAnalyticsWeb.DashboardLive do
         overview: Analytics.overview(filters),
         projects: Analytics.projects(filters),
         domains: Analytics.domains(filters),
-        channels: Analytics.channels(filters)
+        channels: Analytics.channels(filters),
+        # The dwell slider lives in the filter bar above the tabs, so the chart
+        # beside it has to be loaded whatever tab is open.
+        dwell: Analytics.dwell_distribution(filters)
       }
       |> Map.merge(tab_data(socket.assigns.tab, filters, socket.assigns))
 
@@ -300,7 +330,6 @@ defmodule WebAnalyticsWeb.DashboardLive do
       referrers: Analytics.session_breakdown(filters, :referrer_host, 8),
       browsers: Analytics.session_breakdown(filters, :browser, 6),
       devices: Analytics.session_breakdown(filters, :device_type, 4),
-      dwell: Analytics.dwell_distribution(filters),
       anomalies: Analytics.anomaly_breakdown(filters)
     }
   end
@@ -381,8 +410,7 @@ defmodule WebAnalyticsWeb.DashboardLive do
   defp tab_data("sessions", filters, _assigns) do
     %{
       sessions: Analytics.recent_sessions(filters, 60),
-      anomalies: Analytics.anomaly_breakdown(filters),
-      dwell: Analytics.dwell_distribution(filters)
+      anomalies: Analytics.anomaly_breakdown(filters)
     }
   end
 

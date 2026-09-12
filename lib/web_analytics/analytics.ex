@@ -27,6 +27,23 @@ defmodule WebAnalytics.Analytics do
   @doc "Known range keys, in display order."
   def ranges, do: ["1h", "24h", "7d", "30d", "all"]
 
+  # Dwell spans milliseconds to hours, so the buckets are deliberately uneven.
+  # Nothing below five seconds is subdivided: the difference between a 200ms and
+  # a 2s visit is noise — neither one read anything — and splitting them apart
+  # only produces tall bars at the left that crowd out the range where real
+  # reading time actually varies.
+  @dwell_buckets [
+    {5_000, "0-5s"},
+    {10_000, "5-10s"},
+    {60_000, "10s-1m"},
+    {120_000, "1-2m"},
+    {300_000, "2-5m"},
+    {900_000, "5-15m"},
+    {1_800_000, "15-30m"},
+    {3_600_000, "30m-1h"},
+    {:infinity, "1h+"}
+  ]
+
   @doc """
   Builds the filter map every query in this module takes.
 
@@ -58,7 +75,74 @@ defmodule WebAnalytics.Analytics do
       host: Map.get(opts, :host),
       group_by: Map.get(opts, :group_by, :path)
     }
+    |> put_dwell_range(opts)
   end
+
+  # The dwell range is carried as bucket indices rather than raw milliseconds,
+  # because those are what the reader is actually moving. Dwell spans
+  # milliseconds to hours, so a linear slider over the raw value would spend
+  # nine tenths of its travel on "over an hour" and leave every real visit
+  # crushed against the left stop. The buckets are already uneven for the same
+  # reason, and a notch per bucket lines the slider up with the chart above it.
+  defp put_dwell_range(f, opts) do
+    last = length(@dwell_buckets) - 1
+
+    min = opts |> Map.get(:dwell_min, 0) |> clamp_bucket(0, last)
+    max = opts |> Map.get(:dwell_max, last) |> clamp_bucket(0, last)
+
+    # A reader who drags the low handle past the high one means a range, not an
+    # empty set, so the two swap rather than cancelling each other out.
+    {min, max} = if min <= max, do: {min, max}, else: {max, min}
+
+    f
+    |> Map.put(:dwell_min, min)
+    |> Map.put(:dwell_max, max)
+    |> Map.put(:dwell_from_ms, bucket_floor(min))
+    |> Map.put(:dwell_to_ms, bucket_ceiling(max))
+  end
+
+  defp clamp_bucket(value, low, high) when is_integer(value),
+    do: value |> max(low) |> min(high)
+
+  defp clamp_bucket(value, low, high) when is_binary(value) do
+    case Integer.parse(value) do
+      {parsed, _} -> clamp_bucket(parsed, low, high)
+      :error -> low
+    end
+  end
+
+  defp clamp_bucket(_value, low, _high), do: low
+
+  # The floor of a bucket is the ceiling of the one before it; the first starts
+  # at zero.
+  defp bucket_floor(0), do: 0
+
+  defp bucket_floor(index) do
+    @dwell_buckets |> Enum.at(index - 1) |> elem(0)
+  end
+
+  defp bucket_ceiling(index) do
+    case @dwell_buckets |> Enum.at(index) |> elem(0) do
+      :infinity -> nil
+      ceiling -> ceiling
+    end
+  end
+
+  @doc """
+  The dwell buckets, as the slider and the chart above it both need them.
+
+  One list so the two cannot disagree about how many notches there are or what
+  each one means.
+  """
+  def dwell_bucket_labels do
+    @dwell_buckets |> Enum.map(&elem(&1, 1))
+  end
+
+  @doc "Whether a dwell range is narrower than everything."
+  def dwell_filtered?(%{dwell_min: min, dwell_max: max}),
+    do: min > 0 or max < length(@dwell_buckets) - 1
+
+  def dwell_filtered?(_f), do: false
 
   # -- scopes --------------------------------------------------------------
 
@@ -69,6 +153,7 @@ defmodule WebAnalytics.Analytics do
     )
     |> filter_anomalies(f)
     |> filter_crawlers(f)
+    |> filter_dwell(f)
     |> filter_project(f)
     |> filter_host(f)
   end
@@ -108,6 +193,27 @@ defmodule WebAnalytics.Analytics do
 
   defp filter_crawlers(query, _f), do: query
 
+  # Open-ended at the top when the reader has the high handle at "1h+": there is
+  # no ceiling to compare against, and inventing one would silently drop the
+  # longest visits from a range that says it includes them.
+  defp filter_dwell(query, %{dwell_from_ms: from_ms, dwell_to_ms: to_ms}) do
+    query
+    |> then(fn q -> if from_ms > 0, do: where(q, [s], s.dwell_ms >= ^from_ms), else: q end)
+    |> then(fn q -> if to_ms, do: where(q, [s], s.dwell_ms < ^to_ms), else: q end)
+  end
+
+  defp filter_dwell(query, _f), do: query
+
+  defp filter_joined_dwell(query, %{dwell_from_ms: from_ms, dwell_to_ms: to_ms}) do
+    query
+    |> then(fn q ->
+      if from_ms > 0, do: where(q, [session: s], s.dwell_ms >= ^from_ms), else: q
+    end)
+    |> then(fn q -> if to_ms, do: where(q, [session: s], s.dwell_ms < ^to_ms), else: q end)
+  end
+
+  defp filter_joined_dwell(query, _f), do: query
+
   defp filter_joined_anomalies(query, %{exclude_anomalies: true}),
     do: where(query, [session: s], not s.anomalous)
 
@@ -127,6 +233,7 @@ defmodule WebAnalytics.Analytics do
     )
     |> filter_joined_anomalies(f)
     |> filter_joined_crawlers(f)
+    |> filter_joined_dwell(f)
     |> filter_joined_project(f)
     |> filter_joined_host(f)
   end
@@ -140,6 +247,7 @@ defmodule WebAnalytics.Analytics do
     )
     |> filter_joined_anomalies(f)
     |> filter_joined_crawlers(f)
+    |> filter_joined_dwell(f)
     |> filter_joined_project(f)
     |> filter_joined_host(f)
   end
@@ -153,6 +261,7 @@ defmodule WebAnalytics.Analytics do
     )
     |> filter_joined_anomalies(f)
     |> filter_joined_crawlers(f)
+    |> filter_joined_dwell(f)
     |> filter_joined_project(f)
     |> filter_joined_host(f)
   end
@@ -904,23 +1013,6 @@ defmodule WebAnalytics.Analytics do
         select: %{reason: fragment("?", r), count: count(s.id)}
     )
   end
-
-  # Dwell spans milliseconds to hours, so the buckets are deliberately uneven.
-  # Nothing below five seconds is subdivided: the difference between a 200ms and
-  # a 2s visit is noise — neither one read anything — and splitting them apart
-  # only produces tall bars at the left that crowd out the range where real
-  # reading time actually varies.
-  @dwell_buckets [
-    {5_000, "0-5s"},
-    {10_000, "5-10s"},
-    {60_000, "10s-1m"},
-    {120_000, "1-2m"},
-    {300_000, "2-5m"},
-    {900_000, "5-15m"},
-    {1_800_000, "15-30m"},
-    {3_600_000, "30m-1h"},
-    {:infinity, "1h+"}
-  ]
 
   @doc """
   Dwell-time histogram.
