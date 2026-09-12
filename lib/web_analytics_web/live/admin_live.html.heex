@@ -166,13 +166,35 @@
                   {session.host || "—"}
                 </td>
                 <td class="font-mono text-[11px]">{session.project || "—"}</td>
+                <%!-- What this visit is doing. A browser answers with the page
+                it is on; a tool reporting through the ping API has no page and
+                answers with the last thing it reported, which is the only
+                column on this row that is not a dash for it. --%>
                 <td class="max-w-[12rem] truncate">
-                  {session.crawler_name || session.entry_path || "—"}
+                  <span :if={session.last_event} class="font-mono text-[11px]">
+                    {session.last_event}
+                  </span>
+                  <span :if={session.events > 1} class="text-base-content/40 text-[10px]">
+                    · {num(session.events)} events
+                  </span>
+                  <span :if={is_nil(session.last_event)}>
+                    {session.crawler_name || session.entry_path || "—"}
+                  </span>
                 </td>
                 <td class="max-w-[10rem] truncate text-[11px]" title={referrer_title(session)}>
                   {referrer(session)}
                 </td>
-                <td class="text-right tabular-nums">{num(session.pageviews)}</td>
+                <td class="text-right tabular-nums">
+                  <span :if={session.pageviews > 0}>{num(session.pageviews)}</span>
+                  <span
+                    :if={session.pageviews == 0 and session.events > 0}
+                    class="text-base-content/40"
+                    title="No pageviews — this visit reports events instead"
+                  >
+                    —
+                  </span>
+                  <span :if={session.pageviews == 0 and session.events == 0}>0</span>
+                </td>
                 <td class="text-right tabular-nums">{duration(session.dwell_ms)}</td>
                 <td class="text-[11px] whitespace-nowrap">
                   {session.city || session.country || "—"}

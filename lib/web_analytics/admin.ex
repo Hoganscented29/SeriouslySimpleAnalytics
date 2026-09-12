@@ -238,9 +238,56 @@ defmodule WebAnalytics.Admin do
       )
 
     totals
-    |> Map.put(:sessions_list, sessions)
+    |> Map.put(:sessions_list, with_events(sessions))
     |> Map.put(:series, concurrent_series(base, now))
     |> Map.put(:as_of, now)
+  end
+
+  # What each listed visit has actually reported.
+  #
+  # Without this an AI run is a row of em dashes: no host, no entry path, no
+  # pageviews and no dwell, because a tool reporting through the ping API has
+  # none of those by construction. Everything it did is in its events, and the
+  # panel was showing every column except the one with the answer in it.
+  #
+  # Two small queries against the listed ids rather than a join on the main
+  # one, so the panel's own limit bounds the work: at most twenty-five rows,
+  # whatever the deployment is doing.
+  defp with_events([]), do: []
+
+  defp with_events(sessions) do
+    ids = Enum.map(sessions, & &1.id)
+
+    counts =
+      Repo.all(
+        from e in Event,
+          where: e.session_id in ^ids and not is_nil(e.name),
+          group_by: e.session_id,
+          select: {e.session_id, count(e.id)}
+      )
+      |> Map.new()
+
+    # DISTINCT ON is the cheap way to the newest row per session; an aggregate
+    # can give the latest time but not the name that came with it.
+    latest =
+      Repo.all(
+        from e in Event,
+          where: e.session_id in ^ids and not is_nil(e.name),
+          distinct: e.session_id,
+          # id breaks the tie. Events reported in one batch share a timestamp,
+          # so ordering on occurred_at alone leaves "latest" to whatever the
+          # planner returns first — which is how a run whose last act was
+          # tool_called showed run_started instead.
+          order_by: [asc: e.session_id, desc: e.occurred_at, desc: e.id],
+          select: {e.session_id, e.name}
+      )
+      |> Map.new()
+
+    Enum.map(sessions, fn session ->
+      session
+      |> Map.put(:events, Map.get(counts, session.id, 0))
+      |> Map.put(:last_event, Map.get(latest, session.id))
+    end)
   end
 
   # Every minute of the last thirty, including the quiet ones, and a session

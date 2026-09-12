@@ -1243,9 +1243,58 @@ defmodule WebAnalytics.Analytics do
       )
 
     totals
-    |> Map.put(:sessions_list, sessions)
+    |> Map.put(:sessions_list, with_events(sessions))
     |> Map.put(:series, concurrent_series(base, now))
     |> Map.put(:as_of, now)
+  end
+
+  # What each listed visit has reported, for the same reason the admin panel
+  # needs it: an AI tool has no page, no pageview and no dwell by construction,
+  # so a live row for one is a line of em dashes unless its events are on it.
+  #
+  # Two small queries against the listed ids, so the panel's own limit bounds
+  # the work rather than the size of the account.
+  defp with_events([]), do: []
+
+  defp with_events(sessions) do
+    ids = Enum.map(sessions, & &1.id)
+
+    counts =
+      Repo.all(
+        from e in Event,
+          where: e.session_id in ^ids and not is_nil(e.name),
+          group_by: e.session_id,
+          select: {e.session_id, count(e.id)}
+      )
+      |> Map.new()
+
+    # DISTINCT ON gets the newest row per session; an aggregate can give the
+    # latest time but not the name that came with it.
+    latest =
+      Repo.all(
+        from e in Event,
+          where: e.session_id in ^ids and not is_nil(e.name),
+          distinct: e.session_id,
+          # id breaks the tie. Events reported in one batch share a timestamp,
+          # so ordering on occurred_at alone leaves "latest" to whatever the
+          # planner returns first — which is how a run whose last act was
+          # tool_called showed run_started instead.
+          order_by: [asc: e.session_id, desc: e.occurred_at, desc: e.id],
+          select: {e.session_id, e.name}
+      )
+      |> Map.new()
+
+    # Flattened to a plain map rather than wrapped, so the template keeps
+    # reaching for session.field and simply gains two more. A struct cannot
+    # carry keys it did not declare, and a wrapper would mean rewriting every
+    # cell in the row to say row.session.whatever.
+    Enum.map(sessions, fn session ->
+      session
+      |> Map.from_struct()
+      |> Map.drop([:__meta__])
+      |> Map.put(:events, Map.get(counts, session.id, 0))
+      |> Map.put(:last_event, Map.get(latest, session.id))
+    end)
   end
 
   @doc "The two live windows, in milliseconds, for anything that has to label them."

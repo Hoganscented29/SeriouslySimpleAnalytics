@@ -195,6 +195,61 @@ defmodule WebAnalytics.AdminTest do
     end
   end
 
+  describe "the live panel and AI traffic" do
+    test "an AI run shows what it reported, not a row of dashes" do
+      site = site_fixture(%{key: "live-ai"})
+      now = DateTime.utc_now()
+
+      {:ok, _} =
+        Ingest.submit_sync(
+          site,
+          payload(site, [init_event(), event_event("run_started"), event_event("tool_called")],
+            token: "one-run"
+          ),
+          received_at: now
+        )
+
+      WebAnalytics.Repo.update_all(
+        from(s in WebAnalytics.Tracking.Session, where: s.token == "one-run"),
+        set: [channel: "ai", project: "my-agent", last_seen_at: now]
+      )
+
+      [row] = Admin.active_now(%{Admin.scope() | channel: "ai"}, now).sessions_list
+
+      # A tool reporting through the ping API has no host, no entry path, no
+      # pageviews and no dwell by construction. Every column except this one is
+      # a dash for it, so without the events the row says nothing at all.
+      assert row.host == nil
+      assert row.entry_path == nil
+      assert row.pageviews == 0
+
+      assert row.events == 2
+      assert row.last_event == "tool_called"
+    end
+
+    test "a session with no events says so rather than claiming zero" do
+      site = site_fixture(%{key: "live-quiet"})
+      now = DateTime.utc_now()
+
+      {:ok, _} =
+        Ingest.submit_sync(
+          site,
+          payload(site, [init_event(), pageview_event(1, "/")], token: "quiet"),
+          received_at: now
+        )
+
+      WebAnalytics.Repo.update_all(
+        from(s in WebAnalytics.Tracking.Session, where: s.token == "quiet"),
+        set: [last_seen_at: now]
+      )
+
+      [row] = Admin.active_now(Admin.scope(), now).sessions_list
+
+      assert row.events == 0
+      assert row.last_event == nil
+    end
+  end
+
   describe "counters/1" do
     test "an empty deployment reports zeros rather than failing" do
       counters = Admin.counters()

@@ -427,8 +427,18 @@
                   />
                 </td>
                 <td class="whitespace-nowrap text-xs">{relative(session.last_seen_at)}</td>
+                <%!-- A browser answers "what are they on" with a page. A tool
+                reporting through the ping API has none, and answers with the
+                last thing it reported — which is the only column on its row
+                that is not a dash. --%>
                 <td class="max-w-[12rem] truncate" title={session.exit_path}>
-                  {display_name(session.exit_path)}
+                  <span :if={session.last_event} class="font-mono text-xs">
+                    {session.last_event}
+                  </span>
+                  <span :if={session.events > 1} class="text-base-content/40 text-[10px]">
+                    · {number(session.events)} events
+                  </span>
+                  <span :if={is_nil(session.last_event)}>{display_name(session.exit_path)}</span>
                 </td>
                 <td
                   class="max-w-[10rem] truncate text-xs text-base-content/60"

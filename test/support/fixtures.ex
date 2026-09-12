@@ -84,6 +84,17 @@ defmodule WebAnalytics.Fixtures do
     )
   end
 
+  @doc """
+  A named event, the shape an AI tool reports.
+
+  Distinct from click_event/1 because these are what a tool reports instead of
+  pageviews, and a live panel that shows nothing for them is the reason this
+  fixture exists.
+  """
+  def event_event(name, overrides \\ %{}) do
+    Map.merge(%{"n" => "event", "t" => 1_000_000, "name" => name, "pv" => 1}, overrides)
+  end
+
   def click_event(overrides \\ %{}) do
     Map.merge(
       %{
