@@ -139,15 +139,21 @@ jobs:
 
       - run: mix deps.get
 
-      # The same three tasks a deploy runs — tailwind, esbuild, phx.digest — so
-      # a broken Tailwind config, a bad @source glob or an esbuild failure is
-      # found here rather than by the deploy that serves an unstyled page.
+      # The same order deploy/setup.sh uses: deps.get, compile, assets.deploy.
       #
-      # Left in dev on purpose: the prod environment evaluates runtime.exs,
-      # which raises without DATABASE_URL and SECRET_KEY_BASE, and handing CI
-      # production secrets to compile some CSS is a bad trade. The three tasks
-      # are the same either way.
+      # The compile is not optional and not merely faster. app.css imports
+      # phoenix-colocated/web_analytics/colocated.css, which the compiler
+      # generates from colocated hooks — so on a clean checkout Tailwind cannot
+      # resolve that import until the app has been compiled once. Skipping it
+      # here is what made this job fail on its first run, while it passed
+      # locally against a _build left over from earlier work.
+      #
+      # Left in dev on purpose: prod evaluates runtime.exs, which raises without
+      # DATABASE_URL and SECRET_KEY_BASE, and handing CI production secrets to
+      # compile some CSS is a bad trade for tasks that behave the same either
+      # way.
       - name: Build assets the way deploy does
         run: |
+          mix compile
           mix assets.setup
           mix assets.deploy
