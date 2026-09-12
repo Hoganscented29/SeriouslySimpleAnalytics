@@ -58,6 +58,40 @@ defmodule WebAnalytics.AnalyticsTest do
     Analytics.filters(site.id, Map.merge(%{range: "30d"}, opts))
   end
 
+  describe "bounce rate" do
+    test "counts a visit that did not last ten seconds, however many pages", %{site: site} do
+      # Two pages in four seconds is someone who arrived, saw the wrong thing
+      # and left. Counting pages instead of time would score this a success.
+      submit(site, [
+        init_event(),
+        pageview_event(1, "/", %{"title" => "Home"}),
+        pageview_event(2, "/pricing", %{"title" => "Pricing", "fp" => "/", "ft" => "Home"}),
+        tick_event(2, %{"d" => 4_000, "am" => 4_000})
+      ])
+
+      overview = Analytics.overview(filters(site))
+
+      assert overview.sessions == 2
+      assert overview.bounce_rate == 50.0
+    end
+
+    test "a single page held for a long time is not a bounce", %{site: site} do
+      # The point of counting time rather than pages: someone who reads one
+      # long answer and leaves got what they came for. A pageview-count rule
+      # calls that a bounce.
+      submit(site, [
+        init_event(),
+        pageview_event(1, "/docs", %{"title" => "Docs"}),
+        tick_event(1, %{"d" => 90_000, "am" => 80_000})
+      ])
+
+      overview = Analytics.overview(filters(site))
+
+      assert overview.sessions == 2
+      assert overview.bounce_rate == 0.0
+    end
+  end
+
   test "hides crawlers and anomalies from the overview by default", %{site: site} do
     overview = Analytics.overview(filters(site))
 

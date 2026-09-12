@@ -159,6 +159,14 @@ defmodule WebAnalytics.Analytics do
 
   # -- overview ------------------------------------------------------------
 
+  # A bounce is a visit that did not last. Counted on time rather than on
+  # pageview count because a one-page visit is not automatically a failure —
+  # someone who reads a long answer and leaves satisfied got what they came
+  # for, and a pageview-count rule calls that a bounce while calling ten
+  # seconds of frantic clicking a success. Ten seconds is the line: below it
+  # nobody has read anything.
+  @bounce_dwell_ms 10_000
+
   @doc "Headline numbers for the selected range and filter state."
   def overview(f) do
     totals =
@@ -174,7 +182,7 @@ defmodule WebAnalytics.Analytics do
             dwell_ms: avg(s.dwell_ms),
             active_ms: avg(s.active_ms),
             max_scroll: avg(s.max_scroll_pct),
-            bounces: filter(count(s.id), s.pageview_count <= 1)
+            bounces: filter(count(s.id), s.dwell_ms < @bounce_dwell_ms)
           }
       ) || %{}
 
@@ -973,7 +981,7 @@ defmodule WebAnalytics.Analytics do
           visitors: count(s.visitor_token, :distinct),
           pageviews: coalesce(sum(s.pageview_count), 0),
           dwell_ms: avg(s.dwell_ms),
-          bounces: filter(count(s.id), s.pageview_count <= 1)
+          bounces: filter(count(s.id), s.dwell_ms < @bounce_dwell_ms)
         }
     )
     |> finish_locations()
@@ -995,7 +1003,7 @@ defmodule WebAnalytics.Analytics do
           visitors: count(s.visitor_token, :distinct),
           pageviews: coalesce(sum(s.pageview_count), 0),
           dwell_ms: avg(s.dwell_ms),
-          bounces: filter(count(s.id), s.pageview_count <= 1)
+          bounces: filter(count(s.id), s.dwell_ms < @bounce_dwell_ms)
         }
     )
     |> finish_locations()
@@ -1018,7 +1026,7 @@ defmodule WebAnalytics.Analytics do
           visitors: count(s.visitor_token, :distinct),
           pageviews: coalesce(sum(s.pageview_count), 0),
           dwell_ms: avg(s.dwell_ms),
-          bounces: filter(count(s.id), s.pageview_count <= 1)
+          bounces: filter(count(s.id), s.dwell_ms < @bounce_dwell_ms)
         }
     )
     |> finish_locations()
@@ -1041,7 +1049,7 @@ defmodule WebAnalytics.Analytics do
           visitors: count(s.visitor_token, :distinct),
           pageviews: coalesce(sum(s.pageview_count), 0),
           dwell_ms: avg(s.dwell_ms),
-          bounces: filter(count(s.id), s.pageview_count <= 1)
+          bounces: filter(count(s.id), s.dwell_ms < @bounce_dwell_ms)
         }
     )
     |> finish_locations()
