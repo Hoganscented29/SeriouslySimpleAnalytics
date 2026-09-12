@@ -27,6 +27,27 @@
       </div>
     </div>
 
+    <%!-- Web and AI are two products sharing one deployment, and almost every
+    number below means something different for each: a crawler is noise in a
+    website report and the subject of an AI one, dwell is reading time on a
+    page and wall-clock on a tool run. One page mixing them answered neither
+    question, so the channel is a tab rather than a filter — the scope carries
+    it, so every panel narrows at once. --%>
+    <div role="tablist" class="tabs tabs-bordered">
+      <button
+        :for={channel <- channels()}
+        role="tab"
+        phx-click="channel"
+        phx-value-channel={channel || ""}
+        class={[
+          "tab",
+          @scope[:channel] == channel && "tab-active font-medium"
+        ]}
+      >
+        {channel_tab_label(channel)}
+      </button>
+    </div>
+
     <!-- what is narrowing the view -->
     <div
       :if={Admin.scoped?(@scope)}
@@ -489,8 +510,12 @@
         </div>
       </section>
 
-      <!-- channels -->
-      <section class="rounded-box bg-base-100 border border-base-300 p-5">
+      <%!-- Only on the All tab: a breakdown by channel inside one channel is a
+      table with a single row in it. --%>
+      <section
+        :if={is_nil(@scope[:channel])}
+        class="rounded-box bg-base-100 border border-base-300 p-5"
+      >
         <h2 class="text-sm font-medium mb-3">By channel, 30 days</h2>
         <table class="table table-xs">
           <tbody>
@@ -525,8 +550,12 @@
         </div>
       </section>
 
-      <!-- projects -->
-      <section class="rounded-box bg-base-100 border border-base-300 p-5">
+      <%!-- A project is what an AI tool calls itself. A website has none, so on
+      the Web tab this is an empty table asking a question that does not apply. --%>
+      <section
+        :if={@scope[:channel] != "web"}
+        class="rounded-box bg-base-100 border border-base-300 p-5"
+      >
         <h2 class="text-sm font-medium mb-3">Projects, 30 days — busiest first</h2>
         <div class="max-h-64 overflow-y-auto">
           <table class="table table-xs table-pin-rows">
@@ -564,8 +593,12 @@
         </div>
       </section>
 
-      <!-- domains -->
-      <section class="rounded-box bg-base-100 border border-base-300 p-5">
+      <%!-- A domain comes off a pageview's URL. An AI tool reporting through the
+      ping API has no host to report, so this belongs to web traffic. --%>
+      <section
+        :if={@scope[:channel] != "ai"}
+        class="rounded-box bg-base-100 border border-base-300 p-5"
+      >
         <h2 class="text-sm font-medium mb-3">Domains, 30 days — busiest first</h2>
         <div class="max-h-64 overflow-y-auto">
           <table class="table table-xs table-pin-rows">
@@ -607,8 +640,13 @@
     </div>
 
     <div class="grid lg:grid-cols-2 gap-6">
-      <!-- crawlers -->
-      <section class="rounded-box bg-base-100 border border-base-300 p-5">
+      <%!-- A crawler is something fetching a website. An AI tool that honestly
+      declares itself automated is the data here, not noise in front of it, so
+      this table is a web concern. --%>
+      <section
+        :if={@scope[:channel] != "ai"}
+        class="rounded-box bg-base-100 border border-base-300 p-5"
+      >
         <h2 class="text-sm font-medium mb-3">Crawlers, 30 days</h2>
         <div class="overflow-x-auto max-h-80 overflow-y-auto">
           <table class="table table-xs table-pin-rows">
@@ -639,7 +677,9 @@
 
       <!-- top paths -->
       <section class="rounded-box bg-base-100 border border-base-300 p-5">
-        <h2 class="text-sm font-medium mb-3">Pages, 7 days</h2>
+        <h2 class="text-sm font-medium mb-3">
+          {if @scope[:channel] == "ai", do: "Steps, 7 days", else: "Pages, 7 days"}
+        </h2>
         <div class="overflow-x-auto max-h-80 overflow-y-auto">
           <table class="table table-xs table-pin-rows">
             <thead>

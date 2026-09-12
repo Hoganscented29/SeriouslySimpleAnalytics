@@ -32,9 +32,15 @@ defmodule WebAnalytics.Admin do
   — are not narrowed by it, because they do not vary by domain, and the page
   hides them rather than showing a global number beside nine scoped ones.
   """
-  def scope, do: %{domain: nil, project: nil, origins: [], sessions: []}
+  def scope, do: %{domain: nil, project: nil, origins: [], sessions: [], channel: nil}
+
+  @doc "The channels the admin page can be narrowed to, in tab order."
+  def channels, do: [nil, "web", "ai"]
 
   @doc "Whether anything is narrowing the view."
+  # The channel is deliberately not counted. It is a tab rather than a filter,
+  # and a "you are looking at a filtered view" banner on every tab but the
+  # first would be noise that teaches the reader to ignore the banner.
   def scoped?(%{domain: nil, project: nil} = scope),
     do: Map.get(scope, :origins, []) != [] or Map.get(scope, :sessions, []) != []
 
@@ -80,6 +86,16 @@ defmodule WebAnalytics.Admin do
       case scope[:project] do
         nil -> q
         project -> where(q, [session: s], s.project == ^project)
+      end
+    end)
+    # A session recorded before the column existed has a null channel and is
+    # web traffic — the same coalesce every web-facing query in this codebase
+    # uses, rather than a second rule for this one screen to disagree with.
+    |> then(fn q ->
+      case scope[:channel] do
+        "web" -> where(q, [session: s], coalesce(s.channel, "web") == "web")
+        "ai" -> where(q, [session: s], s.channel == "ai")
+        _ -> q
       end
     end)
   end

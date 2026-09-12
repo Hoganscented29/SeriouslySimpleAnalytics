@@ -75,6 +75,74 @@ defmodule WebAnalytics.AdminTest do
     end
   end
 
+  describe "the channel scope" do
+    setup do
+      site = site_fixture(%{key: "channels-scope"})
+
+      # A website visit and an AI tool's own telemetry, which is what the two
+      # tabs exist to stop mixing.
+      {:ok, _} =
+        Ingest.submit_sync(
+          site,
+          payload(site, [init_event(), pageview_event(1, "/web-page")], token: "web-one"),
+          received_at: DateTime.utc_now()
+        )
+
+      {:ok, _} =
+        Ingest.submit_sync(
+          site,
+          payload(site, [init_event(), pageview_event(1, "/run")], token: "ai-one"),
+          received_at: DateTime.utc_now()
+        )
+
+      WebAnalytics.Repo.update_all(
+        from(s in WebAnalytics.Tracking.Session, where: s.token == "ai-one"),
+        set: [channel: "ai", project: "my-agent"]
+      )
+
+      %{site: site}
+    end
+
+    test "no channel means both" do
+      assert Admin.counters(%{Admin.scope() | channel: nil}).sessions == 2
+    end
+
+    test "web and ai each see only their own" do
+      assert Admin.counters(%{Admin.scope() | channel: "web"}).sessions == 1
+      assert Admin.counters(%{Admin.scope() | channel: "ai"}).sessions == 1
+    end
+
+    test "a session recorded before the channel column existed counts as web" do
+      # Null means web everywhere else in this codebase, and this screen must
+      # not be the one place that disagrees.
+      WebAnalytics.Repo.update_all(
+        from(s in WebAnalytics.Tracking.Session, where: s.token == "web-one"),
+        set: [channel: nil]
+      )
+
+      assert Admin.counters(%{Admin.scope() | channel: "web"}).sessions == 1
+      assert Admin.counters(%{Admin.scope() | channel: "ai"}).sessions == 1
+    end
+
+    test "the tab is not treated as a filter" do
+      # A "filtered view" banner on every tab but the first is noise that
+      # teaches the reader to ignore the banner.
+      refute Admin.scoped?(%{Admin.scope() | channel: "ai"})
+      assert Admin.scoped?(%{Admin.scope() | domain: "example.com"})
+    end
+
+    test "it reaches the panels, not just the counters" do
+      web = Admin.detail(%{Admin.scope() | channel: "web"})
+      ai = Admin.detail(%{Admin.scope() | channel: "ai"})
+
+      assert Enum.any?(web.top_paths, &(&1.path == "/web-page"))
+      refute Enum.any?(web.top_paths, &(&1.path == "/run"))
+
+      assert Enum.any?(ai.top_paths, &(&1.path == "/run"))
+      assert Enum.any?(ai.projects, &(&1.project == "my-agent"))
+    end
+  end
+
   describe "counters/1" do
     test "an empty deployment reports zeros rather than failing" do
       counters = Admin.counters()

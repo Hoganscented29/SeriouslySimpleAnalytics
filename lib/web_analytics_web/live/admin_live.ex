@@ -59,7 +59,8 @@ defmodule WebAnalyticsWeb.AdminLive do
       domain: blank_to_nil(params["domain"]),
       project: blank_to_nil(params["project"]),
       origins: origins_param(params["noip"]),
-      sessions: sessions_param(params["nosess"])
+      sessions: sessions_param(params["nosess"]),
+      channel: channel_param(params["channel"])
     }
 
     socket = assign(socket, :scope, scope)
@@ -134,7 +135,18 @@ defmodule WebAnalyticsWeb.AdminLive do
   end
 
   def handle_event("clear_filter", _params, socket) do
-    {:noreply, push_patch(socket, to: ~p"/admin")}
+    # Keeps the tab: clearing a domain filter should not also throw away which
+    # half of the traffic the reader was looking at.
+    {:noreply,
+     push_patch(socket,
+       to: admin_path(%{Admin.scope() | channel: socket.assigns.scope[:channel]}, [], [])
+     )}
+  end
+
+  def handle_event("channel", %{"channel" => channel}, socket) do
+    scope = %{socket.assigns.scope | channel: channel_param(channel)}
+
+    {:noreply, push_patch(socket, to: admin_path(scope, scope.origins, scope.sessions))}
   end
 
   # Unticking a row filters out that origin, not the one session: a single
@@ -183,6 +195,7 @@ defmodule WebAnalyticsWeb.AdminLive do
       [
         {"domain", scope.domain},
         {"project", scope.project},
+        {"channel", scope[:channel]},
         {"noip", if(origins == [], do: nil, else: Enum.join(origins, ","))},
         {"nosess", if(sessions == [], do: nil, else: Enum.join(sessions, ","))}
       ]
@@ -205,6 +218,17 @@ defmodule WebAnalyticsWeb.AdminLive do
   end
 
   defp origins_param(_), do: []
+
+  # Anything but the two known channels means "all of them", so a hand-edited
+  # parameter lands on the first tab rather than on an empty page.
+  defp channel_param(value) when value in ["web", "ai"], do: value
+  defp channel_param(_), do: nil
+
+  defp channels, do: Admin.channels()
+
+  def channel_tab_label(nil), do: "All"
+  def channel_tab_label("web"), do: "Web"
+  def channel_tab_label("ai"), do: "AI"
 
   defp sessions_param(nil), do: []
 
