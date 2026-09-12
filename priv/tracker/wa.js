@@ -707,66 +707,81 @@
 
   // ---------------------------------------------------------------- clicks
 
-  // Outbound clicks are recorded on mousedown and sent straight away. Waiting
-  // for the click event risks losing them: the browser may already be tearing
-  // the document down, and a queued beacon dies with it. This is also why the
-  // same element is then suppressed for a moment — the click that follows the
-  // mousedown is the same interaction, not a second one.
-  var lastOutbound = { el: null, at: 0 };
+  // Everything is recorded on mousedown, not on click.
+  //
+  // A click event only fires after mouseup, and by then a navigation may
+  // already be tearing the document down — taking the queue with it. Pressing
+  // is also the moment the reader decided; the release adds nothing we record.
+  //
+  // The click that follows is the second half of the same interaction, so it is
+  // consumed rather than counted. Consumed, not suppressed for a time window:
+  // one mousedown cancels exactly one following click, so somebody clicking the
+  // same button four times in two seconds is still four clicks.
+  var pendingClick = { el: null, at: 0 };
 
-  function recordOutbound(el, event, trigger) {
+  function record(el, event, trigger) {
     var verdict = classify(el);
-    if (!verdict.outbound) return false;
 
-    lastOutbound = { el: el, at: Date.now() };
+    // One gate per kind, checked here rather than in each handler, so every
+    // entry point honours both flags the same way.
+    if (verdict.outbound ? !config.trackOutbound : !config.trackClicks) return false;
+
     enqueue(describe(el, event, verdict, trigger));
-    flushNow();
-    log('outbound', verdict.kind, verdict.url && verdict.url.href);
+
+    // Sent immediately only when this page is about to be replaced: a queued
+    // beacon dies with the document. A button that opens a menu, or a link
+    // opening in a new tab, leaves this page alive and can ride the heartbeat
+    // like everything else.
+    if (verdict.outbound || (verdict.url && !opensNewTab(el, event))) flushNow();
+
+    log('click', trigger, verdict.kind, verdict.url && verdict.url.href);
     return true;
   }
 
   function onMouseDown(event) {
     interacted();
-    if (!config.trackOutbound) return;
+
+    // Primary and middle only. Button 2 opens a context menu, which is not an
+    // activation of anything.
     if (event.button !== 0 && event.button !== 1) return;
 
     var el = interactiveAncestor(event.target);
     if (!el || ignored(el)) return;
-    recordOutbound(el, event, event.button === 1 ? 'auxdown' : 'mousedown');
+
+    if (record(el, event, event.button === 1 ? 'auxdown' : 'mousedown')) {
+      pendingClick = { el: el, at: Date.now() };
+    }
   }
 
+  // Kept as a fallback rather than removed. A scripted .click(), a <label>
+  // forwarding activation to its control, and some assistive technology all
+  // produce a click with no mousedown in front of it, and those are real
+  // interactions that would otherwise go unrecorded.
   function onClick(event) {
     interacted();
-    if (!config.trackClicks) return;
 
     var el = interactiveAncestor(event.target);
     if (!el || ignored(el)) return;
 
-    // Already captured on mousedown.
-    if (el === lastOutbound.el && Date.now() - lastOutbound.at < 2000) return;
-
-    var verdict = classify(el);
-    if (verdict.outbound && config.trackOutbound) {
-      recordOutbound(el, event, 'click');
+    if (pendingClick.el === el && Date.now() - pendingClick.at < 2000) {
+      pendingClick = { el: null, at: 0 };
       return;
     }
 
-    enqueue(describe(el, event, verdict, 'click'));
+    record(el, event, 'click');
   }
 
   function onKeyDown(event) {
     interacted();
-    if (!config.trackClicks) return;
     if (event.key !== 'Enter' && event.key !== ' ' && event.keyCode !== 13) return;
 
     var el = interactiveAncestor(event.target);
     if (!el || ignored(el)) return;
 
-    var verdict = classify(el);
-    if (verdict.outbound && config.trackOutbound) {
-      recordOutbound(el, event, 'keydown');
-    } else {
-      enqueue(describe(el, event, verdict, 'keydown'));
+    // Enter on a button also fires a click. Recorded here for the trigger, and
+    // the click it produces is consumed the same way a mousedown's is.
+    if (record(el, event, 'keydown')) {
+      pendingClick = { el: el, at: Date.now() };
     }
   }
 
@@ -1096,7 +1111,7 @@
 
     document.addEventListener('mousedown', onMouseDown, true);
     document.addEventListener('click', onClick, true);
-    document.addEventListener('auxclick', onMouseDown, true);
+    document.addEventListener('auxclick', onClick, true);
     document.addEventListener('keydown', onKeyDown, true);
 
     document.addEventListener('input', onInput, true);
