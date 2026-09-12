@@ -254,13 +254,13 @@ defmodule WebAnalyticsWeb.DashboardComponents do
               text-anchor={label_anchor(node)}
               dominant-baseline={label_baseline(node)}
               class={[
-                "text-[11px] fill-current",
+                "wa-flow-label text-[11px] font-mono fill-current",
                 node.clickable && "text-base-content/80",
                 !node.clickable && "text-base-content/40 italic",
                 @click && node.clickable && "hover:text-primary hover:underline"
               ]}
             >
-              {truncate(node.name, 30)}
+              {truncate(node.name, label_length(node))}
             </text>
           </g>
         </svg>
@@ -299,22 +299,34 @@ defmodule WebAnalyticsWeb.DashboardComponents do
   defp node_color(%{side: :middle}), do: "text-accent"
   defp node_color(_node), do: "text-secondary"
 
-  # Where a node's label sits, which is the whole reason the middle column
-  # needs its own case: left of the first column, right of the last, above the
-  # one in between.
+  # Where a node's label sits.
+  #
+  # The outer two read outward into empty margin, away from the ribbons. The
+  # middle one has no margin to read into, so it is centred on its own node and
+  # relies on the halo to stay legible over the bands crossing behind it —
+  # above the node, which is where it used to sit, it collided with the label
+  # of the node above whenever the nodes were thin.
   defp label_x(%{side: :source} = node), do: node.x - 8
   defp label_x(%{side: :middle} = node), do: node.x + @node_width / 2
-  defp label_x(node), do: node.x + 20
+  defp label_x(node), do: node.x + @node_width + 8
 
-  defp label_y(%{side: :middle} = node), do: node.y - 5
   defp label_y(node), do: node.y + node.height / 2
 
   defp label_anchor(%{side: :source}), do: "end"
   defp label_anchor(%{side: :middle}), do: "middle"
   defp label_anchor(_node), do: "start"
 
-  defp label_baseline(%{side: :middle}), do: "auto"
   defp label_baseline(_node), do: "middle"
+
+  # Monospace is wider than the proportional font this used to use, so the
+  # truncation has to know how much room each column actually has: the margin
+  # outside the outer columns, and the gap between columns for the middle one.
+  # Sized against the room each column actually has, at roughly 6.6px a glyph:
+  # the outer labels read into the margin (about 180px), the middle one into
+  # the gap between columns. 28 outer characters would run past the right edge
+  # of the 900-wide viewBox.
+  defp label_length(%{side: :middle}), do: 24
+  defp label_length(_node), do: 26
 
   @doc false
   # Three columns centred on one page: inbound on the left, the page itself in

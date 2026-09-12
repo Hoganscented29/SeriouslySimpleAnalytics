@@ -104,6 +104,42 @@ defmodule WebAnalytics.AnalyticsTest do
     end
   end
 
+  describe "the clicks report" do
+    test "the default grouping shows a click nobody named", %{site: site} do
+      # `name` comes from an opt-in data-wa-name attribute that real pages do
+      # not carry, and this grouping filtered on it being present — so the
+      # default view of the Clicks tab was empty on sites where every click had
+      # been recorded, tag, text, href and all.
+      rows = Analytics.clicks(filters(site), :name, 20)
+
+      assert rows != []
+      assert Enum.all?(rows, &is_binary(&1.name))
+      refute Enum.any?(rows, &(&1.name == ""))
+    end
+
+    test "an explicit name still wins over the fallbacks", %{site: site} do
+      submit(site, [
+        init_event(),
+        pageview_event(1, "/named"),
+        click_event(%{"id" => "ignored-id", "nm" => "Checkout button", "txt" => "Buy"}),
+        tick_event(1, %{"d" => 20_000})
+      ])
+
+      names = Analytics.clicks(filters(site), :name, 20) |> Enum.map(& &1.name)
+
+      assert "Checkout button" in names
+      refute "ignored-id" in names
+    end
+
+    test "a custom event is not a click and stays out of the report", %{site: site} do
+      rows = Analytics.clicks(filters(site), :tag, 20)
+
+      # The :class grouping always excluded them; the others did not, so the
+      # same tab disagreed with itself depending on how it was grouped.
+      refute Enum.any?(rows, &(&1.name == "custom"))
+    end
+  end
+
   describe "page flow" do
     test "derives the previous page when the client never sent one", %{site: site} do
       # Three pages, no `fp` on any of them: a restored tab, a browser refusing

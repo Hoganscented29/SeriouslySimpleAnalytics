@@ -360,7 +360,8 @@ defmodule WebAnalytics.IngestTest do
     test "an address is masked to its first and last group, and never stored whole" do
       # The masked form is the only address data written anywhere, so these are
       # the values that end up in the database.
-      assert WebAnalytics.Ingest.mask_ip("203.0.113.42") == "203.•••.•••.42"
+      # Kept groups are zero-padded to full width, so a column of these lines up.
+      assert WebAnalytics.Ingest.mask_ip("203.0.113.42") == "203.•••.•••.042"
       assert WebAnalytics.Ingest.mask_ip("192.168.100.254") == "192.•••.•••.254"
 
       # Colon-separated addresses get the same treatment.
@@ -368,14 +369,14 @@ defmodule WebAnalytics.IngestTest do
                "2001:•••:•••:•••:•••:•••:7334"
 
       # A fixed-width mask, so the length of what is hidden does not leak.
-      assert WebAnalytics.Ingest.mask_ip("8.8.8.8") == "8.•••.•••.8"
+      assert WebAnalytics.Ingest.mask_ip("8.8.8.8") == "008.•••.•••.008"
 
       # An IPv4 client on a dual-stack listener arrives in mapped form, which
       # is the normal case behind a proxy rather than an oddity. Its last
       # colon-group is a whole IPv4 address, so masking "between the ends"
       # kept every digit of it.
-      assert WebAnalytics.Ingest.mask_ip("::ffff:203.0.113.42") == "203.•••.•••.42"
-      assert WebAnalytics.Ingest.mask_ip("::ffff:127.0.0.1") == "127.•••.•••.1"
+      assert WebAnalytics.Ingest.mask_ip("::ffff:203.0.113.42") == "203.•••.•••.042"
+      assert WebAnalytics.Ingest.mask_ip("::ffff:127.0.0.1") == "127.•••.•••.001"
 
       # Nothing gets through unmasked, whatever shape it arrives in.
       for input <- ["203.0.113.42", "8.8.8.8", "127.0.0.1", "localhost", "::1"] do
@@ -397,7 +398,7 @@ defmodule WebAnalytics.IngestTest do
 
       session = Repo.one(from s in Session, where: s.site_id == ^site.id)
 
-      assert session.ip_masked == "203.•••.•••.42"
+      assert session.ip_masked == "203.•••.•••.042"
     end
 
     test "a session that resumes without its entry pageview still gets a host" do

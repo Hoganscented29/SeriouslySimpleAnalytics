@@ -108,6 +108,16 @@ defmodule WebAnalytics.Ingest do
     end
   end
 
+  # Kept groups are zero-padded to their full width, so every masked address is
+  # the same length and a column of them lines up: 8.8.8.8 reads 008.•••.•••.008
+  # rather than 8.•••.•••.8. The padding says nothing the address did not
+  # already say — a group is three digits in IPv4 and four in IPv6 whether or
+  # not it is written that way.
+  defp pad(group, separator) do
+    width = if separator == ":", do: 4, else: 3
+    String.pad_leading(group, width, "0")
+  end
+
   defp mask_separated(ip, separator) do
     case String.split(ip, separator) do
       # Nothing to hide between the ends, so hide everything past the first
@@ -116,11 +126,15 @@ defmodule WebAnalytics.Ingest do
         String.slice(only, 0, 1) <> "•••"
 
       [first, _last] ->
-        first <> separator <> "•••"
+        pad(first, separator) <> separator <> "•••"
 
       [first | rest] ->
         middle = rest |> Enum.drop(-1) |> Enum.map(fn _ -> "•••" end)
-        Enum.join([first | middle] ++ [List.last(rest)], separator)
+
+        Enum.join(
+          [pad(first, separator) | middle] ++ [pad(List.last(rest), separator)],
+          separator
+        )
     end
   end
 

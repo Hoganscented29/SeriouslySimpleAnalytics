@@ -340,3 +340,19 @@
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }
+
+/* Flow-diagram labels.
+   Paths sit on top of the ribbons, and a path over a band of colour is
+   unreadable at eleven pixels. `paint-order: stroke fill` draws the stroke
+   first, so a halo in the page's own background colour goes *behind* the
+   glyphs rather than over them — legible in both themes without a rectangle
+   behind every label. Rounded joins stop the halo spiking at sharp corners. */
+.wa-flow-label {
+  paint-order: stroke fill;
+  stroke: var(--color-base-100);
+  stroke-width: 3.5px;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  /* The halo is decoration; it must never swallow a click on the label. */
+  pointer-events: none;
+}

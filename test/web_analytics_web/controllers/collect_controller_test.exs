@@ -105,7 +105,7 @@ defmodule WebAnalyticsWeb.CollectControllerTest do
 
       # Without this, every visitor behind the proxy is the loopback address:
       # one origin for the whole site and no city on any session.
-      assert session.ip_masked == "203.•••.•••.42"
+      assert session.ip_masked == "203.•••.•••.042"
     end
 
     test "ignores the header when the deployment does not", %{conn: conn, site: site} do
@@ -122,7 +122,7 @@ defmodule WebAnalyticsWeb.CollectControllerTest do
 
       # A deployment reachable directly must not believe a header the client
       # sets, so the socket address wins.
-      refute session.ip_masked == "203.•••.•••.42"
+      refute session.ip_masked == "203.•••.•••.042"
     end
 
     test "takes the first entry, which the proxy must therefore overwrite",
@@ -141,7 +141,7 @@ defmodule WebAnalyticsWeb.CollectControllerTest do
       # This is why deploy/setup.sh sets the header to $remote_addr rather than
       # $proxy_add_x_forwarded_for: appending would put the client's own claim
       # first, and the client's claim would win.
-      assert session.ip_masked == "203.•••.•••.42"
+      assert session.ip_masked == "203.•••.•••.042"
     end
   end
 

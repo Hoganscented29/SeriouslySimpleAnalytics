@@ -710,10 +710,54 @@ defmodule WebAnalytics.Analytics do
     )
   end
 
+  # "Name" is the question "what is this element called", and for almost every
+  # element on a real page nobody has answered it: `name` comes from an opt-in
+  # data-wa-name attribute that nothing carries by default. Grouping on that
+  # alone, with a not-null filter, made this — the default view of the Clicks
+  # tab — empty on sites where every click had in fact been recorded. The rows
+  # were in the database with a tag, a text and an href on them; the one column
+  # being grouped was the only one nobody had filled in.
+  #
+  # So it falls through to what a page always has. The explicit attribute still
+  # wins where somebody set it, which is the whole point of having it.
+  #
+  # The fragment is repeated in GROUP BY rather than referenced through
+  # selected_as: Postgres resolves a GROUP BY name against input columns first,
+  # and `name` is one of them, so the alias would silently group by e.name —
+  # exactly the column this clause exists to stop relying on.
+  def clicks(f, :name, limit) do
+    Repo.all(
+      from e in events_scope(f),
+        where: e.type != "custom",
+        group_by:
+          fragment(
+            "COALESCE(NULLIF(?, ''), NULLIF(?, ''), NULLIF(?, ''), ?)",
+            e.name,
+            e.text,
+            e.el_id,
+            e.tag
+          ),
+        order_by: [desc: count(e.id)],
+        limit: ^limit,
+        select: %{
+          name:
+            fragment(
+              "COALESCE(NULLIF(?, ''), NULLIF(?, ''), NULLIF(?, ''), ?)",
+              e.name,
+              e.text,
+              e.el_id,
+              e.tag
+            ),
+          count: count(e.id),
+          sessions: count(e.session_id, :distinct),
+          outbound: filter(count(e.id), e.outbound)
+        }
+    )
+  end
+
   def clicks(f, group, limit) do
     key =
       case group do
-        :name -> :name
         :id -> :el_id
         :text -> :text
         :selector -> :selector
@@ -723,6 +767,10 @@ defmodule WebAnalytics.Analytics do
 
     Repo.all(
       from e in events_scope(f),
+        # A custom event from track() is not a click and does not belong in a
+        # report about them. The :class clause always filtered it out; this one
+        # did not, so the same tab disagreed with itself depending on grouping.
+        where: e.type != "custom",
         where: not is_nil(field(e, ^key)),
         group_by: field(e, ^key),
         order_by: [desc: count(e.id)],
