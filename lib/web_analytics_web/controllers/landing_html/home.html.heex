@@ -48,10 +48,9 @@
         </p>
       </div>
       <div class="rounded-box bg-base-100 border border-base-300 p-5">
-        <div class="text-sm font-medium">Free, and self-hostable</div>
+        <div class="text-sm font-medium">Free</div>
         <p class="mt-2 text-sm text-base-content/60">
-          No plan, no event quota, no sampling above some traffic line. Run our copy or run it on
-          your own box against your own Postgres.
+          No plan, no event quota, no sampling above a traffic line. Everything should just work.
         </p>
       </div>
       <div class="rounded-box bg-base-100 border border-base-300 p-5">
@@ -75,29 +74,49 @@
       <div class="mt-8 grid md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div
           :for={
-            item <- [
-              {"Free Unlimited Analytics",
-               "Unmetered metrics for your website, beautifully displayed."},
-              {"Dwell vs. engaged time",
-               "Counted separately. A tab left open all afternoon is hours of dwell and almost no engagement."},
-              {"Max scroll depth", "How far down each page a visitor actually got."},
-              {"Page-to-page flow",
-               "By URL or title. Click any page to re-centre the diagram and follow a route."},
-              {"Outbound clicks", "Caught on mousedown, before the browser tears the page down."},
-              {"Every button and link",
-               "Grouped by the id, class and text already on the element. No tagging plan."},
-              {"Forms, field by field",
-               "On submit and on abandonment. Passwords are masked in the browser and never sent."},
-              {"City, county, state, country",
-               "Resolved at ingest; the address is used for the lookup and then discarded."},
-              {"Junk filtered, not hidden",
-               "Impossible dwell times are held back by default, with the reason shown and a toggle to see them."}
+            {item, index} <-
+              Enum.with_index([
+                {"Free Unlimited Analytics",
+                 "Unmetered metrics for your website, beautifully displayed."},
+                {"Dwell vs. engaged time",
+                 "Counted separately. A tab left open all afternoon is hours of dwell and almost no engagement."},
+                {"Max scroll depth", "How far down each page a visitor actually got."},
+                {"Page-to-page flow",
+                 "By URL or title. Click any page to re-centre the diagram and follow a route."},
+                {"Outbound clicks",
+                 "Caught on mousedown, before the browser tears the page down."},
+                {"Every button and link",
+                 "Grouped by the id, class and text already on the element. No tagging plan."},
+                {"Forms, field by field",
+                 "On submit and on abandonment. Passwords are masked in the browser and never sent."},
+                {"City, county, state, country",
+                 "Resolved at ingest; the address is used for the lookup and then discarded."},
+                {"Junk filtered, not hidden",
+                 "Impossible dwell times are held back by default, with the reason shown and a toggle to see them."}
+              ])
+          }
+          class={
+            [
+              "rounded-box p-5",
+              # The first card answers what it costs. Everything after it describes
+              # behaviour, which is a question you only reach once that one is
+              # settled — so it carries the emphasis rather than sitting level
+              # with the rest.
+              index == 0 && "border-2 border-primary bg-primary/5",
+              index != 0 && "border border-base-300"
             ]
           }
-          class="rounded-box border border-base-300 p-5"
         >
-          <div class="text-sm font-medium">{elem(item, 0)}</div>
-          <p class="mt-2 text-sm text-base-content/60">{elem(item, 1)}</p>
+          <div class={["text-sm font-medium", index == 0 && "text-primary"]}>
+            {elem(item, 0)}
+          </div>
+          <p class={[
+            "mt-2 text-sm",
+            index == 0 && "text-base-content/80",
+            index != 0 && "text-base-content/60"
+          ]}>
+            {elem(item, 1)}
+          </p>
         </div>
       </div>
     </div>
