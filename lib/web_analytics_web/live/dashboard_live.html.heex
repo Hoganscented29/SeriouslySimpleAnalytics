@@ -957,6 +957,60 @@
             else: "Click any page to follow its traffic."}
         </div>
 
+        <%!-- Three steps, not two. A pair says which page follows which; three
+        says what the route actually was — whether the people who reached
+        checkout came through teams, or got there some other way. --%>
+        <div class="rounded-box bg-base-100 border border-base-300 overflow-hidden">
+          <div class="px-4 py-3 border-b border-base-300 flex items-baseline justify-between gap-3 flex-wrap">
+            <span class="text-sm font-medium">Three-step journeys</span>
+            <span class="text-xs text-base-content/40">most travelled first</span>
+          </div>
+
+          <% journeys = @data[:journeys] || [] %>
+          <% busiest = journeys |> Enum.map(& &1.count) |> Enum.max(fn -> 0 end) %>
+
+          <div :if={journeys == []} class="px-4 py-8 text-center text-sm text-base-content/50">
+            No visit in this range reached a third page.
+          </div>
+
+          <div
+            :for={journey <- journeys}
+            class="px-4 py-2.5 border-b border-base-200 last:border-0 transition-colors hover:bg-base-200/50"
+          >
+            <div class="flex items-center gap-2 flex-wrap text-xs">
+              <span
+                :for={
+                  {step, index} <- Enum.with_index([journey.first, journey.second, journey.third])
+                }
+                class="contents"
+              >
+                <span :if={index > 0} class="text-base-content/30" aria-hidden="true">→</span>
+                <button
+                  phx-click="select_page"
+                  phx-value-page={step}
+                  class="font-mono px-2 py-1 rounded bg-base-200 hover:bg-primary/20 transition-colors max-w-[14rem] truncate"
+                  title={step}
+                >
+                  {display_name(step)}
+                </button>
+              </span>
+              <span class="flex-1"></span>
+              <span class="tabular-nums font-medium">{number(journey.count)}</span>
+              <span class="text-base-content/40">
+                {journey.sessions} session{if journey.sessions == 1, do: "", else: "s"}
+              </span>
+            </div>
+
+            <div class="mt-1.5 h-1 rounded-full bg-base-200 overflow-hidden">
+              <div
+                class="h-full bg-primary/60 rounded-full"
+                style={"width: #{if busiest > 0, do: round(journey.count * 100 / busiest), else: 0}%"}
+              >
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div id="flow-diagram">
           <.flow_diagram
             transitions={@data[:flow] || []}

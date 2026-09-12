@@ -531,6 +531,62 @@ defmodule WebAnalytics.Analytics do
     )
   end
 
+  @doc """
+  The commonest three-page journeys.
+
+  A pair says which page follows which; three says what a route actually looks
+  like — whether the people who reach checkout came through teams, or arrived
+  there some other way. Read from the order of each visit, like `flow/2`, with
+  the same window and the same partition.
+
+  A repeat of the page in hand is dropped on either side, so a reload in the
+  middle of a route does not turn one journey into a different-looking one.
+  """
+  def journeys(f, limit \\ 12) do
+    key = group_field(f)
+
+    ordered =
+      from p in pageviews_scope(f),
+        select: %{
+          session_id: p.session_id,
+          second: field(p, ^key),
+          first:
+            fragment(
+              "lag(?) OVER (PARTITION BY ? ORDER BY ?, ?, ?)",
+              field(p, ^key),
+              p.session_id,
+              p.seq,
+              p.entered_at,
+              p.id
+            ),
+          third:
+            fragment(
+              "lead(?) OVER (PARTITION BY ? ORDER BY ?, ?, ?)",
+              field(p, ^key),
+              p.session_id,
+              p.seq,
+              p.entered_at,
+              p.id
+            )
+        }
+
+    Repo.all(
+      from row in subquery(ordered),
+        where: not is_nil(row.first) and not is_nil(row.second) and not is_nil(row.third),
+        where: row.first != row.second and row.second != row.third,
+        group_by: [row.first, row.second, row.third],
+        order_by: [desc: count(row.session_id)],
+        limit: ^limit,
+        select: %{
+          first: row.first,
+          second: row.second,
+          third: row.third,
+          count: count(row.session_id),
+          sessions: count(row.session_id, :distinct)
+        }
+    )
+  end
+
   @doc "Entry pages — where sessions begin."
   def entries(f, limit \\ 10) do
     key = group_field(f)

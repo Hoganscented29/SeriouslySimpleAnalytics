@@ -124,6 +124,50 @@ defmodule WebAnalytics.AnalyticsTest do
       assert {"/b", "/c"} in routes
     end
 
+    test "reports three-step journeys, not just pairs", %{site: site} do
+      submit(site, [
+        init_event(),
+        pageview_event(1, "/teams"),
+        pageview_event(2, "/pricing"),
+        pageview_event(3, "/checkout"),
+        tick_event(3, %{"d" => 40_000})
+      ])
+
+      journeys =
+        filters(site) |> Analytics.journeys(20) |> Enum.map(&{&1.first, &1.second, &1.third})
+
+      # A pair says which page follows which. Three says the route.
+      assert {"/teams", "/pricing", "/checkout"} in journeys
+    end
+
+    test "a two-page visit produces no three-step journey", %{site: site} do
+      submit(site, [
+        init_event(),
+        pageview_event(1, "/one"),
+        pageview_event(2, "/two"),
+        tick_event(2, %{"d" => 20_000})
+      ])
+
+      refute filters(site)
+             |> Analytics.journeys(20)
+             |> Enum.any?(&(&1.first == "/one" or &1.third == "/two"))
+    end
+
+    test "a reload in the middle does not become its own route", %{site: site} do
+      submit(site, [
+        init_event(),
+        pageview_event(1, "/a"),
+        pageview_event(2, "/b"),
+        pageview_event(3, "/b"),
+        pageview_event(4, "/c"),
+        tick_event(4, %{"d" => 40_000})
+      ])
+
+      journeys = filters(site) |> Analytics.journeys(20)
+
+      refute Enum.any?(journeys, &(&1.first == &1.second or &1.second == &1.third))
+    end
+
     test "does not invent a transition into the first page of a visit", %{site: site} do
       submit(site, [init_event(), pageview_event(1, "/only"), tick_event(1, %{"d" => 20_000})])
 

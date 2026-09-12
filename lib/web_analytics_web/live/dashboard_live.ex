@@ -485,6 +485,7 @@ defmodule WebAnalyticsWeb.DashboardLive do
   defp tab_data("flow", filters, assigns) do
     %{
       flow: Analytics.flow(filters, 18),
+      journeys: Analytics.journeys(filters, 12),
       entries: Analytics.entries(filters),
       exits: Analytics.exits(filters),
       navigation:
