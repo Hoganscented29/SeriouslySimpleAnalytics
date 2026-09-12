@@ -10,6 +10,16 @@
         </p>
       </div>
       <div class="flex items-center gap-3">
+        <form phx-submit="open_account" class="join">
+          <input
+            type="text"
+            name="key"
+            placeholder="acct_…"
+            autocomplete="off"
+            class="input input-sm input-bordered join-item font-mono w-40"
+          />
+          <button class="btn btn-sm join-item">Open</button>
+        </form>
         <span class="text-xs text-base-content/50">
           counters {ago(@counters_at)} · tables {ago(@detail_at)}
         </span>
@@ -213,10 +223,27 @@
       </div>
     </section>
 
-    <div class="grid lg:grid-cols-2 gap-6">
-      <!-- sites -->
+    <!-- sites -->
+    <div>
       <section class="rounded-box bg-base-100 border border-base-300 p-5">
-        <h2 class="text-sm font-medium mb-3">Sites ({num(length(@detail.sites))})</h2>
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+          <h2 class="text-sm font-medium">
+            Accounts ({num(length(@sites))}) — busiest first
+          </h2>
+          <div class="join">
+            <button
+              :for={window <- Admin.windows()}
+              phx-click="site_window"
+              phx-value-window={window}
+              class={[
+                "btn btn-xs join-item",
+                @site_window == window && "btn-active btn-primary"
+              ]}
+            >
+              {window_label(window)}
+            </button>
+          </div>
+        </div>
         <div class="overflow-x-auto max-h-96 overflow-y-auto">
           <table class="table table-xs table-pin-rows">
             <thead>
@@ -224,30 +251,62 @@
                 <th>Account ID</th>
                 <th>Name</th>
                 <th>Owner</th>
+                <th class="text-right">Views</th>
+                <th class="text-right">Events</th>
                 <th class="text-right">Sessions</th>
                 <th>Last seen</th>
               </tr>
             </thead>
             <tbody>
-              <tr :for={site <- @detail.sites}>
-                <td class="font-mono text-[11px] whitespace-nowrap">{site.key}</td>
-                <td class="max-w-[10rem] truncate" title={site.name}>{site.name}</td>
+              <tr :for={site <- @sites} class="hover">
+                <td class="font-mono text-[11px] whitespace-nowrap">
+                  <.link
+                    navigate={~p"/admin/accounts/#{site.key}"}
+                    class="link link-hover text-primary"
+                  >
+                    {site.key}
+                  </.link>
+                </td>
+                <td class="max-w-[10rem] truncate" title={site.name}>
+                  <.link navigate={~p"/admin/accounts/#{site.key}"} class="link link-hover">
+                    {site.name}
+                  </.link>
+                </td>
                 <td class="max-w-[12rem] truncate text-base-content/60" title={site.owner}>
                   {site.owner || "unclaimed"}
                 </td>
-                <td class="text-right tabular-nums">{num(site.sessions)}</td>
+                <td class={[
+                  "text-right tabular-nums",
+                  site.views == 0 && "text-base-content/30"
+                ]}>
+                  {num(site.views)}
+                </td>
+                <td class={[
+                  "text-right tabular-nums",
+                  site.events == 0 && "text-base-content/30"
+                ]}>
+                  {num(site.events)}
+                </td>
+                <td class={[
+                  "text-right tabular-nums",
+                  site.sessions == 0 && "text-base-content/30"
+                ]}>
+                  {num(site.sessions)}
+                </td>
                 <td class="whitespace-nowrap text-base-content/60">{ago(site.last_seen)}</td>
               </tr>
-              <tr :if={@detail.sites == []}>
-                <td colspan="5" class="text-center text-base-content/50 py-6">No sites yet.</td>
+              <tr :if={@sites == []}>
+                <td colspan="7" class="text-center text-base-content/50 py-6">No sites yet.</td>
               </tr>
             </tbody>
           </table>
         </div>
       </section>
+    </div>
 
+    <div class="grid lg:grid-cols-3 gap-6">
       <!-- users -->
-      <section class="rounded-box bg-base-100 border border-base-300 p-5">
+      <section class="rounded-box bg-base-100 border border-base-300 p-5 lg:col-span-2">
         <h2 class="text-sm font-medium mb-3">Users ({num(length(@detail.users))})</h2>
         <div class="overflow-x-auto max-h-96 overflow-y-auto">
           <table class="table table-xs table-pin-rows">
@@ -278,9 +337,7 @@
           </table>
         </div>
       </section>
-    </div>
 
-    <div class="grid lg:grid-cols-3 gap-6">
       <!-- channels -->
       <section class="rounded-box bg-base-100 border border-base-300 p-5">
         <h2 class="text-sm font-medium mb-3">By channel, 30 days</h2>
@@ -296,7 +353,9 @@
           </tbody>
         </table>
       </section>
+    </div>
 
+    <div class="grid lg:grid-cols-2 gap-6">
       <!-- countries -->
       <section class="rounded-box bg-base-100 border border-base-300 p-5">
         <h2 class="text-sm font-medium mb-3">Countries, 30 days</h2>

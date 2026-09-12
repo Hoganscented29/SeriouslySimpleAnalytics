@@ -22,18 +22,67 @@ defmodule WebAnalyticsWeb.DashboardLive do
   @refresh_ms 5_000
 
   @impl true
-  def mount(_params, _session, socket) do
+  def mount(params, _session, socket) do
     # The tracker beacons every second, so the dashboard refreshes on its own
     # rather than making the reader reload to see a visit in progress.
     if connected?(socket), do: :timer.send_interval(@refresh_ms, self(), :refresh)
 
+    case socket.assigns.live_action do
+      :admin -> mount_admin(params, socket)
+      _ -> mount_own(socket)
+    end
+  end
+
+  defp mount_own(socket) do
     user = socket.assigns.current_scope.user
 
     # Creating the first site here means a new account never lands on an empty
     # page asking it to make something before it can see its own ID.
     sites = Sites.ensure_site_for_user!(user)
 
-    {:ok, assign(socket, sites: sites, page_title: "Analytics")}
+    {:ok,
+     socket
+     |> assign(:sites, sites)
+     |> assign(:page_title, "Analytics")
+     |> assign(:viewing_as_admin, false)
+     |> assign(:owner, nil)
+     |> assign(:own_account, true)}
+  end
+
+  # The admin drill-down is its own live_action on its own route, rather than a
+  # "may this user see other people's sites?" branch inside the ordinary one.
+  # The route sits behind :require_admin, so the ownership rule on the normal
+  # dashboard stays exactly as strict as it reads — there is no path through it
+  # that returns a site the signed-in user does not own.
+  defp mount_admin(%{"key" => key}, socket) do
+    case Sites.fetch_site_by_key(key) do
+      nil ->
+        {:ok,
+         socket
+         |> put_flash(:error, "No account with the ID #{key}.")
+         |> push_navigate(to: ~p"/admin")}
+
+      site ->
+        {:ok,
+         socket
+         |> assign(:sites, [site])
+         |> assign(:page_title, "#{site.name} — admin")
+         |> assign(:viewing_as_admin, true)
+         |> assign(:owner, owner_email(site))
+         # An admin opening their own account through this route should not be
+         # told it belongs to somebody else. A banner that is wrong about whose
+         # data this is undermines the one job it has.
+         |> assign(:own_account, site.user_id == socket.assigns.current_scope.user.id)}
+    end
+  end
+
+  defp owner_email(%{user_id: nil}), do: nil
+
+  defp owner_email(%{user_id: user_id}) do
+    case WebAnalytics.Accounts.get_user(user_id) do
+      nil -> nil
+      user -> user.email
+    end
   end
 
   @impl true
@@ -83,6 +132,13 @@ defmodule WebAnalyticsWeb.DashboardLive do
 
   def handle_event("clear_page", _params, socket) do
     {:noreply, push_patch(socket, to: path_for(socket, %{"page" => nil}))}
+  end
+
+  def handle_event("add_site", _params, %{assigns: %{viewing_as_admin: true}} = socket) do
+    # The button is hidden in the admin view, and a hidden button is not a
+    # control. Creating a site under an account you are only inspecting is
+    # nobody's intention.
+    {:noreply, put_flash(socket, :error, "Not while viewing another account.")}
   end
 
   def handle_event("add_site", _params, socket) do
@@ -177,7 +233,11 @@ defmodule WebAnalyticsWeb.DashboardLive do
       |> Enum.reject(fn {_key, value} -> is_nil(value) or value == "" end)
       |> Enum.sort()
 
-    ~p"/dashboard?#{query}"
+    if socket.assigns[:viewing_as_admin] do
+      ~p"/admin/accounts/#{socket.assigns.site.key}?#{query}"
+    else
+      ~p"/dashboard?#{query}"
+    end
   end
 
   # -- loading -------------------------------------------------------------

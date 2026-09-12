@@ -202,6 +202,63 @@ defmodule WebAnalyticsWeb.AdminLiveTest do
       end
     end
 
+    test "the accounts table can be ranked over each window", %{conn: conn} do
+      {:ok, live, html} = live(conn, ~p"/admin")
+
+      assert html =~ "busiest first"
+      assert :sys.get_state(live.pid).socket.assigns.site_window == :day
+
+      html = live |> element("button[phx-value-window='hour']") |> render_click()
+
+      assert :sys.get_state(live.pid).socket.assigns.site_window == :hour
+      assert html =~ "Views"
+
+      live |> element("button[phx-value-window='all']") |> render_click()
+      assert :sys.get_state(live.pid).socket.assigns.site_window == :all
+    end
+
+    test "switching window re-queries rather than re-sorting the same numbers", %{
+      conn: conn,
+      site: site
+    } do
+      {:ok, _} =
+        Ingest.submit_sync(site, payload(site, [init_event(), pageview_event(1, "/old")]),
+          received_at: DateTime.add(DateTime.utc_now(), -10, :day)
+        )
+
+      {:ok, live, _html} = live(conn, ~p"/admin")
+
+      by_key = fn -> Map.new(:sys.get_state(live.pid).socket.assigns.sites, &{&1.key, &1}) end
+
+      live |> element("button[phx-value-window='day']") |> render_click()
+      day = by_key.()[site.key].views
+
+      live |> element("button[phx-value-window='month']") |> render_click()
+      month = by_key.()[site.key].views
+
+      assert month > day, "a wider window has to include more, or it is only re-sorting"
+    end
+
+    test "an account ID can be opened straight from the lookup box", %{conn: conn, site: site} do
+      {:ok, live, _html} = live(conn, ~p"/admin")
+
+      assert {:error, {:live_redirect, %{to: to}}} =
+               live
+               |> form("form[phx-submit='open_account']", %{key: site.key})
+               |> render_submit()
+
+      assert to == "/admin/accounts/#{site.key}"
+    end
+
+    test "a typo in the lookup box says so rather than navigating", %{conn: conn} do
+      {:ok, live, _html} = live(conn, ~p"/admin")
+
+      html =
+        live |> form("form[phx-submit='open_account']", %{key: "acct-nope"}) |> render_submit()
+
+      assert html =~ "No account with the ID"
+    end
+
     test "the 24-hour chart always has 24 buckets, gaps included", %{conn: conn} do
       {:ok, live, _html} = live(conn, ~p"/admin")
       hourly = :sys.get_state(live.pid).socket.assigns.detail.hourly
@@ -219,6 +276,139 @@ defmodule WebAnalyticsWeb.AdminLiveTest do
       assert html =~ "No sites yet."
       assert html =~ "No crawler traffic yet."
       assert html =~ "Nothing has reported yet."
+    end
+  end
+
+  describe "drilling into one account" do
+    setup %{conn: conn} do
+      admin = admin_fixture()
+      owner = user_fixture()
+      theirs = user_site_fixture(owner, %{key: "acct-theirs", name: "Their Site"})
+
+      {:ok, _} =
+        Ingest.submit_sync(
+          theirs,
+          payload(theirs, [
+            init_event(),
+            pageview_event(1, "/their-secret-page", %{"title" => "Their Secret Page"}),
+            tick_event(1, %{"d" => 30_000, "am" => 25_000, "sp" => 80})
+          ]),
+          received_at: DateTime.utc_now()
+        )
+
+      %{conn: log_in_user(conn, admin), admin: admin, owner: owner, theirs: theirs}
+    end
+
+    test "an admin sees the full dashboard for an account they do not own", %{
+      conn: conn,
+      theirs: theirs,
+      owner: owner
+    } do
+      {:ok, _live, html} = live(conn, ~p"/admin/accounts/#{theirs.key}")
+
+      assert html =~ "Their Site"
+      assert html =~ theirs.key
+      # The point of the drill-down: the same reports, someone else's data.
+      assert html =~ "Admin view"
+      assert html =~ owner.email
+    end
+
+    test "every tab works, on someone else's account", %{conn: conn, theirs: theirs} do
+      for tab <- ~w(overview pages flow locations clicks forms sessions crawlers) do
+        {:ok, _live, html} = live(conn, ~p"/admin/accounts/#{theirs.key}?tab=#{tab}")
+        assert html =~ "Admin view"
+      end
+    end
+
+    test "navigating stays on the admin route rather than bouncing home", %{
+      conn: conn,
+      theirs: theirs
+    } do
+      {:ok, live, _html} = live(conn, ~p"/admin/accounts/#{theirs.key}")
+
+      live |> element("button[phx-value-tab='pages']") |> render_click()
+
+      # A tab click that pushed to /dashboard would silently swap the admin onto
+      # their own account, with the same chrome and different numbers.
+      assert_patched(
+        live,
+        ~p"/admin/accounts/#{theirs.key}?#{[anomalies: "exclude", clicks: "name", crawlers: "exclude", group: "path", loc: "country", range: "7d", site: theirs.key, tab: "pages"]}"
+      )
+    end
+
+    test "opening your own account through admin does not claim it is someone else's", %{
+      conn: conn,
+      admin: admin
+    } do
+      mine = user_site_fixture(admin, %{key: "acct-mine-admin", name: "Mine"})
+
+      {:ok, _live, html} = live(conn, ~p"/admin/accounts/#{mine.key}")
+
+      assert html =~ "Your own account, opened through admin"
+      refute html =~ "Someone else's account"
+    end
+
+    test "an unclaimed account says so rather than showing a blank owner", %{conn: conn} do
+      orphan = site_fixture(%{key: "acct-orphan", name: "Orphan"})
+
+      {:ok, _live, html} = live(conn, ~p"/admin/accounts/#{orphan.key}")
+
+      assert html =~ "unclaimed"
+    end
+
+    test "an unknown account ID goes back to admin with a reason", %{conn: conn} do
+      assert {:error, {:live_redirect, %{to: "/admin", flash: flash}}} =
+               live(conn, ~p"/admin/accounts/acct-does-not-exist")
+
+      assert flash["error"] =~ "No account with the ID"
+    end
+
+    test "creating a site is refused while inspecting someone else's", %{
+      conn: conn,
+      theirs: theirs,
+      owner: owner
+    } do
+      {:ok, live, html} = live(conn, ~p"/admin/accounts/#{theirs.key}")
+
+      refute html =~ "Add another site"
+
+      # The hidden button is not the control. The server refuses it too.
+      render_click(live, "add_site", %{})
+
+      assert [%{id: id}] = WebAnalytics.Sites.list_sites_for_user(owner)
+      assert id == theirs.id
+    end
+  end
+
+  describe "the boundary the drill-down must not move" do
+    test "a signed-out visitor cannot reach an account", %{conn: conn} do
+      site = site_fixture(%{key: "acct-locked"})
+
+      assert {:error, {:redirect, %{to: "/users/log-in"}}} =
+               live(conn, ~p"/admin/accounts/#{site.key}")
+    end
+
+    test "an ordinary user cannot reach anyone's account, including their own", %{conn: conn} do
+      user = user_fixture()
+      theirs = user_site_fixture(user, %{key: "acct-mine"})
+
+      assert {:error, {:redirect, %{to: "/dashboard", flash: flash}}} =
+               conn |> log_in_user(user) |> live(~p"/admin/accounts/#{theirs.key}")
+
+      assert flash["error"] == "Not found."
+    end
+
+    test "the ordinary dashboard still refuses another user's account", %{conn: conn} do
+      user = user_fixture()
+      other = user_fixture()
+      theirs = user_site_fixture(other, %{key: "acct-not-yours", name: "Not Yours"})
+
+      # The drill-down exists so this rule never had to be relaxed.
+      {:ok, _live, html} =
+        conn |> log_in_user(user) |> live(~p"/dashboard?site=#{theirs.key}")
+
+      refute html =~ "Not Yours"
+      refute html =~ theirs.key
     end
   end
 end

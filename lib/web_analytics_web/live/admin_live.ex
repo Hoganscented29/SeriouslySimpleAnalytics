@@ -40,8 +40,10 @@ defmodule WebAnalyticsWeb.AdminLive do
      |> assign(:cpu_sample, Host.cpu_sample())
      |> assign(:cpu_util, nil)
      |> assign(:cpu_window, nil)
+     |> assign(:site_window, :day)
      |> load_host()
      |> load_counters()
+     |> load_sites()
      |> load_detail()}
   end
 
@@ -58,7 +60,7 @@ defmodule WebAnalyticsWeb.AdminLive do
 
     {:noreply,
      if rem(tick, @detail_every) == 0 do
-       socket |> load_detail() |> assign(:system, Admin.system())
+       socket |> load_sites() |> load_detail() |> assign(:system, Admin.system())
      else
        socket
      end}
@@ -69,14 +71,43 @@ defmodule WebAnalyticsWeb.AdminLive do
   end
 
   @impl true
+  def handle_event("open_account", %{"key" => key}, socket) do
+    case key |> to_string() |> String.trim() do
+      "" ->
+        {:noreply, socket}
+
+      key ->
+        # Checked here rather than letting the dashboard bounce back, so a typo
+        # says so on the page the reader is already looking at.
+        case WebAnalytics.Sites.fetch_site_by_key(key) do
+          nil -> {:noreply, put_flash(socket, :error, "No account with the ID #{key}.")}
+          site -> {:noreply, push_navigate(socket, to: ~p"/admin/accounts/#{site.key}")}
+        end
+    end
+  end
+
   def handle_event("refresh", _params, socket) do
     {:noreply,
      socket
      |> load_host()
      |> load_counters()
+     |> load_sites()
      |> load_detail()
      |> assign(:system, Admin.system())
      |> put_flash(:info, "Refreshed.")}
+  end
+
+  def handle_event("site_window", %{"window" => window}, socket) do
+    window = parse_window(window)
+
+    # Re-queried rather than sorted client-side: the counts themselves are
+    # per-window, so a different window is different numbers, not the same ones
+    # in a different order.
+    {:noreply, socket |> assign(:site_window, window) |> load_sites()}
+  end
+
+  defp parse_window(value) do
+    Enum.find(Admin.windows(), :day, &(to_string(&1) == value))
   end
 
   # Utilisation over the interval since the last sample, which is exactly the
@@ -109,6 +140,10 @@ defmodule WebAnalyticsWeb.AdminLive do
     socket
     |> assign(:counters, Admin.counters(now))
     |> assign(:counters_at, now)
+  end
+
+  defp load_sites(socket) do
+    assign(socket, :sites, Admin.sites(socket.assigns.site_window))
   end
 
   defp load_detail(socket) do
@@ -155,6 +190,13 @@ defmodule WebAnalyticsWeb.AdminLive do
   end
 
   def ago(%NaiveDateTime{} = at), do: at |> DateTime.from_naive!("Etc/UTC") |> ago()
+
+  @doc "A window's label, for the buttons and the column headings."
+  def window_label(:hour), do: "1h"
+  def window_label(:day), do: "24h"
+  def window_label(:week), do: "7d"
+  def window_label(:month), do: "30d"
+  def window_label(:all), do: "All"
 
   @doc "Bytes as something a person reads, not a digit count."
   def bytes(nil), do: "—"

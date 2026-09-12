@@ -78,7 +78,6 @@ defmodule WebAnalytics.Admin do
   """
   def detail(now \\ DateTime.utc_now()) do
     %{
-      sites: sites_with_activity(),
       users: users_with_activity(),
       projects: top_projects(now),
       crawlers: top_crawlers(now),
@@ -107,17 +106,31 @@ defmodule WebAnalytics.Admin do
     }
   end
 
-  # -- tables ---------------------------------------------------------------
+  @windows [:hour, :day, :week, :month, :all]
 
-  defp sites_with_activity do
+  @doc "The activity windows the sites table can be ranked over."
+  def windows, do: @windows
+
+  @doc """
+  Every site, ranked by how busy it has been over `window`.
+
+  Counted with one grouped query per table rather than one join across all
+  three: joining sessions, pageviews and events onto sites multiplies the rows
+  before it counts them, and the numbers come out as the product of the three
+  rather than the three. Four indexed aggregates are both correct and cheaper.
+  """
+  def sites(window \\ :day, now \\ DateTime.utc_now()) do
+    since = window_start(window, now)
+
+    views = counts_by_site(Pageview, :entered_at, since)
+    events = counts_by_site(Event, :occurred_at, since)
+    sessions = counts_by_site(Session, :started_at, since)
+    last_seen = last_seen_by_site()
+
     Repo.all(
       from s in Site,
         left_join: u in User,
         on: u.id == s.user_id,
-        left_join: sess in Session,
-        on: sess.site_id == s.id,
-        group_by: [s.id, u.email],
-        order_by: [desc: count(sess.id)],
         select: %{
           id: s.id,
           key: s.key,
@@ -125,12 +138,52 @@ defmodule WebAnalytics.Admin do
           domain: s.domain,
           owner: u.email,
           claimed_at: s.claimed_at,
-          inserted_at: s.inserted_at,
-          sessions: count(sess.id),
-          last_seen: max(sess.last_seen_at)
+          inserted_at: s.inserted_at
         }
     )
+    |> Enum.map(fn site ->
+      site
+      |> Map.put(:views, Map.get(views, site.id, 0))
+      |> Map.put(:events, Map.get(events, site.id, 0))
+      |> Map.put(:sessions, Map.get(sessions, site.id, 0))
+      |> Map.put(:last_seen, Map.get(last_seen, site.id))
+    end)
+    # Views first because that is the question being asked — who is busiest —
+    # with events and sessions breaking ties rather than a site with no
+    # pageviews sorting arbitrarily among the other empty ones.
+    |> Enum.sort_by(&{&1.views, &1.events, &1.sessions}, :desc)
   end
+
+  defp window_start(:all, _now), do: nil
+  defp window_start(:hour, now), do: DateTime.add(now, -1, :hour)
+  defp window_start(:day, now), do: DateTime.add(now, -24, :hour)
+  defp window_start(:week, now), do: DateTime.add(now, -7, :day)
+  defp window_start(:month, now), do: DateTime.add(now, -30, :day)
+  defp window_start(_other, now), do: window_start(:day, now)
+
+  defp counts_by_site(schema, _field, nil) do
+    Repo.all(from r in schema, group_by: r.site_id, select: {r.site_id, count(r.id)})
+    |> Map.new()
+  end
+
+  defp counts_by_site(schema, field, since) do
+    Repo.all(
+      from r in schema,
+        where: field(r, ^field) > ^since,
+        group_by: r.site_id,
+        select: {r.site_id, count(r.id)}
+    )
+    |> Map.new()
+  end
+
+  # Always all-time: "last seen" answers whether a site is alive at all, and a
+  # windowed version of it would just be the window's edge for everything busy.
+  defp last_seen_by_site do
+    Repo.all(from s in Session, group_by: s.site_id, select: {s.site_id, max(s.last_seen_at)})
+    |> Map.new()
+  end
+
+  # -- tables ---------------------------------------------------------------
 
   defp users_with_activity do
     Repo.all(

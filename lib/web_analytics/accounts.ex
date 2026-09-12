@@ -60,6 +60,9 @@ defmodule WebAnalytics.Accounts do
   """
   def get_user!(id), do: Repo.get!(User, id)
 
+  @doc "Gets a user by id, or nil. For callers where a missing user is a fact, not a bug."
+  def get_user(id), do: Repo.get(User, id)
+
   ## User registration
 
   @doc """

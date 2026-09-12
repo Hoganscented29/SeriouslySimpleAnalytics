@@ -114,6 +114,10 @@ defmodule WebAnalyticsWeb.Router do
     live_session :require_admin,
       on_mount: [{WebAnalyticsWeb.UserAuth, :require_admin}] do
       live "/admin", AdminLive, :index
+
+      # The full dashboard, pointed at one account. A separate action rather
+      # than a flag on /dashboard, so the ownership check there stays absolute.
+      live "/admin/accounts/:key", DashboardLive, :admin
     end
   end
 
