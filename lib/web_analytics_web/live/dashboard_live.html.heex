@@ -21,7 +21,7 @@
     <div class="flex flex-wrap items-center gap-3 justify-between">
       <div class="flex items-center gap-3">
         <h1 class="text-xl font-semibold">{@site.name}</h1>
-        <form :if={length(@sites) > 1} phx-change="navigate">
+        <form :if={length(@sites) > 1} id="site-picker" phx-change="navigate">
           <select name="site" class="select select-sm select-bordered">
             <option :for={site <- @sites} value={site.key} selected={site.id == @site.id}>
               {site.name}
@@ -38,7 +38,7 @@
 
       <div class="flex flex-wrap items-center gap-2">
         <% projects = @data[:projects] || [] %>
-        <form :if={projects != []} phx-change="navigate">
+        <form :if={projects != []} id="project-picker" phx-change="navigate">
           <select name="project" class="select select-sm select-bordered">
             <option value="">All projects</option>
             <option
@@ -274,6 +274,189 @@
         <.bar_list title="Exit pages" rows={@data[:exits] || []} click="select_page" />
       </div>
     </div>
+    <!-- ============================== EVENTS ============================= -->
+    <div :if={@tab == "events"} class="space-y-6">
+      <% events = @data[:events] || [] %>
+      <% selected = @data[:selected_event] %>
+
+      <div
+        :if={events == []}
+        class="rounded-box bg-base-100 border border-base-300 p-8 text-center"
+      >
+        <div class="font-medium">No named events yet</div>
+        <p class="text-sm text-base-content/60 mt-2 max-w-lg mx-auto">
+          Events are what a caller chooses to tell us about — a run starting, a tool being
+          called, an error by kind. Send one and it appears here, with whatever attributes came
+          with it.
+        </p>
+        <pre class="mt-4 text-left bg-base-200 rounded p-3 text-xs overflow-x-auto"><code>curl "{base_url()}/api/ping?uid={@site.key}&type=ai&event=run_started&sid=run_1"</code></pre>
+      </div>
+
+      <div :if={events != []} class="grid lg:grid-cols-[20rem_1fr] gap-6">
+        <!-- the events themselves -->
+        <div class="rounded-box bg-base-100 border border-base-300">
+          <div class="px-4 py-3 border-b border-base-300 font-medium text-sm">
+            Events ({number(length(events))})
+          </div>
+          <div id="event-list" class="max-h-[32rem] overflow-y-auto">
+            <button
+              :for={event <- events}
+              phx-click="select_event"
+              phx-value-event={event.name}
+              class={[
+                "w-full text-left px-4 py-3 border-b border-base-200 hover:bg-base-200/60 transition-colors",
+                selected && selected.name == event.name && "bg-primary/10"
+              ]}
+            >
+              <div class="flex items-baseline justify-between gap-3">
+                <span class="font-mono text-sm truncate">{event.name}</span>
+                <span class="tabular-nums text-sm font-medium">{number(event.count)}</span>
+              </div>
+              <div class="text-xs text-base-content/50 mt-0.5">
+                {number(event.sessions)} session(s)
+                <span :if={event.attributes > 0}>· {number(event.attributes)} with attributes</span>
+                <span :if={event.type == "custom"} class="badge badge-xs badge-ghost ml-1">API</span>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        <!-- one event, in detail -->
+        <div class="space-y-6 min-w-0">
+          <div
+            :if={is_nil(selected)}
+            class="rounded-box bg-base-100 border border-base-300 p-8 text-center text-sm text-base-content/60"
+          >
+            Pick an event to see when it fires and what it carries.
+          </div>
+
+          <div :if={selected} class="space-y-6">
+            <div class="flex flex-wrap items-center gap-3">
+              <h2 class="text-lg font-mono">{selected.name}</h2>
+              <span class="badge badge-sm">{number(selected.count)} events</span>
+              <span class="badge badge-sm badge-ghost">
+                {number(selected.sessions)} session(s)
+              </span>
+              <span class="flex-1"></span>
+              <button phx-click="clear_event" class="btn btn-xs btn-ghost">Clear</button>
+            </div>
+
+            <!-- over time -->
+            <div class="rounded-box bg-base-100 border border-base-300">
+              <div class="px-4 py-3 border-b border-base-300 font-medium text-sm">Over time</div>
+              <div class="px-4 py-4 flex items-end gap-1 h-24">
+                <% series = @data[:event_series] || [] %>
+                <% peak = series |> Enum.map(& &1.count) |> Enum.max(fn -> 0 end) %>
+                <div
+                  :for={point <- series}
+                  class="flex-1 bg-primary rounded-sm min-h-[2px]"
+                  style={"height: #{if peak > 0, do: point.count * 100 / peak, else: 0}%"}
+                  title={"#{point.count} at #{Calendar.strftime(point.at, "%b %d %H:%M")}"}
+                >
+                </div>
+                <div :if={series == []} class="text-sm text-base-content/50">
+                  Nothing in this range.
+                </div>
+              </div>
+            </div>
+
+            <!-- attributes: the half of the contract nothing showed before -->
+            <% attributes = @data[:event_attributes] || [] %>
+            <div class="rounded-box bg-base-100 border border-base-300">
+              <div class="px-4 py-3 border-b border-base-300 font-medium text-sm">
+                Attributes
+              </div>
+              <div :if={attributes == []} class="px-4 py-6 text-sm text-base-content/60">
+                This event carries no attributes. Anything you add to the ping —
+                <code class="font-mono text-xs">&amp;tool=search&amp;latency_ms=420</code>
+                — is kept and shown here.
+              </div>
+              <div
+                :for={attribute <- attributes}
+                class="px-4 py-3 border-b border-base-200 last:border-0"
+              >
+                <div class="flex items-baseline justify-between gap-3">
+                  <span class="font-mono text-sm">{attribute.key}</span>
+                  <span class="text-xs text-base-content/50">
+                    {number(attribute.distinct_values)} distinct value(s)
+                  </span>
+                </div>
+                <div class="mt-2 space-y-1">
+                  <% top = attribute.top %>
+                  <% most = top |> Enum.map(& &1.count) |> Enum.max(fn -> 0 end) %>
+                  <div :for={value <- top} class="flex items-center gap-2 text-sm">
+                    <div class="flex-1 min-w-0 relative">
+                      <div
+                        class="absolute inset-y-0 left-0 bg-primary/15 rounded"
+                        style={"width: #{if most > 0, do: value.count * 100 / most, else: 0}%"}
+                      >
+                      </div>
+                      <span class="relative px-2 py-0.5 font-mono text-xs truncate block">
+                        {value.value}
+                      </span>
+                    </div>
+                    <span class="tabular-nums text-xs w-12 text-right">{number(value.count)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- the stream -->
+      <div :if={events != []} class="rounded-box bg-base-100 border border-base-300">
+        <div class="px-4 py-3 border-b border-base-300 font-medium text-sm">Most recent</div>
+        <div class="overflow-x-auto max-h-96 overflow-y-auto">
+          <table class="table table-sm table-pin-rows">
+            <thead>
+              <tr>
+                <th>When</th>
+                <th>Event</th>
+                <th>Project</th>
+                <th>Attributes</th>
+                <th>Where</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr :for={event <- @data[:recent_events] || []}>
+                <td class="whitespace-nowrap text-base-content/60 text-xs">
+                  {Calendar.strftime(event.at, "%b %d %H:%M:%S")}
+                </td>
+                <td>
+                  <button
+                    phx-click="select_event"
+                    phx-value-event={event.name}
+                    class="font-mono text-xs link link-hover"
+                  >
+                    {event.name}
+                  </button>
+                </td>
+                <td class="text-xs text-base-content/60">
+                  {event.project || event.channel || "web"}
+                  <span :if={event.crawler_name} class="badge badge-xs badge-outline ml-1">
+                    {event.crawler_name}
+                  </span>
+                </td>
+                <td class="font-mono text-[11px] text-base-content/70 max-w-md">
+                  <span :if={event.attrs == %{}} class="text-base-content/30">—</span>
+                  <span
+                    :for={{key, value} <- Enum.sort(event.attrs || %{})}
+                    class="inline-block mr-2 whitespace-nowrap"
+                  >
+                    <span class="text-base-content/50">{key}=</span>{value}
+                  </span>
+                </td>
+                <td class="text-xs text-base-content/60 whitespace-nowrap">
+                  {[event.city, event.country] |> Enum.reject(&is_nil/1) |> Enum.join(", ")}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <!-- ================================ FLOW ============================= -->
     <div :if={@tab == "flow"} class="space-y-6">
       <% nav = @data[:navigation] %>
@@ -876,52 +1059,41 @@
         <pre class="mt-2 p-3 rounded bg-base-200 text-sm overflow-x-auto"><code>{@site.key}</code></pre>
       </div>
 
-      <details>
-        <summary class="cursor-pointer text-sm font-medium">Install snippet</summary>
-        <p class="text-sm text-base-content/70 mt-3">
-          Paste this into the <code>&lt;head&gt;</code> of every page you want tracked.
+      <div>
+        <div class="text-sm font-medium">Instrument your AI tool</div>
+        <p class="text-sm text-base-content/70 mt-1 mb-3">
+          Hand this to your coding agent. It reads the contract, wires up the events, and
+          updates your llms.txt so the next agent does the same.
         </p>
-        <pre class="mt-2 p-3 rounded bg-base-200 text-xs overflow-x-auto"><code>{snippet(@site, base_url())}</code></pre>
-        <p class="text-xs text-base-content/60 mt-2">
-          A demo page that exercises every capture path is at <.link href={~p"/demo"} class="link">/demo</.link>.
-        </p>
-      </details>
+        <.integration_chat
+          base_url={base_url()}
+          prompt={agent_prompt(@site, base_url())}
+          creates_account={false}
+        />
+      </div>
 
-      <details>
-        <summary class="cursor-pointer text-sm font-medium">AI install instructions</summary>
-        <p class="text-sm text-base-content/70 mt-3">
-          For an agent, an MCP server, a CLI, an extension — anything that isn't a browser. One
-          request per event, no SDK and no key exchange: the account ID is the whole contract.
-        </p>
-        <pre class="mt-2 p-3 rounded bg-base-200 text-xs overflow-x-auto"><code>{ping_example(@site, base_url())}</code></pre>
-
-        <p class="text-sm font-medium mt-4">Hand this to your coding agent</p>
-        <p class="text-sm text-base-content/70 mt-1">
-          It contains the full parameter list, the event conventions and the rules about what must
-          never be sent, so an agent can wire this up unattended.
-        </p>
-        <pre class="mt-2 p-3 rounded bg-base-200 text-xs overflow-x-auto"><code>{agent_prompt(@site, base_url())}</code></pre>
-
-        <ul class="text-xs text-base-content/60 mt-3 space-y-1 list-disc list-inside">
-          <li>
-            Pass the same <code class="font-mono">sid</code>
-            across one run or conversation and the flow report works.
-          </li>
-          <li>
-            <code class="font-mono">event=page_view</code>
-            with a <code class="font-mono">path</code>
-            is recorded as a real pageview.
-          </li>
-          <li>
-            Send your user's location as <code class="font-mono">c</code>, <code class="font-mono">cc</code>, <code class="font-mono">s_p</code>,
-            <code class="font-mono">n</code>
-            — a ping's own address is where your code runs.
-          </li>
-          <li>
-            Never put credentials, prompts or completions in a parameter.
-          </li>
-        </ul>
-      </details>
+      <ul class="text-xs text-base-content/60 space-y-1 list-disc list-inside">
+        <li>
+          Pass the same <code class="font-mono">sid</code>
+          across one run or conversation and the flow report works.
+        </li>
+        <li>
+          <code class="font-mono">event=page_view</code>
+          with a <code class="font-mono">path</code>
+          is recorded as a real pageview.
+        </li>
+        <li>
+          Send your user's location as <code class="font-mono">c</code>, <code class="font-mono">cc</code>, <code class="font-mono">s_p</code>,
+          <code class="font-mono">n</code>
+          — a ping's own address is where your code runs.
+        </li>
+        <li>
+          Anything else you add is kept as an attribute, and shows up under Events.
+        </li>
+        <li>
+          Never put credentials, prompts or completions in a parameter.
+        </li>
+      </ul>
 
       <div :if={!@viewing_as_admin} class="pt-1">
         <button phx-click="add_site" class="btn btn-ghost btn-xs">

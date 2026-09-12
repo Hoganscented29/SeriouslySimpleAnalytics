@@ -473,6 +473,121 @@ defmodule WebAnalytics.Analytics do
     )
   end
 
+  # -- events ---------------------------------------------------------------
+
+  @doc """
+  Named events, ranked.
+
+  Split from clicks on purpose. A click is something the tracker noticed; an
+  event is something a caller decided to tell us about, and `run_completed`
+  sitting in a list called "Clicks" reads as a bug in the product rather than a
+  choice about where to put it.
+  """
+  def events(f, limit \\ 50) do
+    Repo.all(
+      from e in events_scope(f),
+        where: not is_nil(e.name),
+        group_by: [e.name, e.type],
+        order_by: [desc: count(e.id)],
+        limit: ^limit,
+        select: %{
+          name: e.name,
+          type: e.type,
+          count: count(e.id),
+          sessions: count(e.session_id, :distinct),
+          first_seen: min(e.occurred_at),
+          last_seen: max(e.occurred_at),
+          attributes: count(fragment("nullif(?, '{}'::jsonb)", e.data_attrs))
+        }
+    )
+  end
+
+  @doc """
+  The attributes carried by one event name, each with its commonest values.
+
+  This is the half of the ping contract nothing showed until now: llms.txt
+  promises that anything a caller invents is kept on the event, and a promise
+  you cannot read back is only half kept.
+
+  One query for keys and values together, grouped here rather than a query per
+  key. An event with a dozen attributes would otherwise be a dozen round trips
+  on a page that refreshes itself every few seconds.
+  """
+  def event_attributes(f, name, value_limit \\ 6) do
+    Repo.all(
+      from e in events_scope(f),
+        cross_join: kv in fragment("jsonb_each_text(?)", e.data_attrs),
+        where: e.name == ^name,
+        group_by: [fragment("?", field(kv, :key)), fragment("?", field(kv, :value))],
+        select: %{
+          key: fragment("?", field(kv, :key)),
+          value: fragment("?", field(kv, :value)),
+          count: count(e.id)
+        }
+    )
+    |> Enum.group_by(& &1.key)
+    |> Enum.map(fn {key, rows} ->
+      %{
+        key: key,
+        count: rows |> Enum.map(& &1.count) |> Enum.sum(),
+        distinct_values: length(rows),
+        top: rows |> Enum.sort_by(& &1.count, :desc) |> Enum.take(value_limit)
+      }
+    end)
+    |> Enum.sort_by(& &1.count, :desc)
+  end
+
+  @doc "The most recent events, with whatever attributes came with them."
+  def recent_events(f, limit \\ 50) do
+    Repo.all(
+      from e in events_scope(f),
+        join: s in assoc(e, :session),
+        where: not is_nil(e.name),
+        order_by: [desc: e.occurred_at],
+        limit: ^limit,
+        select: %{
+          id: e.id,
+          name: e.name,
+          type: e.type,
+          at: e.occurred_at,
+          path: e.path,
+          text: e.text,
+          attrs: e.data_attrs,
+          project: s.project,
+          channel: s.channel,
+          crawler_name: s.crawler_name,
+          country: s.country,
+          city: s.city
+        }
+    )
+  end
+
+  @doc "One event's volume over the range, so a spike has a shape."
+  def event_timeseries(f, name, buckets \\ 24) do
+    seconds = max(DateTime.diff(f.to, f.from), 60)
+    width = max(div(seconds, buckets), 60)
+
+    Repo.all(
+      from e in events_scope(f),
+        where: e.name == ^name,
+        select: %{
+          at:
+            selected_as(
+              fragment(
+                "to_timestamp(floor(extract(epoch from ?) / ?) * ?)",
+                e.occurred_at,
+                ^width,
+                ^width
+              ),
+              :at
+            ),
+          count: count(e.id)
+        },
+        group_by: selected_as(:at),
+        order_by: selected_as(:at)
+    )
+  end
+
   # -- forms ---------------------------------------------------------------
 
   @doc "Per-form submit and abandon counts."

@@ -57,8 +57,12 @@ defmodule WebAnalyticsWeb.LandingControllerTest do
       test "the #{label} page shows the prompt as something to hand over", %{conn: conn} do
         html = conn |> get(unquote(path)) |> html_response(200)
 
-        assert html =~ "Please read"
-        assert html =~ "follow all the instructions exactly"
+        assert html =~ "Read"
+        assert html =~ "instrument this project with"
+        # Naming the events keeps every integration measuring the same things.
+        assert html =~ "run started/completed with an outcome"
+        assert html =~ "Reuse one sid for the whole run"
+        assert html =~ "Never send credentials, prompts or completions"
         assert html =~ "Update our llms.txt with the instructed changes"
       end
 
@@ -85,8 +89,8 @@ defmodule WebAnalyticsWeb.LandingControllerTest do
 
       # A self-hosted instance must not point its own readers at our contract,
       # so the host is this deployment's rather than the canonical one.
-      assert html =~ ~r{Please read https?://[^/\s]+/llms\.txt}
-      refute html =~ "Please read https://seriouslysimpleanalytics.com/llms.txt"
+      assert html =~ ~r{Read https?://[^/\s]+/llms\.txt and instrument}
+      refute html =~ "Read https://seriouslysimpleanalytics.com/llms.txt and instrument"
     end
   end
 

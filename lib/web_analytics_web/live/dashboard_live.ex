@@ -9,6 +9,7 @@ defmodule WebAnalyticsWeb.DashboardLive do
   use WebAnalyticsWeb, :live_view
 
   import WebAnalyticsWeb.DashboardComponents
+  import WebAnalyticsWeb.IntegrationComponents, only: [integration_chat: 1]
 
   alias WebAnalytics.Analytics
   alias WebAnalytics.Analytics.Anomaly
@@ -16,7 +17,7 @@ defmodule WebAnalyticsWeb.DashboardLive do
   alias WebAnalytics.Ingest.Crawler
   alias WebAnalytics.Sites
 
-  @tabs ~w(overview pages flow locations clicks forms sessions crawlers)
+  @tabs ~w(overview pages events flow locations clicks forms sessions crawlers)
   @click_groups ~w(name id class text selector tag)
   @location_levels ~w(country region county city)
   @refresh_ms 5_000
@@ -96,6 +97,7 @@ defmodule WebAnalyticsWeb.DashboardLive do
       |> assign(:click_group, click_group(params["clicks"]))
       |> assign(:location_level, location_level(params["loc"]))
       |> assign(:selected_page, params["page"])
+      |> assign(:selected_event, params["event"])
       |> assign(:project, blank_to_nil(params["project"]))
       |> assign(:anomaly_labels, Anomaly.labels())
       |> assign(:crawler_labels, Crawler.labels())
@@ -128,6 +130,14 @@ defmodule WebAnalyticsWeb.DashboardLive do
 
   def handle_event("select_page", %{"page" => page}, socket) do
     {:noreply, push_patch(socket, to: path_for(socket, %{"page" => page, "tab" => "flow"}))}
+  end
+
+  def handle_event("select_event", %{"event" => name}, socket) do
+    {:noreply, push_patch(socket, to: path_for(socket, %{"event" => name, "tab" => "events"}))}
+  end
+
+  def handle_event("clear_event", _params, socket) do
+    {:noreply, push_patch(socket, to: path_for(socket, %{"event" => nil}))}
   end
 
   def handle_event("clear_page", _params, socket) do
@@ -224,7 +234,8 @@ defmodule WebAnalyticsWeb.DashboardLive do
       "clicks" => to_string(socket.assigns.click_group),
       "loc" => to_string(socket.assigns.location_level),
       "project" => socket.assigns.filters && socket.assigns.filters.project,
-      "page" => socket.assigns.selected_page
+      "page" => socket.assigns.selected_page,
+      "event" => socket.assigns.selected_event
     }
 
     query =
@@ -288,6 +299,24 @@ defmodule WebAnalyticsWeb.DashboardLive do
     }
   end
 
+  defp tab_data("events", filters, assigns) do
+    events = Analytics.events(filters, 50)
+
+    # A name that no longer appears in the range would otherwise show an empty
+    # breakdown next to a populated list, which reads as a bug rather than as a
+    # stale link.
+    selected =
+      assigns.selected_event && Enum.find(events, &(&1.name == assigns.selected_event))
+
+    %{
+      events: events,
+      recent_events: Analytics.recent_events(filters, 40),
+      selected_event: selected,
+      event_attributes: selected && Analytics.event_attributes(filters, selected.name),
+      event_series: selected && Analytics.event_timeseries(filters, selected.name)
+    }
+  end
+
   defp tab_data("flow", filters, assigns) do
     %{
       flow: Analytics.flow(filters, 18),
@@ -342,26 +371,23 @@ defmodule WebAnalyticsWeb.DashboardLive do
 
   defp base_url, do: url(~p"/") |> String.trim_trailing("/")
 
-  defp snippet(site, endpoint) do
-    ~s|<script src="#{endpoint}/wa.js" data-site="#{site.key}" defer></script>|
-  end
+  @doc """
+  The prompt to hand a coding agent, naming this account.
 
-  # A prompt rather than a description, because the reader's next move is to
-  # paste it somewhere. Pointing at llms.txt keeps this short and keeps the
-  # contract in one place.
-  defp agent_prompt(site, endpoint) do
+  A prompt rather than a description, because the reader's next move is to paste
+  it. Naming what to report matters more than it looks: an agent told only to
+  "add analytics" chooses its own events, and every integration then measures
+  something different.
+  """
+  def agent_prompt(site, endpoint) do
     """
     Read #{endpoint}/llms.txt and instrument this project with
     SeriouslySimpleAnalytics. Use account id #{site.key} and set project to this
     tool's name. Report at least: first run, run started/completed with an
     outcome, each tool call, and errors by kind. Reuse one sid for the whole run.
-    Never send credentials, prompts or completions.
+    Never send credentials, prompts or completions. Update our llms.txt with the
+    instructed changes.
     """
     |> String.trim()
-  end
-
-  defp ping_example(site, endpoint) do
-    "curl \"#{endpoint}/api/ping?uid=#{site.key}&type=ai" <>
-      "&project=my-agent&event=page_view&path=/docs/quickstart&sid=$SESSION_ID\""
   end
 end

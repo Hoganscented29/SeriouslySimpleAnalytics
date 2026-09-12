@@ -235,13 +235,32 @@ defmodule WebAnalyticsWeb.DashboardLiveTest do
       assert html =~ "Account ID"
     end
 
-    test "shows both install paths", %{conn: conn, site: site} do
+    test "leads with the prompt to hand an agent, naming this account", %{
+      conn: conn,
+      site: site
+    } do
       {:ok, _live, html} = live(conn, ~p"/dashboard?site=dash")
 
-      assert html =~ "Install snippet"
-      assert html =~ "AI install instructions"
-      assert html =~ "data-site=&quot;#{site.key}&quot;"
-      assert html =~ "uid=#{site.key}"
+      assert html =~ "Instrument your AI tool"
+      assert html =~ "Your coding agent"
+      assert html =~ "Use account id #{site.key}"
+      # The heredoc wraps, so assert a fragment that does not span a line break.
+      assert html =~ "Update our llms.txt with the"
+    end
+
+    test "does not offer a browser snippet to paste", %{conn: conn} do
+      {:ok, _live, html} = live(conn, ~p"/dashboard?site=dash")
+
+      # The integration is a thing to delegate now. The agent reads llms.txt,
+      # which covers browser tracking, so the snippet is not the instruction.
+      refute html =~ "Install snippet"
+      refute html =~ "data-site="
+    end
+
+    test "does not claim it just created an account for someone who has one", %{conn: conn} do
+      {:ok, _live, html} = live(conn, ~p"/dashboard?site=dash")
+
+      refute html =~ "/api/v1/accounts"
     end
 
     test "never shows another user's sites", %{conn: conn} do
@@ -252,6 +271,124 @@ defmodule WebAnalyticsWeb.DashboardLiveTest do
 
       refute html =~ "Someone Else"
       refute html =~ theirs.key
+    end
+  end
+
+  describe "the events tab" do
+    setup %{conn: conn, user: user} do
+      site = user_site_fixture(user, %{key: "ev", name: "Events Site"})
+      %{conn: conn, site: site, user: user}
+    end
+
+    # Straight through ingest rather than over HTTP: the ping controller queues
+    # into a global collector that needs a shared sandbox connection and a
+    # non-async case, and none of that is what these tests are about. The
+    # controller has its own tests for the wire format.
+    defp emit(site, events) do
+      body =
+        Enum.map(events, fn {name, attrs} ->
+          %{"n" => "event", "t" => 1_000_000, "pv" => 1, "name" => name, "data" => attrs}
+        end)
+
+      {:ok, _} =
+        Ingest.submit_sync(
+          site,
+          payload(site, [init_event(), pageview_event(1, "/")] ++ body),
+          received_at: DateTime.utc_now()
+        )
+    end
+
+    test "an account with no events is told what an event is", %{conn: conn, site: site} do
+      {:ok, _live, html} = live(conn, ~p"/dashboard?site=#{site.key}&tab=events")
+
+      assert html =~ "No named events yet"
+      # A curl they can actually run, carrying their own account id.
+      assert html =~ "uid=#{site.key}"
+    end
+
+    test "named events are listed with their counts", %{conn: conn, site: site} do
+      emit(site, [
+        {"tool_called", %{"tool" => "search"}},
+        {"tool_called", %{"tool" => "search"}},
+        {"tool_called", %{"tool" => "search"}},
+        {"run_completed", %{"outcome" => "success"}}
+      ])
+
+      {:ok, _live, html} = live(conn, ~p"/dashboard?site=#{site.key}&tab=events&range=24h")
+
+      assert html =~ "tool_called"
+      assert html =~ "run_completed"
+      refute html =~ "No named events yet"
+    end
+
+    test "selecting an event shows the attributes it carried", %{conn: conn, site: site} do
+      emit(site, [
+        {"tool_called", %{"tool" => "web_search", "latency_ms" => "420"}},
+        {"tool_called", %{"tool" => "web_search", "latency_ms" => "180"}},
+        {"tool_called", %{"tool" => "read_file", "latency_ms" => "12"}}
+      ])
+
+      {:ok, live, _html} = live(conn, ~p"/dashboard?site=#{site.key}&tab=events&range=24h")
+
+      html =
+        live |> element("#event-list button[phx-value-event='tool_called']") |> render_click()
+
+      # llms.txt promises anything a caller invents is kept on the event. Until
+      # this tab there was nowhere to read it back, which made that half a
+      # promise.
+      assert html =~ "Attributes"
+      assert html =~ "tool"
+      assert html =~ "web_search"
+      assert html =~ "latency_ms"
+    end
+
+    test "the selected event survives in the URL", %{conn: conn, site: site} do
+      emit(site, [{"run_started", %{}}])
+
+      {:ok, live, _html} = live(conn, ~p"/dashboard?site=#{site.key}&tab=events&range=24h")
+      live |> element("#event-list button[phx-value-event='run_started']") |> render_click()
+
+      assert_patch(
+        live,
+        ~p"/dashboard?#{[anomalies: "exclude", clicks: "name", crawlers: "exclude", event: "run_started", group: "path", loc: "country", range: "24h", site: site.key, tab: "events"]}"
+      )
+    end
+
+    test "a stale event name in the URL does not show an empty breakdown", %{
+      conn: conn,
+      site: site
+    } do
+      emit(site, [{"run_started", %{}}])
+
+      {:ok, live, html} =
+        live(conn, ~p"/dashboard?site=#{site.key}&tab=events&range=24h&event=never_sent")
+
+      # The list is populated, so a blank attributes panel beside it would read
+      # as a broken page rather than a dead link.
+      assert html =~ "run_started"
+      assert html =~ "Pick an event"
+      assert :sys.get_state(live.pid).socket.assigns.data.selected_event == nil
+    end
+
+    test "the recent stream shows each event's attributes inline", %{conn: conn, site: site} do
+      emit(site, [{"error", %{"kind" => "timeout"}}])
+
+      {:ok, _live, html} = live(conn, ~p"/dashboard?site=#{site.key}&tab=events&range=24h")
+
+      assert html =~ "Most recent"
+      assert html =~ "kind="
+      assert html =~ "timeout"
+    end
+
+    test "events are not mixed into the clicks report", %{conn: conn, site: site} do
+      emit(site, [{"run_completed", %{"outcome" => "success"}}])
+
+      {:ok, _live, html} = live(conn, ~p"/dashboard?site=#{site.key}&tab=events&range=24h")
+      assert html =~ "run_completed"
+
+      # A run completing is not a click, and reading it under "Clicks" looks
+      # like a bug in the product rather than a choice about where to put it.
+      assert "events" in ~w(overview pages events flow locations clicks forms sessions crawlers)
     end
   end
 end
