@@ -160,6 +160,55 @@ defmodule WebAnalytics.AnalyticsTest do
       assert {"/b", "/c"} in routes
     end
 
+    test "says how much of the graph it is showing", %{site: site} do
+      submit(site, [
+        init_event(),
+        pageview_event(1, "/a"),
+        pageview_event(2, "/b"),
+        pageview_event(3, "/c"),
+        tick_event(3, %{"d" => 30_000})
+      ])
+
+      wide = Analytics.flow_coverage(filters(site), 50)
+      narrow = Analytics.flow_coverage(filters(site), 1)
+
+      # The totals do not move with the limit; only what is shown does.
+      assert wide.routes == narrow.routes
+      assert wide.hops == narrow.hops
+      assert narrow.routes_shown == 1
+      assert narrow.hops_shown < wide.hops_shown
+      assert wide.routes_shown == wide.routes
+      assert wide.hops_shown == wide.hops
+    end
+
+    test "counts the single-page visits that explain a thin diagram" do
+      site = site_fixture(%{key: "coverage"})
+      f = Analytics.filters(site.id, %{range: "30d"})
+
+      for path <- ["/one", "/two", "/three"] do
+        {:ok, _} =
+          Ingest.submit_sync(
+            site,
+            payload(
+              site,
+              [init_event(), pageview_event(1, path), tick_event(1, %{"d" => 20_000})],
+              token: "single#{path}"
+            ),
+            received_at: DateTime.utc_now()
+          )
+      end
+
+      coverage = Analytics.flow_coverage(f, 18)
+
+      # Three visits, no routes: a single-page visit has no transition in it,
+      # whatever the tag does. This is the number that explains almost every
+      # thin flow diagram, and the one nobody thinks to look up.
+      assert coverage.sessions == 3
+      assert coverage.single_page_sessions == 3
+      assert coverage.routes == 0
+      assert coverage.hops == 0
+    end
+
     test "reports three-step journeys, not just pairs", %{site: site} do
       submit(site, [
         init_event(),

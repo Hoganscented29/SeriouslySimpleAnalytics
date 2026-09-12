@@ -959,6 +959,44 @@
             else: "Click any page to follow its traffic."}
         </div>
 
+        <%!-- What the diagram can and cannot draw. A thin graph has two causes
+        that look the same from outside — the limit cutting the tail off a busy
+        one, or almost nothing to draw — and a reader cannot tell which without
+        being told. --%>
+        <% cov = @data[:flow_coverage] || %{} %>
+        <div
+          :if={cov[:sessions]}
+          class="rounded-box bg-base-200/50 border border-base-300 px-4 py-3 text-xs space-y-1"
+        >
+          <div :if={cov.routes > 0} class="flex flex-wrap gap-x-4 gap-y-1">
+            <span>
+              Showing <strong class="tabular-nums">{number(cov.routes_shown)}</strong>
+              of <strong class="tabular-nums">{number(cov.routes)}</strong>
+              routes
+            </span>
+            <span class="text-base-content/60">
+              {number(cov.hops_shown)} of {number(cov.hops)} page-to-page moves
+            </span>
+          </div>
+
+          <p :if={cov.routes == 0} class="text-base-content/70">
+            No visit in this range moved from one page to another, so there is no route to draw.
+          </p>
+
+          <%!-- The number that explains almost every thin flow diagram, and the
+          one nobody thinks to look up. A single-page visit cannot contribute a
+          transition, whatever the tag does. --%>
+          <p
+            :if={cov.sessions > 0 and cov.single_page_sessions * 2 >= cov.sessions}
+            class="text-base-content/70"
+          >
+            <strong class="tabular-nums">{number(cov.single_page_sessions)}</strong>
+            of {number(cov.sessions)} visits here were a single page, and a single-page visit
+            has no route in it. That, rather than the limit above, is what keeps this diagram
+            thin.
+          </p>
+        </div>
+
         <div id="flow-diagram">
           <.flow_diagram
             transitions={@data[:flow] || []}

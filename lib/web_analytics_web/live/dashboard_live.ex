@@ -480,6 +480,7 @@ defmodule WebAnalyticsWeb.DashboardLive do
     %{
       flow: Analytics.flow(filters, 18),
       journeys: Analytics.journeys(filters, 12),
+      flow_coverage: Analytics.flow_coverage(filters, 18),
       entries: Analytics.entries(filters),
       exits: Analytics.exits(filters),
       navigation:

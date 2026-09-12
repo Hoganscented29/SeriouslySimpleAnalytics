@@ -479,22 +479,42 @@ defmodule WebAnalytics.Analytics do
   graph is one grouped scan rather than a self join over ordered sessions.
   """
   def flow(f, limit \\ 25) do
+    Repo.all(
+      from row in transitions(f),
+        group_by: [row.from, row.to],
+        order_by: [desc: count(row.session_id)],
+        limit: ^limit,
+        select: %{
+          from: row.from,
+          to: row.to,
+          count: count(row.session_id),
+          sessions: count(row.session_id, :distinct)
+        }
+    )
+  end
+
+  # Every transition in range, one row per hop, before any ranking or limit.
+  #
+  # Shared so flow/2 and flow_coverage/1 cannot disagree about what a transition
+  # is: a coverage line counting differently from the diagram it explains would
+  # be worse than no coverage line.
+  #
+  # The previous page is worked out here rather than taken from the client. The
+  # tag does send one — it carries the last path across page loads in
+  # sessionStorage — but it is missing whenever that state did not survive: a
+  # restored tab, a new tab, the first load after the tag was added, a browser
+  # refusing storage, and every pageview reported through the ping API, which
+  # has no notion of a previous page at all. On real traffic that was most of
+  # them, and a diagram built only from the ones that arrived with a from_path
+  # showed a handful of transitions out of hundreds.
+  #
+  # The server already holds every pageview of a session in order, so it can
+  # simply look at the row before. The client's value is kept as the fallback
+  # for the one case the server cannot see: a session whose earlier pageviews
+  # never reached us, where the row before is genuinely not here.
+  defp transitions(f) do
     {from_key, to_key} = flow_fields(f)
 
-    # The previous page is worked out here rather than taken from the client.
-    #
-    # The tag does send one — it carries the last path across page loads in
-    # sessionStorage — but it is missing whenever that state did not survive:
-    # a restored tab, a new tab, the first load after the tag was added, a
-    # browser refusing storage, and every pageview reported through the ping
-    # API, which has no notion of a previous page at all. On real traffic that
-    # was most of them, and a flow diagram built only from the ones that
-    # arrived with a from_path showed a handful of transitions out of hundreds.
-    #
-    # The server already holds every pageview of a session in order, so it can
-    # simply look at the row before. The client's value is kept as the fallback
-    # for the one case the server cannot see: a session whose earlier pageviews
-    # never reached us, where the row before is genuinely not here.
     ordered =
       from p in pageviews_scope(f),
         select: %{
@@ -512,23 +532,71 @@ defmodule WebAnalytics.Analytics do
             )
         }
 
-    Repo.all(
-      from row in subquery(ordered),
-        where: not is_nil(row.from) and not is_nil(row.to),
-        # A reload reports the same path twice in a row. It is a real pageview
-        # and belongs in the counts, but as a loop on the diagram it says
-        # nothing and crowds out the routes that do.
-        where: row.from != row.to,
-        group_by: [row.from, row.to],
-        order_by: [desc: count(row.session_id)],
-        limit: ^limit,
-        select: %{
-          from: row.from,
-          to: row.to,
-          count: count(row.session_id),
-          sessions: count(row.session_id, :distinct)
-        }
-    )
+    from row in subquery(ordered),
+      where: not is_nil(row.from) and not is_nil(row.to),
+      # A reload reports the same path twice in a row. It is a real pageview and
+      # belongs in the counts, but as a loop on the diagram it says nothing and
+      # crowds out the routes that do.
+      where: row.from != row.to
+  end
+
+  @doc """
+  How much of the traffic the flow diagram can actually draw.
+
+  A thin diagram has two causes that look identical from the outside: the limit
+  is cutting the tail off a busy graph, or almost every visit was a single page
+  and there is no route to draw at all. Reporting both lets the panel say which
+  one it is, instead of leaving a reader to wonder whether it is broken.
+  """
+  def flow_coverage(f, limit \\ 25) do
+    # A subquery has to select a map or a source, so the grouped pairs come back
+    # as one and are counted outside.
+    routes =
+      Repo.one(
+        from r in subquery(
+               from(row in transitions(f),
+                 group_by: [row.from, row.to],
+                 select: %{from: row.from, to: row.to}
+               )
+             ),
+             select: count()
+      ) || 0
+
+    hops =
+      Repo.one(from row in transitions(f), select: count(row.session_id)) || 0
+
+    visits =
+      Repo.one(
+        from s in sessions_scope(f),
+          select: %{
+            total: count(s.id),
+            single: filter(count(s.id), s.pageview_count <= 1)
+          }
+      ) || %{total: 0, single: 0}
+
+    shown =
+      Repo.one(
+        from r in subquery(
+               from(row in transitions(f),
+                 group_by: [row.from, row.to],
+                 order_by: [desc: count(row.session_id)],
+                 limit: ^limit,
+                 select: %{hops: count(row.session_id)}
+               )
+             ),
+             select: coalesce(sum(r.hops), 0)
+      ) || 0
+
+    %{
+      routes: routes,
+      routes_shown: min(routes, limit),
+      hops: hops,
+      # sum/1 comes back as a Decimal, and a Decimal in a template renders as a
+      # struct rather than a number.
+      hops_shown: shown |> to_number() |> round(),
+      sessions: visits.total,
+      single_page_sessions: visits.single
+    }
   end
 
   @doc """
