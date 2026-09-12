@@ -20,6 +20,7 @@ defmodule WebAnalyticsWeb.DashboardLive do
   @tabs ~w(overview pages events flow locations clicks forms sessions crawlers)
   @click_groups ~w(name id class text selector tag)
   @location_levels ~w(country region county city)
+  @flow_modes ~w(pages events)
   @refresh_ms 5_000
 
   @impl true
@@ -98,6 +99,7 @@ defmodule WebAnalyticsWeb.DashboardLive do
       |> assign(:location_level, location_level(params["loc"]))
       |> assign(:selected_page, params["page"])
       |> assign(:selected_event, params["event"])
+      |> assign(:flow_mode, flow_mode(params["flow"]))
       |> assign(:project, blank_to_nil(params["project"]))
       |> assign(:anomaly_labels, Anomaly.labels())
       |> assign(:crawler_labels, Crawler.labels())
@@ -181,6 +183,9 @@ defmodule WebAnalyticsWeb.DashboardLive do
   defp click_group(value) when value in @click_groups, do: String.to_existing_atom(value)
   defp click_group(_), do: :name
 
+  defp flow_mode(value) when value in @flow_modes, do: value
+  defp flow_mode(_), do: "pages"
+
   defp location_level(value) when value in @location_levels, do: String.to_existing_atom(value)
   defp location_level(_), do: :country
 
@@ -201,6 +206,7 @@ defmodule WebAnalyticsWeb.DashboardLive do
       exclude_anomalies: params["anomalies"] != "include",
       exclude_crawlers: params["crawlers"] != "include",
       project: blank_to_nil(params["project"]),
+      host: blank_to_nil(params["domain"]),
       group_by: if(params["group"] == "title", do: :title, else: :path)
     })
   end
@@ -235,7 +241,11 @@ defmodule WebAnalyticsWeb.DashboardLive do
       "loc" => to_string(socket.assigns.location_level),
       "project" => socket.assigns.filters && socket.assigns.filters.project,
       "page" => socket.assigns.selected_page,
-      "event" => socket.assigns.selected_event
+      "event" => socket.assigns.selected_event,
+      # Omitted at its default, like every other control: a shared URL carrying
+      # each default is longer and says less.
+      "flow" => if(socket.assigns.flow_mode == "pages", do: nil, else: "events"),
+      "domain" => socket.assigns.filters && socket.assigns.filters.host
     }
 
     query =
@@ -262,6 +272,7 @@ defmodule WebAnalyticsWeb.DashboardLive do
       %{
         overview: Analytics.overview(filters),
         projects: Analytics.projects(filters),
+        domains: Analytics.domains(filters),
         channels: Analytics.channels(filters)
       }
       |> Map.merge(tab_data(socket.assigns.tab, filters, socket.assigns))
@@ -314,6 +325,17 @@ defmodule WebAnalyticsWeb.DashboardLive do
       selected_event: selected,
       event_attributes: selected && Analytics.event_attributes(filters, selected.name),
       event_series: selected && Analytics.event_timeseries(filters, selected.name)
+    }
+  end
+
+  defp tab_data("flow", filters, %{flow_mode: "events"} = assigns) do
+    %{
+      event_flow: Analytics.event_flow(filters, 18),
+      event_entries: Analytics.event_entries(filters),
+      event_exits: Analytics.event_exits(filters),
+      events: Analytics.events(filters, 30),
+      sequences:
+        assigns.selected_event && Analytics.event_sequences(filters, assigns.selected_event, 8)
     }
   end
 

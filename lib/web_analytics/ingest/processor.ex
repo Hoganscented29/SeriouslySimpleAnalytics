@@ -310,6 +310,9 @@ defmodule WebAnalytics.Ingest.Processor do
       |> put_unless_nil(:agent_name, plan.agent_name)
       |> put_unless_nil(:contact_email, plan.contact_email)
       |> Map.merge(location_attrs(plan.location))
+      # The host comes from the first pageview's URL, which is the only place the
+      # client tells us which domain the tag is deployed on.
+      |> put_unless_nil(:host, entry && entry.url && uri_host(entry.url))
       |> put_unless_nil(:entry_path, entry && entry.path)
       |> put_unless_nil(:entry_title, entry && entry.title)
       |> Map.merge(init_attrs(init))
@@ -389,6 +392,7 @@ defmodule WebAnalytics.Ingest.Processor do
           longitude: fragment("COALESCE(?, EXCLUDED.longitude)", s.longitude),
           accuracy_km: fragment("COALESCE(?, EXCLUDED.accuracy_km)", s.accuracy_km),
           geo_source: fragment("COALESCE(?, EXCLUDED.geo_source)", s.geo_source),
+          host: fragment("COALESCE(?, EXCLUDED.host)", s.host),
           entry_path: fragment("COALESCE(?, EXCLUDED.entry_path)", s.entry_path),
           entry_title: fragment("COALESCE(?, EXCLUDED.entry_title)", s.entry_title),
           referrer: fragment("COALESCE(?, EXCLUDED.referrer)", s.referrer),
@@ -460,6 +464,13 @@ defmodule WebAnalytics.Ingest.Processor do
         form_count: session.forms
       ]
     )
+  end
+
+  defp uri_host(url) do
+    case URI.parse(url) do
+      %URI{host: host} when is_binary(host) and host != "" -> String.downcase(host)
+      _ -> nil
+    end
   end
 
   defp put_unless_nil(map, _key, nil), do: map

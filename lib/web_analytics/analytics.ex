@@ -54,6 +54,8 @@ defmodule WebAnalytics.Analytics do
       exclude_crawlers: Map.get(opts, :exclude_crawlers, true),
       # One account can instrument several things; nil means "all of them".
       project: Map.get(opts, :project),
+      # And one tag can be deployed on several hostnames. Same rule: nil is all.
+      host: Map.get(opts, :host),
       group_by: Map.get(opts, :group_by, :path)
     }
   end
@@ -68,6 +70,7 @@ defmodule WebAnalytics.Analytics do
     |> filter_anomalies(f)
     |> filter_crawlers(f)
     |> filter_project(f)
+    |> filter_host(f)
   end
 
   defp filter_project(query, %{project: project}) when is_binary(project),
@@ -75,10 +78,20 @@ defmodule WebAnalytics.Analytics do
 
   defp filter_project(query, _f), do: query
 
+  defp filter_host(query, %{host: host}) when is_binary(host),
+    do: where(query, [s], s.host == ^host)
+
+  defp filter_host(query, _f), do: query
+
   defp filter_joined_project(query, %{project: project}) when is_binary(project),
     do: where(query, [session: s], s.project == ^project)
 
   defp filter_joined_project(query, _f), do: query
+
+  defp filter_joined_host(query, %{host: host}) when is_binary(host),
+    do: where(query, [session: s], s.host == ^host)
+
+  defp filter_joined_host(query, _f), do: query
 
   defp filter_anomalies(query, %{exclude_anomalies: true}),
     do: where(query, [s], not s.anomalous)
@@ -115,6 +128,7 @@ defmodule WebAnalytics.Analytics do
     |> filter_joined_anomalies(f)
     |> filter_joined_crawlers(f)
     |> filter_joined_project(f)
+    |> filter_joined_host(f)
   end
 
   defp events_scope(f) do
@@ -127,6 +141,7 @@ defmodule WebAnalytics.Analytics do
     |> filter_joined_anomalies(f)
     |> filter_joined_crawlers(f)
     |> filter_joined_project(f)
+    |> filter_joined_host(f)
   end
 
   defp forms_scope(f) do
@@ -139,6 +154,7 @@ defmodule WebAnalytics.Analytics do
     |> filter_joined_anomalies(f)
     |> filter_joined_crawlers(f)
     |> filter_joined_project(f)
+    |> filter_joined_host(f)
   end
 
   # -- overview ------------------------------------------------------------
@@ -537,6 +553,113 @@ defmodule WebAnalytics.Analytics do
     |> Enum.sort_by(& &1.count, :desc)
   end
 
+  @doc """
+  Event-to-event transitions inside a session.
+
+  The page flow graph answers "where did people go next"; for a tool that has no
+  pages, the same question is asked of events — run_started to tool_called to
+  run_completed. Paired with a window function so consecutive events are found
+  in one pass, rather than reading every event back and pairing them here.
+  """
+  def event_flow(f, limit \\ 18) do
+    Repo.all(
+      from t in subquery(event_sequence(f)),
+        where: not is_nil(t.previous),
+        group_by: [t.previous, t.name],
+        order_by: [desc: count(t.id)],
+        limit: ^limit,
+        select: %{
+          from: t.previous,
+          to: t.name,
+          count: count(t.id),
+          sessions: count(t.session_id, :distinct)
+        }
+    )
+  end
+
+  @doc "The events sessions open with, and the ones they stop at."
+  def event_entries(f, limit \\ 10) do
+    Repo.all(
+      from t in subquery(event_sequence(f)),
+        where: is_nil(t.previous),
+        group_by: t.name,
+        order_by: [desc: count(t.id)],
+        limit: ^limit,
+        select: %{name: t.name, count: count(t.id)}
+    )
+  end
+
+  def event_exits(f, limit \\ 10) do
+    Repo.all(
+      from t in subquery(event_sequence(f)),
+        where: is_nil(t.next),
+        group_by: t.name,
+        order_by: [desc: count(t.id)],
+        limit: ^limit,
+        select: %{name: t.name, count: count(t.id)}
+    )
+  end
+
+  @doc "Everything that happened in one session, in order. The drill-down's payload."
+  def event_sequences(f, name, limit \\ 10) do
+    sessions =
+      Repo.all(
+        from t in subquery(event_sequence(f)),
+          where: t.name == ^name,
+          group_by: t.session_id,
+          order_by: [desc: max(t.at)],
+          limit: ^limit,
+          select: t.session_id
+      )
+
+    Repo.all(
+      from e in events_scope(f),
+        join: s in assoc(e, :session),
+        where: e.session_id in ^sessions and not is_nil(e.name),
+        order_by: [asc: e.session_id, asc: e.occurred_at, asc: e.id],
+        select: %{
+          session_id: e.session_id,
+          name: e.name,
+          at: e.occurred_at,
+          attrs: e.data_attrs,
+          project: s.project
+        }
+    )
+    |> Enum.group_by(& &1.session_id)
+    |> Enum.map(fn {id, events} -> %{session_id: id, events: events} end)
+    |> Enum.sort_by(fn %{events: [first | _]} -> first.at end, {:desc, DateTime})
+  end
+
+  # Each event with the one before and after it in the same session. Ordered by
+  # id as well as time because two pings from the same run can land in the same
+  # millisecond, and a tie makes the pairing arbitrary.
+  defp event_sequence(f) do
+    from e in events_scope(f),
+      where: not is_nil(e.name),
+      select: %{
+        id: e.id,
+        session_id: e.session_id,
+        name: e.name,
+        at: e.occurred_at,
+        previous:
+          fragment(
+            "lag(?) OVER (PARTITION BY ? ORDER BY ?, ?)",
+            e.name,
+            e.session_id,
+            e.occurred_at,
+            e.id
+          ),
+        next:
+          fragment(
+            "lead(?) OVER (PARTITION BY ? ORDER BY ?, ?)",
+            e.name,
+            e.session_id,
+            e.occurred_at,
+            e.id
+          )
+      }
+  end
+
   @doc "The most recent events, with whatever attributes came with them."
   def recent_events(f, limit \\ 50) do
     Repo.all(
@@ -728,6 +851,31 @@ defmodule WebAnalytics.Analytics do
   end
 
   # -- projects ------------------------------------------------------------
+
+  @doc """
+  Hostnames this account has seen traffic on, busiest first.
+
+  Populated from the first pageview of each session, so an account whose tag is
+  only on one domain gets a single row and no selector worth showing.
+
+  Ignores the host filter, since it exists to populate the control that sets it.
+  """
+  def domains(f) do
+    Repo.all(
+      from s in Session,
+        where: s.site_id == ^f.site_id,
+        where: s.started_at >= ^f.from and s.started_at < ^f.to,
+        where: not is_nil(s.host),
+        group_by: s.host,
+        order_by: [desc: count(s.id)],
+        select: %{
+          name: s.host,
+          count: count(s.id),
+          pageviews: coalesce(sum(s.pageview_count), 0),
+          last_seen: max(s.last_seen_at)
+        }
+    )
+  end
 
   @doc """
   Projects seen for a site, newest activity first.

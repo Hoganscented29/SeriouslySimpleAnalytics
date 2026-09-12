@@ -234,4 +234,137 @@ defmodule WebAnalytics.AnalyticsTest do
     assert List.last(buckets).label == "1h+"
     assert Analytics.timeseries(filters(site)) != []
   end
+
+  describe "event flow" do
+    setup do
+      site = site_fixture(%{key: "evflow"})
+
+      # One run, in order: started, two tools, completed.
+      {:ok, _} =
+        Ingest.submit_sync(
+          site,
+          payload(site, [
+            init_event(),
+            pageview_event(1, "/"),
+            %{
+              "n" => "event",
+              "t" => 1_000_000,
+              "pv" => 1,
+              "name" => "run_started",
+              "data" => %{}
+            },
+            %{
+              "n" => "event",
+              "t" => 1_000_100,
+              "pv" => 1,
+              "name" => "tool_called",
+              "data" => %{"tool" => "search"}
+            },
+            %{
+              "n" => "event",
+              "t" => 1_000_200,
+              "pv" => 1,
+              "name" => "tool_called",
+              "data" => %{"tool" => "read"}
+            },
+            %{
+              "n" => "event",
+              "t" => 1_000_300,
+              "pv" => 1,
+              "name" => "run_completed",
+              "data" => %{"outcome" => "success"}
+            }
+          ]),
+          received_at: DateTime.utc_now()
+        )
+
+      %{site: site, f: Analytics.filters(site.id, %{range: "24h"})}
+    end
+
+    test "pairs consecutive events within a session", %{f: f} do
+      pairs = Analytics.event_flow(f) |> Enum.map(&{&1.from, &1.to, &1.count})
+
+      assert {"run_started", "tool_called", 1} in pairs
+      assert {"tool_called", "tool_called", 1} in pairs
+      assert {"tool_called", "run_completed", 1} in pairs
+    end
+
+    test "does not pair across sessions", %{site: site, f: f} do
+      # A second run's first event must not follow the first run's last one.
+      {:ok, _} =
+        Ingest.submit_sync(
+          site,
+          payload(site, [
+            init_event(),
+            pageview_event(1, "/"),
+            %{"n" => "event", "t" => 1_000_000, "pv" => 1, "name" => "run_started", "data" => %{}}
+          ]),
+          received_at: DateTime.utc_now()
+        )
+
+      pairs = Analytics.event_flow(f) |> Enum.map(&{&1.from, &1.to})
+
+      refute {"run_completed", "run_started"} in pairs
+    end
+
+    test "entries are what a session opens with, exits what it stops at", %{f: f} do
+      assert [%{name: "run_started", count: 1}] = Analytics.event_entries(f)
+      assert [%{name: "run_completed", count: 1}] = Analytics.event_exits(f)
+    end
+
+    test "a sequence comes back in order, with attributes", %{f: f} do
+      assert [%{events: events}] = Analytics.event_sequences(f, "tool_called")
+
+      assert Enum.map(events, & &1.name) ==
+               ~w(run_started tool_called tool_called run_completed)
+
+      assert Enum.at(events, 1).attrs == %{"tool" => "search"}
+    end
+
+    test "a session with one event produces no transitions", %{f: f} do
+      # It is still an entry and an exit, which is the honest reading.
+      assert Analytics.event_flow(f) != []
+      assert length(Analytics.event_entries(f)) == 1
+    end
+  end
+
+  describe "domains" do
+    setup do
+      site = site_fixture(%{key: "domains"})
+
+      for {host, count} <- [{"www.example.com", 3}, {"app.example.com", 1}] do
+        for _ <- 1..count do
+          {:ok, _} =
+            Ingest.submit_sync(
+              site,
+              payload(site, [
+                init_event(),
+                pageview_event(1, "/", %{"url" => "https://#{host}/"})
+              ]),
+              received_at: DateTime.utc_now()
+            )
+        end
+      end
+
+      %{site: site, f: Analytics.filters(site.id, %{range: "24h"})}
+    end
+
+    test "lists every host the tag was deployed on, busiest first", %{f: f} do
+      assert [%{name: "www.example.com", count: 3}, %{name: "app.example.com", count: 1}] =
+               Analytics.domains(f)
+    end
+
+    test "filtering by host narrows every report to that domain", %{site: site} do
+      f = Analytics.filters(site.id, %{range: "24h", host: "app.example.com"})
+
+      assert Analytics.overview(f).sessions == 1
+      assert Analytics.domains(f) |> length() == 2, "the picker still lists all of them"
+    end
+
+    test "an unknown host matches nothing rather than everything", %{site: site} do
+      f = Analytics.filters(site.id, %{range: "24h", host: "nope.example.com"})
+
+      assert Analytics.overview(f).sessions == 0
+    end
+  end
 end

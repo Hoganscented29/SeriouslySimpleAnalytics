@@ -29,6 +29,9 @@ defmodule WebAnalytics.Tracking.Session do
     field :form_count, :integer, default: 0
     field :max_scroll_pct, :integer, default: 0
 
+    # The hostname the visit happened on, for accounts whose tag is deployed
+    # across more than one domain.
+    field :host, :string
     field :entry_path, :string
     field :entry_title, :string
     field :exit_path, :string

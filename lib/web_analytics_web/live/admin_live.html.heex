@@ -376,17 +376,60 @@
 
       <!-- projects -->
       <section class="rounded-box bg-base-100 border border-base-300 p-5">
-        <h2 class="text-sm font-medium mb-3">AI projects, 30 days</h2>
+        <h2 class="text-sm font-medium mb-3">Projects, 30 days — busiest first</h2>
         <div class="max-h-64 overflow-y-auto">
-          <table class="table table-xs">
+          <table class="table table-xs table-pin-rows">
+            <thead>
+              <tr>
+                <th>Project</th>
+                <th>Channel</th>
+                <th class="text-right">Sessions</th>
+                <th class="text-right">Accounts</th>
+              </tr>
+            </thead>
             <tbody>
               <tr :for={row <- @detail.projects}>
-                <td class="max-w-[10rem] truncate" title={row.project}>{row.project}</td>
+                <td class="max-w-[10rem] truncate font-mono text-[11px]" title={row.project}>
+                  {row.project}
+                </td>
                 <td class="text-base-content/50 text-[11px]">{channel_label(row.channel)}</td>
                 <td class="text-right tabular-nums">{num(row.sessions)}</td>
+                <td class="text-right tabular-nums text-base-content/60">{num(row.accounts)}</td>
               </tr>
               <tr :if={@detail.projects == []}>
-                <td class="text-base-content/50 py-4">No projects reporting yet.</td>
+                <td colspan="4" class="text-base-content/50 py-4">No projects reporting yet.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- domains -->
+      <section class="rounded-box bg-base-100 border border-base-300 p-5">
+        <h2 class="text-sm font-medium mb-3">Domains, 30 days — busiest first</h2>
+        <div class="max-h-64 overflow-y-auto">
+          <table class="table table-xs table-pin-rows">
+            <thead>
+              <tr>
+                <th>Domain</th>
+                <th class="text-right">Sessions</th>
+                <th class="text-right">Views</th>
+                <th class="text-right">Accounts</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr :for={row <- @detail.domains}>
+                <td class="max-w-[14rem] truncate font-mono text-[11px]" title={row.name}>
+                  {row.name}
+                </td>
+                <td class="text-right tabular-nums">{num(row.sessions)}</td>
+                <td class="text-right tabular-nums">{num(row.pageviews)}</td>
+                <td class="text-right tabular-nums text-base-content/60">{num(row.accounts)}</td>
+              </tr>
+              <tr :if={@detail.domains == []}>
+                <td colspan="4" class="text-base-content/50 py-4">
+                  No domains yet — a domain appears once a page reports its URL.
+                </td>
               </tr>
             </tbody>
           </table>

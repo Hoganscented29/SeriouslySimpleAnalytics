@@ -80,6 +80,7 @@ defmodule WebAnalytics.Admin do
     %{
       users: users_with_activity(),
       projects: top_projects(now),
+      domains: top_domains(now),
       crawlers: top_crawlers(now),
       countries: top_countries(now),
       channels: sessions_by_channel(now),
@@ -211,12 +212,36 @@ defmodule WebAnalytics.Admin do
         where: not is_nil(s.project) and s.started_at > ^since,
         group_by: [s.project, s.channel],
         order_by: [desc: count(s.id)],
-        limit: 20,
+        limit: 25,
         select: %{
           project: s.project,
           channel: s.channel,
           sessions: count(s.id),
-          pageviews: sum(s.pageview_count),
+          pageviews: coalesce(sum(s.pageview_count), 0),
+          accounts: count(s.site_id, :distinct),
+          last_seen: max(s.last_seen_at)
+        }
+    )
+  end
+
+  # Across every account, so the operator can see which domains this deployment
+  # is actually carrying rather than which accounts exist.
+  defp top_domains(now) do
+    since = DateTime.add(now, -30, :day)
+
+    Repo.all(
+      from s in Session,
+        join: site in Site,
+        on: site.id == s.site_id,
+        where: not is_nil(s.host) and s.started_at > ^since,
+        group_by: s.host,
+        order_by: [desc: count(s.id)],
+        limit: 25,
+        select: %{
+          name: s.host,
+          sessions: count(s.id),
+          pageviews: coalesce(sum(s.pageview_count), 0),
+          accounts: count(site.id, :distinct),
           last_seen: max(s.last_seen_at)
         }
     )

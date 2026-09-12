@@ -37,6 +37,20 @@
       </div>
 
       <div class="flex flex-wrap items-center gap-2">
+        <% domains = @data[:domains] || [] %>
+        <form :if={length(domains) > 1} id="domain-picker" phx-change="navigate">
+          <select name="domain" class="select select-sm select-bordered">
+            <option value="">All domains</option>
+            <option
+              :for={domain <- domains}
+              value={domain.name}
+              selected={@filters.host == domain.name}
+            >
+              {domain.name} ({number(domain.count)})
+            </option>
+          </select>
+        </form>
+
         <% projects = @data[:projects] || [] %>
         <form :if={projects != []} id="project-picker" phx-change="navigate">
           <select name="project" class="select select-sm select-bordered">
@@ -459,99 +473,234 @@
 
     <!-- ================================ FLOW ============================= -->
     <div :if={@tab == "flow"} class="space-y-6">
-      <% nav = @data[:navigation] %>
-
-      <div class="text-sm text-base-content/60">
-        Grouped by <span class="font-medium">{@filters.group_by}</span>. Transitions are recorded on
-        each pageview, so they follow real navigation rather than inferred ordering. {if nav,
-          do: "Click any page in the diagram to re-centre the flow on it.",
-          else: "Click any page to follow its traffic."}
-      </div>
-
-      <div id="flow-diagram">
-        <.flow_diagram
-          transitions={@data[:flow] || []}
-          focus={nav}
-          click="select_page"
-          title={
-            if nav,
-              do: "Flow through #{display_name(nav.page)}",
-              else: "Busiest transitions by #{@filters.group_by}"
-          }
-          subtitle={
-            if nav,
-              do:
-                "#{number(nav.totals.views)} views · #{number(nav.totals.entrances)} entrances · #{number(nav.totals.exits)} exits",
-              else: "every #{@filters.group_by} pair, ranked"
-          }
+      <!-- pages or events: both are flows, and a tool with no pages has only one -->
+      <div class="join">
+        <button
+          :for={{mode, label} <- [{"pages", "Page flow"}, {"events", "Event flow"}]}
+          phx-click="navigate"
+          phx-value-flow={mode}
+          class={["btn btn-sm join-item", @flow_mode == mode && "btn-active btn-primary"]}
         >
-          <:actions>
-            <button :if={nav} phx-click="clear_page" class="btn btn-ghost btn-xs">
-              Show all transitions
-            </button>
-          </:actions>
-        </.flow_diagram>
+          {label}
+        </button>
       </div>
 
-      <div :if={nav} id="flow-navigation" class="grid md:grid-cols-2 gap-4">
-        <div>
-          <div class="text-xs uppercase tracking-wide text-base-content/60 mb-2">
-            Came from — {number(nav.totals.views - nav.totals.entrances)} views
+      <% nav = @data[:navigation] %>
+      <div :if={@flow_mode == "events"} class="space-y-6">
+        <% flow = @data[:event_flow] || [] %>
+        <.flow_diagram
+          transitions={flow}
+          click="select_event"
+          title="How events follow each other"
+          subtitle="every consecutive pair within a session, ranked"
+        />
+
+        <div class="grid md:grid-cols-2 gap-4">
+          <div>
+            <div class="text-xs uppercase tracking-wide text-base-content/60 mb-2">
+              Sessions start with
+            </div>
+            <.bar_list
+              rows={Enum.map(@data[:event_entries] || [], &%{name: &1.name, count: &1.count})}
+              empty="Nothing reported yet"
+              click="select_event"
+            />
           </div>
-          <.bar_list
-            rows={nav.before}
-            empty="Every visit entered directly here"
+          <div>
+            <div class="text-xs uppercase tracking-wide text-base-content/60 mb-2">
+              Sessions stop at
+            </div>
+            <.bar_list
+              rows={Enum.map(@data[:event_exits] || [], &%{name: &1.name, count: &1.count})}
+              empty="Nothing reported yet"
+              click="select_event"
+            />
+          </div>
+        </div>
+
+        <!-- the data behind the picture -->
+        <div class="rounded-box bg-base-100 border border-base-300 overflow-x-auto">
+          <div class="px-4 py-3 border-b border-base-300 font-medium text-sm">
+            Transitions
+          </div>
+          <table class="table table-sm">
+            <thead>
+              <tr>
+                <th>From</th>
+                <th>To</th>
+                <th class="text-right">Times</th>
+                <th class="text-right">Sessions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr :for={row <- flow} class="hover">
+                <td>
+                  <button
+                    phx-click="select_event"
+                    phx-value-event={row.from}
+                    class="font-mono text-xs link link-hover"
+                  >
+                    {row.from}
+                  </button>
+                </td>
+                <td>
+                  <button
+                    phx-click="select_event"
+                    phx-value-event={row.to}
+                    class="font-mono text-xs link link-hover"
+                  >
+                    {row.to}
+                  </button>
+                </td>
+                <td class="text-right tabular-nums">{number(row.count)}</td>
+                <td class="text-right tabular-nums">{number(row.sessions)}</td>
+              </tr>
+              <tr :if={flow == []}>
+                <td colspan="4" class="text-center text-base-content/50 py-8">
+                  No event-to-event transitions yet. A session needs at least two events before
+                  one can follow another.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- one event, as whole runs -->
+        <div :if={@selected_event} class="rounded-box bg-base-100 border border-base-300">
+          <div class="px-4 py-3 border-b border-base-300 flex items-center gap-3 flex-wrap">
+            <span class="font-medium text-sm">
+              Runs containing <code class="font-mono">{@selected_event}</code>
+            </span>
+            <span class="flex-1"></span>
+            <button phx-click="clear_event" class="btn btn-ghost btn-xs">Clear</button>
+          </div>
+          <div class="divide-y divide-base-200">
+            <div :for={run <- @data[:sequences] || []} class="px-4 py-3">
+              <div class="flex flex-wrap items-center gap-x-2 gap-y-2">
+                <span :for={{event, index} <- Enum.with_index(run.events)} class="contents">
+                  <span :if={index > 0} class="text-base-content/30">→</span>
+                  <span class={[
+                    "px-2 py-1 rounded text-xs font-mono",
+                    event.name == @selected_event && "bg-primary/15 font-semibold",
+                    event.name != @selected_event && "bg-base-200"
+                  ]}>
+                    {event.name}
+                    <span :if={event.attrs != %{}} class="text-base-content/50">
+                      {event.attrs
+                      |> Enum.sort()
+                      |> Enum.map_join(" ", fn {k, v} -> "#{k}=#{v}" end)}
+                    </span>
+                  </span>
+                </span>
+              </div>
+            </div>
+            <div
+              :if={(@data[:sequences] || []) == []}
+              class="px-4 py-8 text-center text-sm text-base-content/50"
+            >
+              No sessions contain that event in this range.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div :if={@flow_mode == "pages"} class="space-y-6">
+        <div class="text-sm text-base-content/60">
+          Grouped by <span class="font-medium">{@filters.group_by}</span>. Transitions are recorded on
+          each pageview, so they follow real navigation rather than inferred ordering. {if nav,
+            do: "Click any page in the diagram to re-centre the flow on it.",
+            else: "Click any page to follow its traffic."}
+        </div>
+
+        <div id="flow-diagram">
+          <.flow_diagram
+            transitions={@data[:flow] || []}
+            focus={nav}
             click="select_page"
-          />
+            title={
+              if nav,
+                do: "Flow through #{display_name(nav.page)}",
+                else: "Busiest transitions by #{@filters.group_by}"
+            }
+            subtitle={
+              if nav,
+                do:
+                  "#{number(nav.totals.views)} views · #{number(nav.totals.entrances)} entrances · #{number(nav.totals.exits)} exits",
+                else: "every #{@filters.group_by} pair, ranked"
+            }
+          >
+            <:actions>
+              <button :if={nav} phx-click="clear_page" class="btn btn-ghost btn-xs">
+                Show all transitions
+              </button>
+            </:actions>
+          </.flow_diagram>
         </div>
-        <div>
-          <div class="text-xs uppercase tracking-wide text-base-content/60 mb-2">
-            Went to — {number(nav.totals.views - nav.totals.exits)} views
+
+        <div :if={nav} id="flow-navigation" class="grid md:grid-cols-2 gap-4">
+          <div>
+            <div class="text-xs uppercase tracking-wide text-base-content/60 mb-2">
+              Came from — {number(nav.totals.views - nav.totals.entrances)} views
+            </div>
+            <.bar_list
+              rows={nav.before}
+              empty="Every visit entered directly here"
+              click="select_page"
+            />
           </div>
-          <.bar_list rows={nav.next} empty="Every visit ended here" click="select_page" />
+          <div>
+            <div class="text-xs uppercase tracking-wide text-base-content/60 mb-2">
+              Went to — {number(nav.totals.views - nav.totals.exits)} views
+            </div>
+            <.bar_list rows={nav.next} empty="Every visit ended here" click="select_page" />
+          </div>
         </div>
-      </div>
 
-      <div
-        id="flow-transitions"
-        class="rounded-box bg-base-100 border border-base-300 overflow-x-auto"
-      >
-        <table class="table table-sm">
-          <thead>
-            <tr>
-              <th>From</th>
-              <th>To</th>
-              <th class="text-right">Transitions</th>
-              <th class="text-right">Sessions</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr :for={hop <- @data[:flow] || []} class="hover">
-              <td class="max-w-xs truncate" title={"Drill into #{display_name(hop.from)}"}>
-                <button phx-click="select_page" phx-value-page={hop.from} class="link link-hover">
-                  {display_name(hop.from)}
-                </button>
-              </td>
-              <td class="max-w-xs truncate" title={"Drill into #{display_name(hop.to)}"}>
-                <button phx-click="select_page" phx-value-page={hop.to} class="link link-hover">
-                  {display_name(hop.to)}
-                </button>
-              </td>
-              <td class="text-right tabular-nums">{number(hop.count)}</td>
-              <td class="text-right tabular-nums">{number(hop.sessions)}</td>
-            </tr>
-            <tr :if={(@data[:flow] || []) == []}>
-              <td colspan="4" class="text-center py-8 text-base-content/50">
-                No transitions yet — they appear once a session visits a second page
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+        <div
+          id="flow-transitions"
+          class="rounded-box bg-base-100 border border-base-300 overflow-x-auto"
+        >
+          <table class="table table-sm">
+            <thead>
+              <tr>
+                <th>From</th>
+                <th>To</th>
+                <th class="text-right">Transitions</th>
+                <th class="text-right">Sessions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr :for={hop <- @data[:flow] || []} class="hover">
+                <td class="max-w-xs truncate" title={"Drill into #{display_name(hop.from)}"}>
+                  <button
+                    phx-click="select_page"
+                    phx-value-page={hop.from}
+                    class="link link-hover"
+                  >
+                    {display_name(hop.from)}
+                  </button>
+                </td>
+                <td class="max-w-xs truncate" title={"Drill into #{display_name(hop.to)}"}>
+                  <button phx-click="select_page" phx-value-page={hop.to} class="link link-hover">
+                    {display_name(hop.to)}
+                  </button>
+                </td>
+                <td class="text-right tabular-nums">{number(hop.count)}</td>
+                <td class="text-right tabular-nums">{number(hop.sessions)}</td>
+              </tr>
+              <tr :if={(@data[:flow] || []) == []}>
+                <td colspan="4" class="text-center py-8 text-base-content/50">
+                  No transitions yet — they appear once a session visits a second page
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
 
-      <div class="grid md:grid-cols-2 gap-4">
-        <.bar_list title="Entry pages" rows={@data[:entries] || []} click="select_page" />
-        <.bar_list title="Exit pages" rows={@data[:exits] || []} click="select_page" />
+        <div class="grid md:grid-cols-2 gap-4">
+          <.bar_list title="Entry pages" rows={@data[:entries] || []} click="select_page" />
+          <.bar_list title="Exit pages" rows={@data[:exits] || []} click="select_page" />
+        </div>
       </div>
     </div>
     <!-- ============================ LOCATIONS ============================ -->
