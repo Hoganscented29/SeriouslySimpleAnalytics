@@ -133,7 +133,7 @@ defmodule WebAnalyticsWeb.LandingControllerTest do
       assert html =~ "Your visit, as recorded"
       # The script reads the tag's own state rather than measuring separately.
       assert html =~ ~s|src="/wa-live.js"|
-      for id <- ~w(wa-dwell wa-active wa-scroll wa-clicks wa-path), do: assert(html =~ id)
+      for id <- ~w(wa-dwell wa-pageviews wa-scroll wa-clicks wa-path), do: assert(html =~ id)
     end
 
     test "shows this site's own crawler traffic when there is some", %{conn: conn} do

@@ -85,7 +85,7 @@ defmodule WebAnalyticsWeb.IntegrationComponents do
               :for={
                 {label, id, hint} <- [
                   {"Time on page", "wa-dwell", "dwell"},
-                  {"Engaged", "wa-active", "actually reading"},
+                  {"Pageviews", "wa-pageviews", "this session"},
                   {"Scroll depth", "wa-scroll", "furthest point"},
                   {"Clicks", "wa-clicks", "auto-captured"}
                 ]

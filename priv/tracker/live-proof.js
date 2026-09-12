@@ -11,7 +11,7 @@
   'use strict';
 
   var FIELDS = [
-    'wa-dwell', 'wa-active', 'wa-scroll', 'wa-clicks',
+    'wa-dwell', 'wa-pageviews', 'wa-scroll', 'wa-clicks',
     'wa-path', 'wa-viewport', 'wa-tz', 'wa-conn', 'wa-plat'
   ];
 
@@ -48,8 +48,24 @@
     lastSampleAt: Date.now(),
     lastInteractionAt: Date.now(),
     scrollPct: 0,
-    clicks: 0
+    clicks: 0,
+    pageviews: countPageview()
   };
+
+  // A session spans page loads, so the count has to outlive this one. Stored
+  // rather than derived because there is nothing on a fresh document to derive
+  // it from, and wrapped because a browser set to refuse storage throws on the
+  // read rather than returning nothing.
+  function countPageview() {
+    try {
+      var seen = parseInt(window.sessionStorage.getItem('wa-live-pv'), 10) || 0;
+      var next = seen + 1;
+      window.sessionStorage.setItem('wa-live-pv', String(next));
+      return next;
+    } catch (e) {
+      return 1;
+    }
+  }
 
   function noteInteraction() {
     local.lastInteractionAt = Date.now();
@@ -108,6 +124,7 @@
 
     return {
       path: location.pathname,
+      pageviews: local.pageviews,
       dwellMs: Date.now() - local.startedAt,
       activeMs: local.activeMs,
       scrollPct: local.scrollPct,
@@ -151,7 +168,7 @@
     var s = readState();
 
     set('wa-dwell', duration(s.dwellMs));
-    set('wa-active', duration(s.activeMs));
+    set('wa-pageviews', String(s.pageviews || 1));
     set('wa-scroll', (s.scrollPct || 0) + '%');
     set('wa-clicks', String(s.clicks || 0));
     set('wa-path', s.path);
