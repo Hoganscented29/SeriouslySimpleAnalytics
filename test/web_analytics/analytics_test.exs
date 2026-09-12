@@ -488,6 +488,25 @@ defmodule WebAnalytics.AnalyticsTest do
       assert Analytics.overview(f).sessions == 1
     end
 
+    test "the label is one span, not two bucket names", %{site: site} do
+      # The handles sit on buckets and every bucket is itself a range, so
+      # naming both produced "0-5s – 30m-1h": four numbers for a two-number
+      # idea, and the middle two are edges of buckets nobody asked about.
+      assert Analytics.dwell_range_label(filters(site, %{dwell_min: 0, dwell_max: 7})) == "0–1h"
+      assert Analytics.dwell_range_label(filters(site, %{dwell_min: 3, dwell_max: 5})) == "1m–15m"
+      assert Analytics.dwell_range_label(filters(site, %{dwell_min: 2, dwell_max: 2})) == "10s–1m"
+    end
+
+    test "the label says open-ended when the top bucket is included", %{site: site} do
+      # The top bucket has no ceiling, so "5m–1h+" would claim a bound that
+      # does not exist.
+      assert Analytics.dwell_range_label(filters(site, %{dwell_min: 5, dwell_max: 8})) == "5m+"
+      assert Analytics.dwell_range_label(filters(site, %{dwell_min: 8, dwell_max: 8})) == "1h+"
+
+      # And the whole range is not a span worth printing at all.
+      assert Analytics.dwell_range_label(filters(site)) == "Any length"
+    end
+
     test "a floor drops the visits below it", %{site: site} do
       # Nothing in the setup dwells longer than a minute except the anomaly,
       # which the default filter already hides.

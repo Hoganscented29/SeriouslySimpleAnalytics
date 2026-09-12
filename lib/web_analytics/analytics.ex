@@ -156,6 +156,33 @@ defmodule WebAnalytics.Analytics do
     @dwell_buckets |> Enum.map(&elem(&1, 1))
   end
 
+  @doc """
+  The selected session-length range, as one span rather than two bucket names.
+
+  The handles sit on buckets, and every bucket is itself a range, so naming the
+  two of them produced "0-5s – 30m-1h" — four numbers for a two-number idea,
+  and the two in the middle are edges of buckets nobody asked about. What the
+  reader chose is the outside edges: "0–1h".
+  """
+  def dwell_range_label(%{dwell_min: min, dwell_max: max}) do
+    last = length(@dwell_buckets) - 1
+
+    cond do
+      min == 0 and max == last -> "Any length"
+      # The top bucket has no ceiling, so a range ending there is open-ended
+      # and "5m–1h+" would be claiming a bound that does not exist.
+      max == last -> dwell_edge(bucket_floor(min)) <> "+"
+      true -> dwell_edge(bucket_floor(min)) <> "–" <> dwell_edge(bucket_ceiling(max))
+    end
+  end
+
+  def dwell_range_label(_f), do: "Any length"
+
+  defp dwell_edge(0), do: "0"
+  defp dwell_edge(ms) when ms < 60_000, do: "#{div(ms, 1_000)}s"
+  defp dwell_edge(ms) when ms < 3_600_000, do: "#{div(ms, 60_000)}m"
+  defp dwell_edge(ms), do: "#{div(ms, 3_600_000)}h"
+
   @doc "Whether a dwell range is narrower than everything."
   def dwell_filtered?(%{dwell_min: min, dwell_max: max}),
     do: min > 0 or max < length(@dwell_buckets) - 1

@@ -159,10 +159,7 @@
             "text-xs font-medium tabular-nums",
             Analytics.dwell_filtered?(@filters) && "text-primary"
           ]}>
-            {Enum.at(dwell_labels, @filters.dwell_min)} – {Enum.at(
-              dwell_labels,
-              @filters.dwell_max
-            )}
+            {Analytics.dwell_range_label(@filters)}
           </span>
           <button
             :if={Analytics.dwell_filtered?(@filters)}
