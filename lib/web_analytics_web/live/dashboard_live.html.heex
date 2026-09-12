@@ -948,8 +948,9 @@
 
       <div :if={@flow_mode == "pages"} class="space-y-6">
         <div class="text-sm text-base-content/60">
-          Grouped by <span class="font-medium">{@filters.group_by}</span>. Transitions are recorded on
-          each pageview, so they follow real navigation rather than inferred ordering. {if nav,
+          Grouped by <span class="font-medium">{@filters.group_by}</span>. Each transition is the
+          page a visit was on immediately before this one, read from the order of their visit.
+          A reload is left out — it is a real pageview but not a route. {if nav,
             do: "Click any page in the diagram to re-centre the flow on it.",
             else: "Click any page to follow its traffic."}
         </div>

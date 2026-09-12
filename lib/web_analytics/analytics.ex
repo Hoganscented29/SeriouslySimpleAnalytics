@@ -481,17 +481,52 @@ defmodule WebAnalytics.Analytics do
   def flow(f, limit \\ 25) do
     {from_key, to_key} = flow_fields(f)
 
-    Repo.all(
+    # The previous page is worked out here rather than taken from the client.
+    #
+    # The tag does send one — it carries the last path across page loads in
+    # sessionStorage — but it is missing whenever that state did not survive:
+    # a restored tab, a new tab, the first load after the tag was added, a
+    # browser refusing storage, and every pageview reported through the ping
+    # API, which has no notion of a previous page at all. On real traffic that
+    # was most of them, and a flow diagram built only from the ones that
+    # arrived with a from_path showed a handful of transitions out of hundreds.
+    #
+    # The server already holds every pageview of a session in order, so it can
+    # simply look at the row before. The client's value is kept as the fallback
+    # for the one case the server cannot see: a session whose earlier pageviews
+    # never reached us, where the row before is genuinely not here.
+    ordered =
       from p in pageviews_scope(f),
-        where: not is_nil(field(p, ^from_key)) and not is_nil(field(p, ^to_key)),
-        group_by: [field(p, ^from_key), field(p, ^to_key)],
-        order_by: [desc: count(p.id)],
+        select: %{
+          session_id: p.session_id,
+          to: field(p, ^to_key),
+          from:
+            fragment(
+              "COALESCE(lag(?) OVER (PARTITION BY ? ORDER BY ?, ?, ?), ?)",
+              field(p, ^to_key),
+              p.session_id,
+              p.seq,
+              p.entered_at,
+              p.id,
+              field(p, ^from_key)
+            )
+        }
+
+    Repo.all(
+      from row in subquery(ordered),
+        where: not is_nil(row.from) and not is_nil(row.to),
+        # A reload reports the same path twice in a row. It is a real pageview
+        # and belongs in the counts, but as a loop on the diagram it says
+        # nothing and crowds out the routes that do.
+        where: row.from != row.to,
+        group_by: [row.from, row.to],
+        order_by: [desc: count(row.session_id)],
         limit: ^limit,
         select: %{
-          from: field(p, ^from_key),
-          to: field(p, ^to_key),
-          count: count(p.id),
-          sessions: count(p.session_id, :distinct)
+          from: row.from,
+          to: row.to,
+          count: count(row.session_id),
+          sessions: count(row.session_id, :distinct)
         }
     )
   end

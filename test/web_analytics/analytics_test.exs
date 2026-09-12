@@ -104,6 +104,59 @@ defmodule WebAnalytics.AnalyticsTest do
     end
   end
 
+  describe "page flow" do
+    test "derives the previous page when the client never sent one", %{site: site} do
+      # Three pages, no `fp` on any of them: a restored tab, a browser refusing
+      # storage, a first load after the tag was added, or anything reported
+      # through the ping API. This was most of the traffic, and the diagram was
+      # built only from the pageviews that happened to arrive with one.
+      submit(site, [
+        init_event(),
+        pageview_event(1, "/a"),
+        pageview_event(2, "/b"),
+        pageview_event(3, "/c"),
+        tick_event(3, %{"d" => 30_000})
+      ])
+
+      routes = filters(site) |> Analytics.flow(50) |> Enum.map(&{&1.from, &1.to})
+
+      assert {"/a", "/b"} in routes
+      assert {"/b", "/c"} in routes
+    end
+
+    test "does not invent a transition into the first page of a visit", %{site: site} do
+      submit(site, [init_event(), pageview_event(1, "/only"), tick_event(1, %{"d" => 20_000})])
+
+      refute filters(site) |> Analytics.flow(50) |> Enum.any?(&(&1.to == "/only"))
+    end
+
+    test "keeps a reload out of the diagram", %{site: site} do
+      submit(site, [
+        init_event(),
+        pageview_event(1, "/same"),
+        pageview_event(2, "/same"),
+        tick_event(2, %{"d" => 20_000})
+      ])
+
+      # A real pageview, and a loop on the diagram says nothing about a route.
+      refute filters(site) |> Analytics.flow(50) |> Enum.any?(&(&1.from == &1.to))
+    end
+
+    test "falls back to the client's value when the row before is not here", %{site: site} do
+      # A visit whose opening pageviews never reached us: seq 9 is the first row
+      # held, so there is nothing behind it to look at.
+      submit(site, [
+        init_event(),
+        pageview_event(9, "/deep", %{"fp" => "/came-from"}),
+        tick_event(9, %{"d" => 30_000})
+      ])
+
+      routes = filters(site) |> Analytics.flow(50) |> Enum.map(&{&1.from, &1.to})
+
+      assert {"/came-from", "/deep"} in routes
+    end
+  end
+
   describe "excluding sessions one row at a time" do
     test "unticking one row removes one row, not every row sharing its origin",
          %{site: site} do
