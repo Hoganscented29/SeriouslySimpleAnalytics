@@ -369,6 +369,23 @@
 
   function persist() {
     session.last = Date.now();
+
+    // The open pageview rides along, so a reload can resume it rather than
+    // open a second one against the same visit. Only what is needed to carry
+    // on counting: the row it belongs to, and what has been counted so far.
+    session.page =
+      page &&
+      {
+        seq: page.seq,
+        key: page.key,
+        path: page.path,
+        startedAt: page.startedAt,
+        dwell: page.dwell,
+        active: page.active,
+        scrollPct: scrollMax.pct,
+        scrollPx: scrollMax.px
+      };
+
     writeStore('sessionStorage', SESSION_KEY, session);
 
     // A sliding lifetime equal to the session timeout, so the cookie stops
@@ -503,7 +520,57 @@
     scrollMax.docHeight = current.docHeight;
   }
 
+  // A reload we asked for, of the page already open, within the window the
+  // marker is good for. Anything else — a user pressing reload, a navigation,
+  // a stale marker — starts a pageview normally.
+  function resumable() {
+    var stored = session.resume;
+    if (!stored || !stored.at) return null;
+    if (Date.now() - stored.at > 60000) return null;
+
+    var previous = session.page;
+    if (!previous || previous.key !== pageKey()) return null;
+
+    return previous;
+  }
+
   function startPageview(referrer) {
+    var resume = resumable();
+
+    // Consumed either way: a marker that outlived its reload must not make the
+    // next navigation look like one. Cleared in memory here and written out at
+    // the end, once `page` exists — persisting first would store a null page
+    // and lose the resume for a second reload arriving inside that window.
+    session.resume = null;
+
+    if (resume) {
+      // No new seq and no pv event. The server keys a pageview on (session,
+      // seq), so a fresh number would open a second row for one visit to one
+      // page — which is the extra pageview a deploy would otherwise book. The
+      // heartbeat carries on against the row already there, and the time
+      // already counted comes back with it.
+      page = {
+        seq: resume.seq,
+        key: resume.key,
+        path: resume.path,
+        title: (document.title || '').slice(0, 255),
+        startedAt: Date.now() - (resume.dwell || 0),
+        dwell: resume.dwell || 0,
+        active: resume.active || 0
+      };
+
+      scrollMax = {
+        pct: resume.scrollPct || 0,
+        px: resume.scrollPx || 0,
+        docHeight: 0
+      };
+
+      refreshScroll();
+      persist();
+      log('resumed pageview', page.seq, page.path, page.dwell + 'ms carried over');
+      return;
+    }
+
     session.seq += 1;
 
     page = {
@@ -1536,6 +1603,15 @@
         automation: automation,
         ticks: session.ticks
       };
+    },
+    // Called just before a reload the page is doing to itself — after a
+    // deployment, say. Marks the open pageview as resumable and gets what is
+    // queued out of the door, so the reload costs neither an extra pageview
+    // nor the dwell time already measured.
+    prepareReload: function () {
+      session.resume = { at: Date.now() };
+      persist();
+      flushNow();
     },
     track: function (name, meta) {
       enqueue({

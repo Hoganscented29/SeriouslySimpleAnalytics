@@ -38,6 +38,21 @@ window.addEventListener("phx:page-loading-start", _info => topbar.show(300))
 window.addEventListener("phx:page-loading-stop", _info => topbar.hide())
 
 // connect if there are any LiveViews on the page
+// The server was redeployed while this tab was open. Tell the tag first, so
+// the reload does not book a second pageview against the visit or throw away
+// the dwell time already measured, then reload.
+window.addEventListener("phx:wa:reload", () => {
+  try {
+    if (window.__webAnalytics && window.__webAnalytics.prepareReload) {
+      window.__webAnalytics.prepareReload()
+    }
+  } catch (e) {
+    // A tag that cannot be told is not a reason to keep serving a stale build.
+  }
+
+  window.location.reload()
+})
+
 liveSocket.connect()
 
 // expose liveSocket on window for web console debug logs and latency simulation:

@@ -1547,7 +1547,6 @@
                 <th class="text-right">Clicks</th>
                 <th>Device</th>
                 <th>IP</th>
-                <th>Anomaly</th>
               </tr>
             </thead>
             <tbody>
@@ -1586,12 +1585,6 @@
                 </td>
                 <td class="font-mono text-[11px] text-base-content/60">
                   {masked_ip(session)}
-                </td>
-                <td>
-                  <.anomaly_badges
-                    reasons={session.anomaly_reasons}
-                    score={session.anomaly_score}
-                  />
                 </td>
               </tr>
               <tr :if={(@data[:sessions] || []) == []}>

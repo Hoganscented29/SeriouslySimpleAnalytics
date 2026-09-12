@@ -5,8 +5,6 @@ defmodule WebAnalyticsWeb.DashboardComponents do
   """
   use WebAnalyticsWeb, :html
 
-  alias WebAnalytics.Analytics.Anomaly
-
   # -- stat card -----------------------------------------------------------
 
   attr :label, :string, required: true
@@ -669,26 +667,6 @@ defmodule WebAnalyticsWeb.DashboardComponents do
     </div>
     """
   end
-
-  attr :reasons, :list, required: true
-  attr :score, :float, default: nil
-
-  def anomaly_badges(assigns) do
-    ~H"""
-    <span :if={@reasons == []} class="text-xs text-base-content/40">—</span>
-    <span class="flex flex-wrap gap-1">
-      <span
-        :for={reason <- @reasons}
-        class="badge badge-sm badge-warning badge-outline whitespace-nowrap"
-        title={Anomaly.label(reason)}
-      >
-        {Anomaly.label(reason)}
-      </span>
-    </span>
-    """
-  end
-
-  # -- formatting ----------------------------------------------------------
 
   @doc """
   Where a visit came from, shortened to its host.

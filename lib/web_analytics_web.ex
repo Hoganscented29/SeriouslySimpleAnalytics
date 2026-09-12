@@ -53,6 +53,11 @@ defmodule WebAnalyticsWeb do
     quote do
       use Phoenix.LiveView
 
+      # Every LiveView, rather than each one remembering: a tab left open
+      # across a deploy is running last week's markup against this week's
+      # server, and nothing on the page says so.
+      on_mount WebAnalyticsWeb.ReloadOnDeploy
+
       unquote(html_helpers())
     end
   end
