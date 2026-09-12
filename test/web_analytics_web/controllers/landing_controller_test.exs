@@ -329,6 +329,40 @@ defmodule WebAnalyticsWeb.LandingControllerTest do
       assert block =~ "List it with the other files you changed"
     end
 
+    test "tells an agent to refactor, and where each call goes", %{conn: conn} do
+      body = conn |> get(~p"/llms.txt") |> response(200)
+
+      # Naming events is not enough on its own: an agent needs to know which
+      # point in the code each one belongs at, or it bolts them on at the edges
+      # where the outcome and the latency have to be guessed.
+      assert body =~ "What to instrument, and where to put the call"
+      assert body =~ "Refactor the code so each call sits at the point"
+      assert body =~ "Where in your code"
+
+      for event <- ~w(first_run run_started tool_called page_view error run_completed feedback) do
+        assert body =~ "`#{event}`", "#{event} should be recommended"
+      end
+
+      # The three that change the shape of the data if you get them wrong.
+      assert body =~ "Report `run_completed` from a `finally`"
+      assert body =~ "Emit `tool_called` from the single dispatch point"
+      assert body =~ "Pair `run_started` with `run_completed`"
+    end
+
+    test "tells an agent to add the browser tag when the project serves pages", %{conn: conn} do
+      body = conn |> get(~p"/llms.txt") |> response(200)
+
+      assert body =~ "If this project has a website, add the script tag to it"
+      assert body =~ "Put it in the shared layout, once"
+      assert body =~ ~r{<script src="https?://[^"]+/wa\.js" data-site=}
+
+      # It travels downstream too, or the next project only gets half of it.
+      [_, block] = String.split(body, "--- copy from here ---", parts: 2)
+      [block, _] = String.split(block, "--- copy to here ---", parts: 2)
+      assert block =~ "add the browser tag to the shared layout"
+      assert block =~ "wa.js"
+    end
+
     test "documents the account creation endpoint for agents", %{conn: conn} do
       body = conn |> get(~p"/llms.txt") |> response(200)
 
