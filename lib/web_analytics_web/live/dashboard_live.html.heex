@@ -244,7 +244,7 @@
         <span :if={suggested != []} class="badge badge-warning badge-sm gap-1">
           {length(suggested)} worth excluding
         </span>
-        <span :if={excluded != []} class="badge badge-primary badge-sm">
+        <span :if={excluded != []} class="badge badge-error badge-sm">
           {length(excluded)} excluded
         </span>
       </summary>
@@ -258,7 +258,7 @@
           >
             Exclude all {length(suggested)} suggested
           </button>
-          <button :if={excluded != []} phx-click="clear_origins" class="btn btn-xs btn-ghost">
+          <button :if={excluded != []} phx-click="clear_origins" class="btn btn-xs btn-error">
             Clear exclusions
           </button>
         </div>
@@ -372,15 +372,17 @@
       <div class="rounded-box bg-base-100 border border-base-300">
         <div
           :if={@filters.exclude_sessions != [] or @filters.exclude_origins != []}
-          class="px-4 py-2 border-b border-base-300 flex items-center gap-3 flex-wrap text-xs"
+          class="px-4 py-2 border-b-2 border-error bg-error/10 flex items-center gap-3 flex-wrap text-xs"
         >
-          <span :if={@filters.exclude_sessions != []} class="text-base-content/60">
-            {length(@filters.exclude_sessions)} session(s) filtered out
+          <span class="badge badge-error badge-sm font-medium">Filtered</span>
+          <span :if={@filters.exclude_sessions != []}>
+            {length(@filters.exclude_sessions)} session(s) held back
           </span>
-          <span :if={@filters.exclude_origins != []} class="text-base-content/60">
-            {length(@filters.exclude_origins)} origin(s) filtered out
+          <span :if={@filters.exclude_origins != []}>
+            {length(@filters.exclude_origins)} origin(s) held back
           </span>
-          <button phx-click="clear_row_filters" class="btn btn-xs btn-ghost">Remove filter</button>
+          <span class="flex-1"></span>
+          <button phx-click="clear_row_filters" class="btn btn-xs btn-error">Remove filter</button>
         </div>
         <div class="overflow-x-auto">
           <table class="table table-sm">
@@ -1379,15 +1381,17 @@
       <div class="rounded-box bg-base-100 border border-base-300">
         <div
           :if={@filters.exclude_sessions != [] or @filters.exclude_origins != []}
-          class="px-4 py-2 border-b border-base-300 flex items-center gap-3 flex-wrap text-xs"
+          class="px-4 py-2 border-b-2 border-error bg-error/10 flex items-center gap-3 flex-wrap text-xs"
         >
-          <span :if={@filters.exclude_sessions != []} class="text-base-content/60">
-            {length(@filters.exclude_sessions)} session(s) filtered out
+          <span class="badge badge-error badge-sm font-medium">Filtered</span>
+          <span :if={@filters.exclude_sessions != []}>
+            {length(@filters.exclude_sessions)} session(s) held back
           </span>
-          <span :if={@filters.exclude_origins != []} class="text-base-content/60">
-            {length(@filters.exclude_origins)} origin(s) filtered out
+          <span :if={@filters.exclude_origins != []}>
+            {length(@filters.exclude_origins)} origin(s) held back
           </span>
-          <button phx-click="clear_row_filters" class="btn btn-xs btn-ghost">Remove filter</button>
+          <span class="flex-1"></span>
+          <button phx-click="clear_row_filters" class="btn btn-xs btn-error">Remove filter</button>
         </div>
         <div class="overflow-x-auto">
           <table class="table table-sm">

@@ -30,9 +30,9 @@
     <!-- what is narrowing the view -->
     <div
       :if={Admin.scoped?(@scope)}
-      class="rounded-box border border-primary/40 bg-primary/5 px-4 py-3 flex flex-wrap items-center gap-3"
+      class="rounded-box border-2 border-error bg-error/10 px-4 py-3 flex flex-wrap items-center gap-3"
     >
-      <span class="badge badge-primary badge-sm">Filtered</span>
+      <span class="badge badge-error badge-sm font-medium">Filtered</span>
       <span :if={@scope.domain} class="text-sm">
         domain <code class="font-mono font-medium">{@scope.domain}</code>
       </span>
@@ -44,7 +44,7 @@
         hidden while filtered.
       </span>
       <span class="flex-1"></span>
-      <button phx-click="clear_filter" class="btn btn-xs btn-outline">Clear</button>
+      <button phx-click="clear_filter" class="btn btn-xs btn-error">Clear</button>
     </div>
 
     <!-- live: on its own clock, refreshed on every tick -->
@@ -87,15 +87,13 @@
 
         <div
           :if={Map.get(@scope, :origins, []) != [] or Map.get(@scope, :sessions, []) != []}
-          class="flex items-center gap-3 flex-wrap text-xs rounded-box bg-base-200/60 px-3 py-2"
+          class="flex items-center gap-3 flex-wrap text-xs rounded-box border-2 border-error bg-error/10 px-3 py-2"
         >
-          <span :if={@scope.sessions != []} class="text-base-content/60">
-            {length(@scope.sessions)} session(s) filtered out
-          </span>
-          <span :if={@scope.origins != []} class="text-base-content/60">
-            {length(@scope.origins)} origin(s) filtered out
-          </span>
-          <button phx-click="clear_row_filters" class="btn btn-xs btn-ghost">Remove filter</button>
+          <span class="badge badge-error badge-sm font-medium">Filtered</span>
+          <span :if={@scope.sessions != []}>{length(@scope.sessions)} session(s) held back</span>
+          <span :if={@scope.origins != []}>{length(@scope.origins)} origin(s) held back</span>
+          <span class="flex-1"></span>
+          <button phx-click="clear_row_filters" class="btn btn-xs btn-error">Remove filter</button>
         </div>
 
         <div class="overflow-x-auto">
@@ -674,16 +672,22 @@
     <section class="rounded-box bg-base-100 border border-base-300 p-5">
       <div class="flex items-center gap-3 flex-wrap mb-3">
         <h2 class="text-sm font-medium">Most recent sessions</h2>
-        <span :if={@scope.sessions != []} class="text-xs text-base-content/60">
-          {length(@scope.sessions)} session(s) filtered out
+        <span
+          :if={@scope.origins != [] or @scope.sessions != []}
+          class="badge badge-error badge-sm font-medium"
+        >
+          Filtered
         </span>
-        <span :if={@scope.origins != []} class="text-xs text-base-content/60">
-          {length(@scope.origins)} origin(s) filtered out
+        <span :if={@scope.sessions != []} class="text-xs">
+          {length(@scope.sessions)} session(s) held back
+        </span>
+        <span :if={@scope.origins != []} class="text-xs">
+          {length(@scope.origins)} origin(s) held back
         </span>
         <button
           :if={@scope.origins != [] or @scope.sessions != []}
           phx-click="clear_row_filters"
-          class="btn btn-xs btn-ghost"
+          class="btn btn-xs btn-error"
         >
           Remove filter
         </button>
