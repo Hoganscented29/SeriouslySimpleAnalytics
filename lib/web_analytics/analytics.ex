@@ -1123,6 +1123,12 @@ defmodule WebAnalytics.Analytics do
       |> filter_anomalies(f)
       |> filter_crawlers(f)
       |> filter_origins(f)
+      # Struck-out sessions are hidden here, unlike in the session list. That
+      # list is where a row goes to be put back, so it has to keep showing one;
+      # this panel answers "who is here right now", and a visit you have
+      # decided is not traffic should not be in the answer or in the count.
+      # The Remove filter strip above it is the way back from either.
+      |> filter_sessions(f)
       |> filter_project(f)
       |> filter_host(f)
 

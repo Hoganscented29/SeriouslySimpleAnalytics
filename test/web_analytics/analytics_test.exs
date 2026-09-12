@@ -283,6 +283,28 @@ defmodule WebAnalytics.AnalyticsTest do
       assert Analytics.overview(filters(site, %{exclude_sessions: [one.id]})).sessions == 0
     end
 
+    test "the live panel hides a struck-out session, and stops counting it",
+         %{site: site} do
+      [one | _] =
+        Repo.all(from s in Session, where: not s.anomalous and not s.crawler, order_by: s.id)
+
+      now = DateTime.utc_now()
+
+      Repo.update_all(from(s in Session, where: s.id == ^one.id),
+        set: [started_at: now, last_seen_at: now]
+      )
+
+      before = Analytics.active_now(filters(site), now)
+      assert Enum.any?(before.sessions_list, &(&1.id == one.id))
+
+      after_exclusion = Analytics.active_now(filters(site, %{exclude_sessions: [one.id]}), now)
+
+      # "Who is here right now" should not include a visit you have decided is
+      # not traffic — in the list or in the number above it.
+      refute Enum.any?(after_exclusion.sessions_list, &(&1.id == one.id))
+      assert after_exclusion.sessions == before.sessions - 1
+    end
+
     test "ids arrive from a query string, so strings and rubbish are handled", %{site: site} do
       assert filters(site, %{exclude_sessions: ["12", 34]}).exclude_sessions == [12, 34]
       assert filters(site, %{exclude_sessions: ["banana", "-1", "0", nil]}).exclude_sessions == []
