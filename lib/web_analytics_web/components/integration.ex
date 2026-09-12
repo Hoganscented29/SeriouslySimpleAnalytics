@@ -116,14 +116,10 @@ defmodule WebAnalyticsWeb.IntegrationComponents do
             </div>
           </dl>
 
-          <p id="wa-stale" hidden class="text-[10px] text-warning mt-3">
-            Your browser has an older copy of the tag cached, so these are not filling in.
-            A reload in a few minutes will pick up the current one.
-          </p>
-
-          <p id="wa-blocked" hidden class="text-[10px] text-warning mt-3">
-            The tag never loaded — something in this browser blocked it. That is the tag
-            working as designed from your side, and the reason these rows are empty.
+          <p id="wa-fallback" hidden class="text-[10px] text-warning mt-3">
+            The tag did not run in this browser — an extension blocked it, or your copy is
+            cached from an older build — so this panel measured your visit itself. The
+            numbers are the same ones, taken the same way.
           </p>
 
           <p class="text-[10px] text-base-content/40 mt-3">
