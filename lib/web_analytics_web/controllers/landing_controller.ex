@@ -27,7 +27,7 @@ defmodule WebAnalyticsWeb.LandingController do
     conn
     |> assign(:page_title, "Free website analytics")
     |> assign(:crawler_summary, crawler_summary())
-    |> assign(:site_key, demo_site_key())
+    |> assign(:site_key, sample_account_id())
     |> assign(:base_url, base_url(conn))
     |> render(:home)
   end
@@ -35,7 +35,7 @@ defmodule WebAnalyticsWeb.LandingController do
   def ai(conn, _params) do
     conn
     |> assign(:page_title, "Free analytics for AI tools")
-    |> assign(:site_key, demo_site_key())
+    |> assign(:site_key, sample_account_id())
     |> assign(:base_url, base_url(conn))
     |> render(:ai)
   end
@@ -74,8 +74,8 @@ defmodule WebAnalyticsWeb.LandingController do
     conn |> url(~p"/") |> String.trim_trailing("/")
   end
 
-  # The landing page shows a copy-pasteable snippet, so it needs a real key.
-  defp demo_site_key do
+  # The pages show a copy-pasteable snippet, so it needs a real account id.
+  defp sample_account_id do
     case Sites.list_sites() do
       [site | _] -> site.key
       [] -> "YOUR_ACCOUNT_ID"

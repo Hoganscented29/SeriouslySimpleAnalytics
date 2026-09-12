@@ -41,11 +41,10 @@ defmodule WebAnalyticsWeb.LandingControllerTest do
       assert html =~ ~s|href="/AI-Analytics-llms-txt"|
     end
 
-    test "links to the dashboard, the demo and llms.txt", %{conn: conn} do
+    test "links to the dashboard and llms.txt", %{conn: conn} do
       html = conn |> get(~p"/") |> html_response(200)
 
       assert html =~ ~s|href="/dashboard"|
-      assert html =~ ~s|href="/demo"|
       assert html =~ ~s|href="/llms.txt"|
     end
   end
@@ -88,11 +87,20 @@ defmodule WebAnalyticsWeb.LandingControllerTest do
       refute html =~ "Read https://seriouslysimpleanalytics.com/llms.txt and instrument"
     end
 
-    test "is not on the website page, which leads with the dashboard", %{conn: conn} do
+    test "is on the website page too, under the AI cross-link", %{conn: conn} do
       html = conn |> get(~p"/") |> html_response(200)
 
-      refute html =~ "Your coding agent"
-      refute html =~ "instrument this project with"
+      assert html =~ "Building an AI tool, not just a website?"
+      assert html =~ "Your coding agent"
+      assert html =~ "AI tool analytics"
+
+      # The hero leads with the dashboard, because a visitor with a website
+      # wants to see what they get; the conversation belongs further down, where
+      # the page asks whether they are building an AI tool as well. Position is
+      # the claim, so position is what this asserts.
+      {dashboard, _} = :binary.match(html, "Sessions over time")
+      {chat, _} = :binary.match(html, "Your coding agent")
+      assert dashboard < chat
     end
   end
 
@@ -149,7 +157,9 @@ defmodule WebAnalyticsWeb.LandingControllerTest do
       assert html =~ "Busiest pages"
       assert html =~ "AI crawlers, named"
       # An empty dashboard sells nothing, so the illustration has traffic in it.
-      assert html =~ "12,480"
+      # Derived from the hourly series below it rather than written by hand, so
+      # the headline and the chart cannot disagree.
+      assert html =~ "15,603"
     end
 
     test "the AI page shows what an agent reports, not pageviews", %{conn: conn} do

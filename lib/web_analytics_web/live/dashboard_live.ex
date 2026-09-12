@@ -383,6 +383,10 @@ defmodule WebAnalyticsWeb.DashboardLive do
 
   defp base_url, do: url(~p"/") |> String.trim_trailing("/")
 
+  defp snippet(site, endpoint) do
+    ~s|<script src="#{endpoint}/wa.js" data-site="#{site.key}" defer></script>|
+  end
+
   @doc """
   The prompt to hand a coding agent, naming this account.
 

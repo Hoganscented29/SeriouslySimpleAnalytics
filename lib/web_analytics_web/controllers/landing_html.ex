@@ -136,12 +136,6 @@ defmodule WebAnalyticsWeb.LandingHTML do
     """
   end
 
-  @doc "The ping URL shown in the hero, with this deployment's host."
-  def ping_url(base_url, account_id) do
-    "#{base_url}/api/ping?uid=#{account_id}&type=ai&project=my-agent&event=page_view" <>
-      "&c=Austin&cc=Travis&s_p=Texas&n=United%20States"
-  end
-
   @doc "The install snippet, for sites that also want browser tracking."
   def script_tag(base_url, site_key) do
     ~s|<script src="#{base_url}/wa.js" data-site="#{site_key}" defer></script>|

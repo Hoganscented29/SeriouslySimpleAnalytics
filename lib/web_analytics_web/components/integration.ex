@@ -47,16 +47,27 @@ defmodule WebAnalyticsWeb.IntegrationComponents do
   """
   def live_proof(assigns) do
     ~H"""
-    <section class="rounded-2xl border border-base-300 bg-base-100 overflow-hidden" id="live-proof">
-      <div class="px-4 py-3 border-b border-base-300 bg-base-200 flex items-center gap-2 flex-wrap">
-        <span class="relative flex h-2 w-2" aria-hidden="true">
-          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-60"></span>
-          <span class="relative inline-flex rounded-full h-2 w-2 bg-success"></span>
-        </span>
-        <span class="text-xs font-semibold">This page is running the tag on you right now</span>
-        <span class="text-[11px] text-base-content/50">
-          — nothing below leaves your browser except what the tag already sends
-        </span>
+    <section
+      class="rounded-2xl border-2 border-success/50 bg-base-100 overflow-hidden shadow-md"
+      id="live-proof"
+    >
+      <div class="px-4 py-4 border-b border-success/30 bg-success/10">
+        <div class="flex items-center gap-3 flex-wrap">
+          <span class="inline-flex items-center gap-2 rounded-full bg-success text-success-content px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider">
+            <span class="relative flex h-2 w-2" aria-hidden="true">
+              <span class="motion-safe:animate-ping absolute inline-flex h-full w-full rounded-full bg-success-content opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-2 w-2 bg-success-content"></span>
+            </span>
+            Live
+          </span>
+          <h3 class="text-base sm:text-lg font-semibold tracking-tight">
+            This page is running the tag on you right now
+          </h3>
+        </div>
+        <p class="text-xs text-base-content/60 mt-1.5">
+          Everything below is what it has recorded so far. Nothing leaves your browser except
+          what the tag already sends.
+        </p>
       </div>
 
       <div class="grid md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-base-300">
@@ -215,14 +226,56 @@ defmodule WebAnalyticsWeb.IntegrationComponents do
         </span>
       </div>
 
+      <% runs = 9142 %>
+      <% completed = 8795 %>
+      <% tools = [{"web_search", 18_204}, {"read_file", 12_460}, {"run_tests", 11_142}] %>
+      <% tool_calls = tools |> Enum.map(&elem(&1, 1)) |> Enum.sum() %>
+      <% errored = 1677 %>
+      <% events = [
+        {"tool_called", tool_calls},
+        {"run_started", runs},
+        {"run_completed", completed},
+        {"page_view", 6204},
+        {"error", 347}
+      ] %>
+      <% event_total = events |> Enum.map(&elem(&1, 1)) |> Enum.sum() %>
+      <% hourly = [
+        1378,
+        1155,
+        1684,
+        1951,
+        1728,
+        2524,
+        2922,
+        2698,
+        3276,
+        3058,
+        3630,
+        4208,
+        4426,
+        3892,
+        3368,
+        3587,
+        4116,
+        3189,
+        2834,
+        2567,
+        2169,
+        2436,
+        1903,
+        1595
+      ] %>
+      <% peak = Enum.max(hourly) %>
+
       <div class="p-3 sm:p-4 space-y-3">
+        <!-- every figure derived, so the page never contradicts itself -->
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
           <div
             :for={
               stat <- [
-                {"Runs", "9,142", "+24%"},
-                {"Tool calls", "41,806", "4.6 per run"},
-                {"Completed", "96.2%", "outcome=success"},
+                {"Runs", thousands(runs), "+24%"},
+                {"Tool calls", thousands(tool_calls), "#{Float.round(tool_calls / runs, 1)} per run"},
+                {"Completed", "#{Float.round(completed / runs * 100, 1)}%", "outcome=success"},
                 {"Median run", "8.4s", "start to finish"}
               ]
             }
@@ -239,57 +292,23 @@ defmodule WebAnalyticsWeb.IntegrationComponents do
         <div class="rounded-lg border border-base-300 p-3">
           <div class="flex items-baseline justify-between mb-2">
             <span class="text-[11px] font-medium">Events over time</span>
-            <span class="text-[10px] text-base-content/40">peak 3,180/hour</span>
+            <span class="text-[10px] text-base-content/40">
+              {thousands(event_total)} events · peak {thousands(peak)}/hour
+            </span>
           </div>
           <div class="flex items-end gap-[3px] h-16">
             <div
-              :for={
-                height <- [
-                  31,
-                  26,
-                  38,
-                  44,
-                  39,
-                  57,
-                  66,
-                  61,
-                  74,
-                  69,
-                  82,
-                  95,
-                  100,
-                  88,
-                  76,
-                  81,
-                  93,
-                  72,
-                  64,
-                  58,
-                  49,
-                  55,
-                  43,
-                  36
-                ]
-              }
+              :for={count <- hourly}
               class="flex-1 bg-primary/80 rounded-sm"
-              style={"height: #{height}%"}
+              style={"height: #{round(count / peak * 100)}%"}
             >
             </div>
           </div>
         </div>
 
         <div class="grid sm:grid-cols-2 gap-3">
-          <!-- the events themselves -->
           <div class="rounded-lg border border-base-300 p-3">
             <div class="text-[11px] font-medium mb-2">Events reported</div>
-            <% events = [
-              {"tool_called", 41_806},
-              {"run_started", 9_142},
-              {"run_completed", 8_795},
-              {"page_view", 6_204},
-              {"error", 347}
-            ] %>
-            <% event_total = events |> Enum.map(&elem(&1, 1)) |> Enum.sum() %>
             <% event_peak = events |> Enum.map(&elem(&1, 1)) |> Enum.max() %>
             <div class="space-y-1.5">
               <div :for={{name, count} <- events} class="flex items-center gap-2">
@@ -313,18 +332,16 @@ defmodule WebAnalyticsWeb.IntegrationComponents do
             </div>
           </div>
 
-          <!-- the attributes on one of them -->
           <div class="rounded-lg border border-base-300 p-3">
             <div class="text-[11px] font-medium mb-2">
               Attributes on <code class="font-mono">tool_called</code>
             </div>
-            <% attrs = [
-              {"tool=web_search", 18_204},
-              {"tool=read_file", 12_460},
-              {"tool=run_tests", 7_118},
-              {"outcome=success", 40_129},
-              {"outcome=error", 1_677}
-            ] %>
+            <% attrs =
+              Enum.map(tools, fn {tool, count} -> {"tool=#{tool}", count} end) ++
+                [
+                  {"outcome=success", tool_calls - errored},
+                  {"outcome=error", errored}
+                ] %>
             <% attr_peak = attrs |> Enum.map(&elem(&1, 1)) |> Enum.max() %>
             <div class="space-y-1.5">
               <div :for={{label, count} <- attrs} class="flex items-center gap-2">
@@ -340,6 +357,9 @@ defmodule WebAnalyticsWeb.IntegrationComponents do
                 </div>
                 <span class="text-[10px] tabular-nums text-base-content/60 w-12 text-right">
                   {thousands(count)}
+                </span>
+                <span class="text-[10px] tabular-nums text-base-content/40 w-9 text-right">
+                  {share(count, tool_calls)}
                 </span>
               </div>
             </div>
@@ -413,15 +433,62 @@ defmodule WebAnalyticsWeb.IntegrationComponents do
         </span>
       </div>
 
+      <% hourly = [
+        312,
+        378,
+        245,
+        456,
+        612,
+        534,
+        690,
+        790,
+        645,
+        489,
+        734,
+        923,
+        1012,
+        823,
+        756,
+        978,
+        1112,
+        878,
+        678,
+        578,
+        523,
+        645,
+        445,
+        367
+      ] %>
+      <% sessions = Enum.sum(hourly) %>
+      <% peak = Enum.max(hourly) %>
+      <% pages = [
+        {"/", 9412},
+        {"/pricing", 4806},
+        {"/docs/quickstart", 3271},
+        {"/blog/why-llms-txt", 2118},
+        {"/changelog", 1004}
+      ] %>
+      <% pageviews = pages |> Enum.map(&elem(&1, 1)) |> Enum.sum() %>
+      <% visitors = round(sessions * 0.66) %>
+      <% bots = [
+        {"ClaudeBot", 1842},
+        {"GPTBot", 1506},
+        {"PerplexityBot", 744},
+        {"Bytespider", 389},
+        {"CCBot", 201}
+      ] %>
+      <% bot_total = bots |> Enum.map(&elem(&1, 1)) |> Enum.sum() %>
+
       <div class="p-3 sm:p-4 space-y-3">
-        <!-- headline numbers -->
+        <!-- headline numbers, every one of them derived from the lists below -->
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
           <div
             :for={
               stat <- [
-                {"Sessions", "12,480", "+18%"},
-                {"Visitors", "8,204", "+11%"},
-                {"Pageviews", "34,201", "+22%"},
+                {"Sessions", thousands(sessions), "+18%"},
+                {"Visitors", thousands(visitors), "#{share(visitors, sessions)} of sessions"},
+                {"Pageviews", thousands(pageviews),
+                 "#{Float.round(pageviews / sessions, 1)} per session"},
                 {"Avg dwell", "2m 41s", "1m 09s active"}
               ]
             }
@@ -439,40 +506,13 @@ defmodule WebAnalyticsWeb.IntegrationComponents do
         <div class="rounded-lg border border-base-300 p-3">
           <div class="flex items-baseline justify-between mb-2">
             <span class="text-[11px] font-medium">Sessions over time</span>
-            <span class="text-[10px] text-base-content/40">peak 1,204/hour</span>
+            <span class="text-[10px] text-base-content/40">peak {thousands(peak)}/hour</span>
           </div>
           <div class="flex items-end gap-[3px] h-16">
             <div
-              :for={
-                height <- [
-                  28,
-                  34,
-                  22,
-                  41,
-                  55,
-                  48,
-                  62,
-                  71,
-                  58,
-                  44,
-                  66,
-                  83,
-                  91,
-                  74,
-                  68,
-                  88,
-                  100,
-                  79,
-                  61,
-                  52,
-                  47,
-                  58,
-                  40,
-                  33
-                ]
-              }
+              :for={count <- hourly}
               class="flex-1 bg-primary/80 rounded-sm"
-              style={"height: #{height}%"}
+              style={"height: #{round(count / peak * 100)}%"}
             >
             </div>
           </div>
@@ -482,14 +522,6 @@ defmodule WebAnalyticsWeb.IntegrationComponents do
           <!-- busiest pages -->
           <div class="rounded-lg border border-base-300 p-3">
             <div class="text-[11px] font-medium mb-2">Busiest pages</div>
-            <% pages = [
-              {"/", 9412},
-              {"/pricing", 4806},
-              {"/docs/quickstart", 3271},
-              {"/blog/why-llms-txt", 2118},
-              {"/changelog", 1004}
-            ] %>
-            <% page_total = pages |> Enum.map(&elem(&1, 1)) |> Enum.sum() %>
             <% page_peak = pages |> Enum.map(&elem(&1, 1)) |> Enum.max() %>
             <div class="space-y-1.5">
               <div :for={{path, count} <- pages} class="flex items-center gap-2">
@@ -507,7 +539,7 @@ defmodule WebAnalyticsWeb.IntegrationComponents do
                   {thousands(count)}
                 </span>
                 <span class="text-[10px] tabular-nums text-base-content/40 w-9 text-right">
-                  {share(count, page_total)}
+                  {share(count, pageviews)}
                 </span>
               </div>
             </div>
@@ -515,15 +547,10 @@ defmodule WebAnalyticsWeb.IntegrationComponents do
 
           <!-- crawlers -->
           <div class="rounded-lg border border-base-300 p-3">
-            <div class="text-[11px] font-medium mb-2">AI crawlers, named</div>
-            <% bots = [
-              {"ClaudeBot", 1842},
-              {"GPTBot", 1506},
-              {"PerplexityBot", 744},
-              {"Bytespider", 389},
-              {"CCBot", 201}
-            ] %>
-            <% bot_total = bots |> Enum.map(&elem(&1, 1)) |> Enum.sum() %>
+            <div class="flex items-baseline justify-between mb-2">
+              <span class="text-[11px] font-medium">AI crawlers, named</span>
+              <span class="text-[10px] text-base-content/40">{thousands(bot_total)} visits</span>
+            </div>
             <div class="space-y-1.5">
               <div :for={{name, count} <- bots} class="flex items-center gap-2">
                 <span class="text-[10px] font-mono truncate flex-1">{name}</span>

@@ -20,7 +20,6 @@
       <.dashboard_preview />
       <div class="mt-4 flex flex-wrap items-center gap-3">
         <.cta current_scope={@current_scope} class="btn btn-primary btn-sm" />
-        <.link href={~p"/demo"} class="btn btn-outline btn-sm">See it capturing, live</.link>
         <span class="text-sm text-base-content/50">
           One <code class="font-mono text-xs">&lt;script&gt;</code>
           tag. Everything above, from the first visit.
@@ -145,31 +144,29 @@
   <!-- ai analytics cross-link -->
   <section class="mx-auto max-w-6xl px-4 sm:px-6 py-16">
     <div class="rounded-box bg-base-100 border border-base-300 p-6 sm:p-8">
-      <div class="badge badge-primary badge-outline mb-3">Also free</div>
-      <h3 class="text-2xl font-semibold tracking-tight">
+      <h3 class="text-2xl font-semibold tracking-tight mb-6">
         Building an AI tool, not just a website?
       </h3>
-      <p class="mt-3 text-base-content/70 max-w-2xl">
-        An agent, an MCP server, a CLI, an extension — anything that ships an
-        <code class="font-mono text-xs">llms.txt</code>
-        or an <code class="font-mono text-xs">AGENTS.md</code>. The same account tracks it by
-        fetching one URL, with no SDK and nothing added to your dependency tree.
-      </p>
-      <pre class="mt-6 bg-base-200 rounded p-4 text-xs sm:text-sm overflow-x-auto"><code>{ping_url(@base_url, @site_key)}</code></pre>
-      <a href={ai_path()} class="btn btn-primary btn-sm mt-5">AI tool analytics →</a>
+
+      <.integration_chat base_url={@base_url} />
+
+      <div class="mt-6">
+        <a href={ai_path()} class="btn btn-primary btn-lg">AI tool analytics →</a>
+      </div>
     </div>
   </section>
 
   <!-- cta -->
   <section class="border-t border-base-300 bg-base-100">
     <div class="mx-auto max-w-6xl px-4 sm:px-6 py-16 text-center">
-      <h3 class="text-2xl font-semibold tracking-tight">Start counting in about a minute</h3>
+      <h3 class="text-2xl font-semibold tracking-tight">
+        Start <strong class="font-bold">collecting</strong> in less than a minute.
+      </h3>
       <p class="mt-3 text-base-content/70">
         Create an account, copy the snippet, paste it in your <code class="font-mono text-xs">&lt;head&gt;</code>.
       </p>
       <div class="mt-6 flex flex-wrap gap-3 justify-center">
         <.cta current_scope={@current_scope} />
-        <.link href={~p"/demo"} class="btn btn-outline">See the browser tracker</.link>
       </div>
     </div>
   </section>

@@ -69,12 +69,6 @@ defmodule WebAnalyticsWeb.Router do
         as: :"#{String.replace(slug, "-", "_")}_analytics",
         assigns: %{provider_slug: slug}
     end
-
-    get "/demo", DemoController, :home
-    get "/demo/pricing", DemoController, :pricing
-    get "/demo/docs", DemoController, :docs
-    get "/demo/thanks", DemoController, :thanks
-    post "/demo/signup", DemoController, :signup
   end
 
   # Enable LiveDashboard in development

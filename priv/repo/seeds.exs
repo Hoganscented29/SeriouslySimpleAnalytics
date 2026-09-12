@@ -36,21 +36,21 @@ site =
   end
 
 pages = [
-  {"/demo", "Acme — Home"},
-  {"/demo/pricing", "Acme — Pricing"},
-  {"/demo/docs", "Acme — Docs"},
-  {"/demo/thanks", "Acme — Thanks"}
+  {"/", "Acme — Home"},
+  {"/pricing", "Acme — Pricing"},
+  {"/docs", "Acme — Docs"},
+  {"/thanks", "Acme — Thanks"}
 ]
 
 journeys = [
-  ["/demo"],
-  ["/demo", "/demo/pricing"],
-  ["/demo", "/demo/docs"],
-  ["/demo", "/demo/pricing", "/demo/thanks"],
-  ["/demo", "/demo/docs", "/demo/pricing"],
-  ["/demo", "/demo/docs", "/demo/pricing", "/demo/thanks"],
-  ["/demo/pricing", "/demo"],
-  ["/demo/docs"]
+  ["/"],
+  ["/", "/pricing"],
+  ["/", "/docs"],
+  ["/", "/pricing", "/thanks"],
+  ["/", "/docs", "/pricing"],
+  ["/", "/docs", "/pricing", "/thanks"],
+  ["/pricing", "/"],
+  ["/docs"]
 ]
 
 # Real public addresses spread across regions. Weighted so the mix looks like
@@ -240,7 +240,7 @@ emit = fn opts ->
         end
 
       form =
-        if path == "/demo/pricing" and opts.clicks? and :rand.uniform() < 0.5 do
+        if path == "/pricing" and opts.clicks? and :rand.uniform() < 0.5 do
           submitted? = :rand.uniform() < 0.55
           name = pick.(["Ada Lovelace", "Grace Hopper", "Alan Turing", "Katherine Johnson"])
           plan = pick.(["starter", "pro", "enterprise"])
@@ -253,7 +253,7 @@ emit = fn opts ->
               "st" => if(submitted?, do: "submitted", else: "abandoned"),
               "fid" => "signup",
               "fnm" => "signup",
-              "act" => "/demo/signup",
+              "act" => "/signup",
               "mth" => "post",
               "sel" => "form#signup",
               "cls" => ["signup-form"],
@@ -393,7 +393,7 @@ anomalies = [
   %{
     count: 5,
     dwell_ms: 600,
-    journey: ["/demo"],
+    journey: ["/"],
     active?: false,
     clicks?: false,
     ticks: 0,
@@ -403,7 +403,7 @@ anomalies = [
   %{
     count: 5,
     dwell_ms: 1_200,
-    journey: ["/demo", "/demo/pricing", "/demo/docs", "/demo/thanks"],
+    journey: ["/", "/pricing", "/docs", "/thanks"],
     active?: false,
     clicks?: false,
     ticks: 1,
@@ -413,7 +413,7 @@ anomalies = [
   %{
     count: 4,
     dwell_ms: 6 * 3_600_000,
-    journey: ["/demo/docs"],
+    journey: ["/docs"],
     active?: false,
     clicks?: false,
     ticks: 80,
@@ -423,7 +423,7 @@ anomalies = [
   %{
     count: 3,
     dwell_ms: 20 * 3_600_000,
-    journey: ["/demo"],
+    journey: ["/"],
     active?: false,
     clicks?: false,
     ticks: 90,
@@ -433,7 +433,7 @@ anomalies = [
   %{
     count: 4,
     dwell_ms: 400_000,
-    journey: ["/demo"],
+    journey: ["/"],
     active?: false,
     clicks?: false,
     ticks: 70,

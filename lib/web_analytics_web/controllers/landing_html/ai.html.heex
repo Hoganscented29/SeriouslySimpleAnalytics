@@ -3,9 +3,11 @@
 
   <!-- hero -->
   <section class="mx-auto max-w-6xl px-4 sm:px-6 pt-16 pb-10">
-    <div class="max-w-3xl">
+    <div class="max-w-4xl">
       <h1 class="badge badge-primary badge-outline mb-4">AI Analytics</h1>
-      <h2 class="text-4xl sm:text-5xl font-semibold tracking-tight leading-tight">
+      <!-- Sized off the viewport rather than a breakpoint, so it holds one line
+           at every width instead of wrapping between two of them. -->
+      <h2 class="font-semibold tracking-tight leading-tight whitespace-nowrap text-[clamp(1.05rem,4.1vw,3rem)]">
         <code class="font-mono">llms.txt</code> Analytics — Free AI Data Metrics
       </h2>
       <p class="mt-5 text-lg text-base-content/70 leading-relaxed">
@@ -170,14 +172,21 @@
   <section class="border-t border-base-300 bg-base-100">
     <div class="mx-auto max-w-6xl px-4 sm:px-6 py-16 text-center">
       <h3 class="text-2xl font-semibold tracking-tight">Integrate with AI, now!</h3>
-      <p class="mt-3 text-base-content/70 max-w-2xl mx-auto">
-        Copy this and give it to whatever coding agent works on your project. It does the rest —
-        reads the contract, opens an account, reports the events, and updates your own
-        <code class="font-mono text-sm">llms.txt</code>
-        so the next agent does the same.
-      </p>
+      <p class="mt-3 text-base-content/70">Copy this and give it to your coding agent:</p>
 
-      <pre class="mt-6 mx-auto max-w-3xl text-left bg-base-200 rounded-box p-5 text-sm whitespace-pre-wrap break-words"><code>{agent_prompt(@base_url)}</code></pre>
+      <div class="mt-6 mx-auto max-w-3xl relative">
+        <pre
+          id="agent-prompt"
+          class="text-left bg-base-200 rounded-box p-5 pr-24 text-sm whitespace-pre-wrap break-words"
+        ><code>{agent_prompt(@base_url)}</code></pre>
+        <button
+          type="button"
+          data-copy="agent-prompt"
+          class="btn btn-sm btn-primary absolute top-3 right-3"
+        >
+          Copy
+        </button>
+      </div>
 
       <div class="mt-6 flex flex-wrap gap-3 justify-center">
         <.cta current_scope={@current_scope} />
@@ -187,4 +196,7 @@
   </section>
 
   <.site_footer />
+
+  <script src={~p"/wa-live.js"} defer>
+  </script>
 </div>

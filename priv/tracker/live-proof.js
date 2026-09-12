@@ -1,4 +1,5 @@
-// Drives the "your visit, as recorded" panel on the landing page.
+// The landing pages' small behaviours: the "your visit, as recorded" panel, and
+// the copy buttons on the prompts.
 //
 // Reads the tag's own state rather than measuring anything itself: the claim is
 // that the tag records this, so the panel has to show what the tag holds, not a
@@ -76,4 +77,67 @@
   }
 
   if (FIELDS.some(el)) startWhenReady(0);
+})();
+
+// Copy buttons. Delegated from the document so a page can have several and the
+// markup stays a button next to a <pre> rather than a component with a hook.
+(function () {
+  'use strict';
+
+  document.addEventListener('click', function (event) {
+    var button = event.target.closest && event.target.closest('[data-copy]');
+    if (!button) return;
+
+    var source = document.getElementById(button.getAttribute('data-copy'));
+    if (!source) return;
+
+    var text = source.innerText.trim();
+    // Never leave the button unchanged: a press that does nothing visible reads
+    // as a broken button, and the reader has no other way to tell.
+    var flash = function (message) {
+      var original = button.getAttribute('data-copy-label') || button.textContent;
+      button.setAttribute('data-copy-label', original);
+      button.textContent = message;
+      setTimeout(function () { button.textContent = original; }, 2000);
+    };
+
+    var failed = function () {
+      flash('Press ⌘C');
+      var range = document.createRange();
+      range.selectNodeContents(source);
+      var selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    };
+
+    var done = function () {
+      flash('Copied');
+    };
+
+    // The older selection trick, used when the clipboard API is missing and
+    // again when it refuses — it rejects on an unfocused document, which is not
+    // a reason to leave the button silent.
+    var fallback = function () {
+      var area = document.createElement('textarea');
+      area.value = text;
+      area.setAttribute('readonly', '');
+      area.style.position = 'fixed';
+      area.style.opacity = '0';
+      document.body.appendChild(area);
+      area.select();
+
+      var copied = false;
+      try { copied = document.execCommand('copy'); } catch (e) { copied = false; }
+      document.body.removeChild(area);
+
+      if (copied) done(); else failed();
+    };
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, fallback);
+      return;
+    }
+
+    fallback();
+  });
 })();

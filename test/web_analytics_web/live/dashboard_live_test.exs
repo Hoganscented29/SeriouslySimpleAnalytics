@@ -249,13 +249,24 @@ defmodule WebAnalyticsWeb.DashboardLiveTest do
       assert html =~ "Update our llms.txt with the"
     end
 
-    test "does not offer a browser snippet to paste", %{conn: conn} do
+    test "offers the website snippet above the agent instructions", %{conn: conn, site: site} do
       {:ok, _live, html} = live(conn, ~p"/dashboard?site=dash")
 
-      # The integration is a thing to delegate now. The agent reads llms.txt,
-      # which covers browser tracking, so the snippet is not the instruction.
-      refute html =~ "Install snippet"
-      refute html =~ "data-site="
+      assert html =~ "Website Integration Instructions"
+      assert html =~ "data-site=&quot;#{site.key}&quot;"
+      assert html =~ "AI Integration Instructions"
+
+      # One line, and most accounts want it, so it comes first.
+      {website, _} = :binary.match(html, "Website Integration Instructions")
+      {ai, _} = :binary.match(html, "AI Integration Instructions")
+      assert website < ai
+    end
+
+    test "both snippets can be copied", %{conn: conn} do
+      {:ok, _live, html} = live(conn, ~p"/dashboard?site=dash")
+
+      assert html =~ ~s|data-copy="script-tag"|
+      assert html =~ ~s|src="/wa-live.js"|
     end
 
     test "does not claim it just created an account for someone who has one", %{conn: conn} do

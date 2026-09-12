@@ -33,12 +33,16 @@ defmodule WebAnalyticsWeb.TrackerController do
 
   # Short enough that a fix reaches visitors within the hour, long enough that
   # repeat visitors are not re-downloading it on every pageview.
-  @max_age 3600
+  #
+  # Zero in dev: an hour-long cache on a file you are actively editing means the
+  # browser keeps running last hour's copy, and every change looks like it did
+  # nothing. That has cost more debugging time than the cache saves.
+  @max_age if Mix.env() == :dev, do: 0, else: 3600
 
   def script(conn, _params) do
     conn = put_resp_header(conn, "etag", ~s("#{@etag}"))
 
-    if stale?(conn) do
+    if @max_age == 0 or stale?(conn) do
       conn
       |> put_resp_content_type("application/javascript")
       |> put_resp_header("cache-control", "public, max-age=#{@max_age}")
@@ -51,7 +55,7 @@ defmodule WebAnalyticsWeb.TrackerController do
   def proof(conn, _params) do
     conn = put_resp_header(conn, "etag", ~s("#{@proof_etag}"))
 
-    if stale?(conn) do
+    if @max_age == 0 or stale?(conn) do
       conn
       |> put_resp_content_type("application/javascript")
       |> put_resp_header("cache-control", "public, max-age=#{@max_age}")

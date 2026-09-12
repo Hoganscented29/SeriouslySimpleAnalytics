@@ -26,7 +26,7 @@ defmodule WebAnalyticsWeb.ProviderController do
     |> assign(:structured_data, Provider.structured_data(provider, base_url))
     |> assign(:provider, provider)
     |> assign(:base_url, base_url)
-    |> assign(:site_key, demo_site_key())
+    |> assign(:site_key, sample_account_id())
     |> render(:show)
   end
 
@@ -43,7 +43,7 @@ defmodule WebAnalyticsWeb.ProviderController do
     |> render(:index)
   end
 
-  defp demo_site_key do
+  defp sample_account_id do
     case Sites.list_sites() do
       [site | _] -> site.key
       [] -> "YOUR_ACCOUNT_ID"
