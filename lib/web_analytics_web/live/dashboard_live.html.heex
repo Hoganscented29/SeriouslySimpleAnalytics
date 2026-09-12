@@ -396,6 +396,7 @@
                 <th>Last seen</th>
                 <th>On</th>
                 <th>Entry</th>
+                <th>Referrer</th>
                 <th class="text-right">Pages</th>
                 <th class="text-right">Duration</th>
                 <th class="text-right">Dwell</th>
@@ -435,6 +436,9 @@
                 >
                   {display_name(session.entry_path)}
                 </td>
+                <td class="text-xs max-w-[10rem] truncate" title={referrer_title(session)}>
+                  {referrer(session)}
+                </td>
                 <td class="text-right tabular-nums">{number(session.pageview_count)}</td>
                 <td class="text-right tabular-nums">{duration(session_duration(session))}</td>
                 <td class="text-right tabular-nums">{duration(session.dwell_ms)}</td>
@@ -448,7 +452,7 @@
                 </td>
               </tr>
               <tr :if={(live[:sessions_list] || []) == []}>
-                <td colspan="11" class="text-center py-8 text-base-content/50">
+                <td colspan="12" class="text-center py-8 text-base-content/50">
                   Nobody in the last 30 minutes
                 </td>
               </tr>
@@ -627,7 +631,7 @@
               </td>
             </tr>
             <tr :if={(@data[:pages] || []) == []}>
-              <td colspan="11" class="text-center py-8 text-base-content/50">No pageviews yet</td>
+              <td colspan="12" class="text-center py-8 text-base-content/50">No pageviews yet</td>
             </tr>
           </tbody>
         </table>
@@ -1534,6 +1538,7 @@
                 <th>Started</th>
                 <th>Entry</th>
                 <th>Exit</th>
+                <th>Referrer</th>
                 <th class="text-right">Pages</th>
                 <th class="text-right">Duration</th>
                 <th class="text-right">Dwell</th>
@@ -1566,6 +1571,9 @@
                 </td>
                 <td class="max-w-[10rem] truncate" title={session.exit_path}>
                   {display_name(session.exit_path)}
+                </td>
+                <td class="text-xs max-w-[10rem] truncate" title={referrer_title(session)}>
+                  {referrer(session)}
                 </td>
                 <td class="text-right tabular-nums">{number(session.pageview_count)}</td>
                 <td class="text-right tabular-nums">{duration(session_duration(session))}</td>

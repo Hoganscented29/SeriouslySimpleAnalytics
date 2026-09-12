@@ -14,7 +14,8 @@ defmodule WebAnalyticsWeb.AdminLive do
 
   # Only the one component: this module defines its own num/1 and duration/1,
   # and importing the rest would collide with them.
-  import WebAnalyticsWeb.DashboardComponents, only: [live_sparkline: 1, masked_ip: 1]
+  import WebAnalyticsWeb.DashboardComponents,
+    only: [live_sparkline: 1, masked_ip: 1, referrer: 1, referrer_title: 1]
 
   alias WebAnalytics.Admin
   alias WebAnalytics.Admin.Host

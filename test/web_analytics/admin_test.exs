@@ -143,6 +143,58 @@ defmodule WebAnalytics.AdminTest do
     end
   end
 
+  describe "referrers on the session lists" do
+    test "carries the referring host, and says Direct when there is none" do
+      site = site_fixture(%{key: "referrers"})
+
+      {:ok, _} =
+        Ingest.submit_sync(
+          site,
+          payload(site, [init_event(), pageview_event(1, "/from-hn")], token: "referred"),
+          received_at: DateTime.utc_now()
+        )
+
+      {:ok, _} =
+        Ingest.submit_sync(
+          site,
+          payload(site, [init_event(%{"ref" => nil}), pageview_event(1, "/typed")],
+            token: "direct"
+          ),
+          received_at: DateTime.utc_now()
+        )
+
+      rows = Admin.detail().recent_sessions
+      referred = Enum.find(rows, &(&1.entry_path == "/from-hn"))
+      direct = Enum.find(rows, &(&1.entry_path == "/typed"))
+
+      # The fixture's init_event carries a Hacker News referrer.
+      assert referred.referrer_host == "news.ycombinator.com"
+      assert referred.referrer =~ "news.ycombinator.com"
+
+      # Absent is a different fact from unrecorded: no referrer means a typed
+      # URL, a bookmark, or a client that strips it, and the renderer says
+      # "Direct" rather than a dash that reads as missing data.
+      assert is_nil(direct.referrer_host)
+      assert WebAnalyticsWeb.DashboardComponents.referrer(direct) == "Direct"
+      assert WebAnalyticsWeb.DashboardComponents.referrer(referred) == "news.ycombinator.com"
+    end
+
+    test "the live panel carries it too" do
+      site = site_fixture(%{key: "referrers-live"})
+
+      {:ok, _} =
+        Ingest.submit_sync(
+          site,
+          payload(site, [init_event(), pageview_event(1, "/")], token: "live-referred"),
+          received_at: DateTime.utc_now()
+        )
+
+      [session | _] = Admin.active_now().sessions_list
+
+      assert session.referrer_host == "news.ycombinator.com"
+    end
+  end
+
   describe "counters/1" do
     test "an empty deployment reports zeros rather than failing" do
       counters = Admin.counters()

@@ -127,6 +127,7 @@
                 <th>Domain</th>
                 <th>Project</th>
                 <th>On</th>
+                <th>Referrer</th>
                 <th class="text-right">Pages</th>
                 <th class="text-right">Dwell</th>
                 <th>Where</th>
@@ -168,6 +169,9 @@
                 <td class="max-w-[12rem] truncate">
                   {session.crawler_name || session.entry_path || "—"}
                 </td>
+                <td class="max-w-[10rem] truncate text-[11px]" title={referrer_title(session)}>
+                  {referrer(session)}
+                </td>
                 <td class="text-right tabular-nums">{num(session.pageviews)}</td>
                 <td class="text-right tabular-nums">{duration(session.dwell_ms)}</td>
                 <td class="text-[11px] whitespace-nowrap">
@@ -178,7 +182,7 @@
                 </td>
               </tr>
               <tr :if={@live.sessions_list == []}>
-                <td colspan="10" class="text-center py-8 text-base-content/50">
+                <td colspan="11" class="text-center py-8 text-base-content/50">
                   Nobody in the last 30 minutes
                 </td>
               </tr>
@@ -741,6 +745,7 @@
               <th>Site</th>
               <th>Channel</th>
               <th>Entry</th>
+              <th>Referrer</th>
               <th>Where</th>
               <th class="text-right">Views</th>
               <th class="text-right">Dwell</th>
@@ -770,6 +775,9 @@
               <td class="font-mono text-[11px] max-w-[14rem] truncate" title={row.entry_path}>
                 {row.entry_path}
               </td>
+              <td class="max-w-[10rem] truncate text-[11px]" title={referrer_title(row)}>
+                {referrer(row)}
+              </td>
               <td class="text-base-content/60 max-w-[12rem] truncate">
                 {[row.city, row.country] |> Enum.reject(&is_nil/1) |> Enum.join(", ")}
               </td>
@@ -777,7 +785,7 @@
               <td class="text-right tabular-nums">{duration(row.dwell_ms)}</td>
             </tr>
             <tr :if={@detail.recent_sessions == []}>
-              <td colspan="8" class="text-center text-base-content/50 py-6">
+              <td colspan="9" class="text-center text-base-content/50 py-6">
                 Nothing has reported yet.
               </td>
             </tr>

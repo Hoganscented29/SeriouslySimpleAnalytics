@@ -691,6 +691,23 @@ defmodule WebAnalyticsWeb.DashboardComponents do
   # -- formatting ----------------------------------------------------------
 
   @doc """
+  Where a visit came from, shortened to its host.
+
+  "Direct" rather than a dash for an absent referrer, because the two are
+  different facts: a visit with no referrer arrived by typed URL, bookmark or a
+  client that strips it, which is information — where a dash reads as "we did
+  not record this". The full URL rides on the title attribute, since the path
+  and query of a referrer are often where the campaign actually is.
+  """
+  def referrer(%{referrer_host: host}) when is_binary(host) and host != "", do: host
+  def referrer(%{referrer: ref}) when is_binary(ref) and ref != "", do: ref
+  def referrer(_), do: "Direct"
+
+  @doc "The full referring URL, for a title attribute; nil when there is none."
+  def referrer_title(%{referrer: ref}) when is_binary(ref) and ref != "", do: ref
+  def referrer_title(_), do: nil
+
+  @doc """
   A visitor's address with its middle masked out.
 
   Masked in the request that carried it, so the value shown here is the only
