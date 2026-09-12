@@ -10,6 +10,196 @@ defmodule WebAnalyticsWeb.IntegrationComponents do
   use Phoenix.Component
   use WebAnalyticsWeb, :verified_routes
 
+  @doc """
+  A dashboard, drawn.
+
+  The hero has to answer "what do I get" before anyone reads a word, and a
+  screenshot would be a binary that goes stale the moment the real thing
+  changes. This is markup: theme-aware, selectable, and it costs nothing to
+  keep honest.
+
+  The numbers are illustrative — a deployment with real traffic in it, so the
+  layout reads as a working tool rather than an empty state. It is `role="img"`
+  for that reason: it depicts the product, it is not a report of anything.
+  """
+  def dashboard_preview(assigns) do
+    ~H"""
+    <div
+      class="rounded-2xl border border-base-300 bg-base-100 overflow-hidden shadow-lg"
+      role="img"
+      aria-label={
+        "An illustration of the dashboard: sessions, visitors, pageviews and dwell time " <>
+          "across the top, a bar chart of sessions over the last day, a list of the busiest " <>
+          "pages, the AI crawlers seen, and a page-to-page flow diagram."
+      }
+    >
+      <!-- window chrome -->
+      <div class="flex items-center gap-2.5 px-4 py-2.5 border-b border-base-300 bg-base-200">
+        <span class="flex gap-1.5" aria-hidden="true">
+          <i class="w-2.5 h-2.5 rounded-full bg-base-300 block"></i>
+          <i class="w-2.5 h-2.5 rounded-full bg-base-300 block"></i>
+          <i class="w-2.5 h-2.5 rounded-full bg-base-300 block"></i>
+        </span>
+        <span class="text-[11px] font-medium text-base-content/50">Analytics</span>
+        <span class="flex-1"></span>
+        <span class="hidden sm:flex gap-1">
+          <span
+            :for={{range, active} <- [{"24h", false}, {"7d", true}, {"30d", false}]}
+            class={[
+              "text-[10px] px-1.5 py-0.5 rounded",
+              active && "bg-primary text-primary-content font-medium",
+              !active && "text-base-content/40"
+            ]}
+          >
+            {range}
+          </span>
+        </span>
+      </div>
+
+      <div class="p-3 sm:p-4 space-y-3">
+        <!-- headline numbers -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <div
+            :for={
+              stat <- [
+                {"Sessions", "12,480", "+18%"},
+                {"Visitors", "8,204", "+11%"},
+                {"Pageviews", "34,201", "+22%"},
+                {"Avg dwell", "2m 41s", "1m 09s active"}
+              ]
+            }
+            class="rounded-lg border border-base-300 px-3 py-2"
+          >
+            <div class="text-[10px] text-base-content/50">{elem(stat, 0)}</div>
+            <div class="text-base sm:text-lg font-semibold tabular-nums leading-tight">
+              {elem(stat, 1)}
+            </div>
+            <div class="text-[10px] text-success">{elem(stat, 2)}</div>
+          </div>
+        </div>
+
+        <!-- sessions over time -->
+        <div class="rounded-lg border border-base-300 p-3">
+          <div class="flex items-baseline justify-between mb-2">
+            <span class="text-[11px] font-medium">Sessions over time</span>
+            <span class="text-[10px] text-base-content/40">peak 1,204/hour</span>
+          </div>
+          <div class="flex items-end gap-[3px] h-16">
+            <div
+              :for={
+                height <- [
+                  28,
+                  34,
+                  22,
+                  41,
+                  55,
+                  48,
+                  62,
+                  71,
+                  58,
+                  44,
+                  66,
+                  83,
+                  91,
+                  74,
+                  68,
+                  88,
+                  100,
+                  79,
+                  61,
+                  52,
+                  47,
+                  58,
+                  40,
+                  33
+                ]
+              }
+              class="flex-1 bg-primary/80 rounded-sm"
+              style={"height: #{height}%"}
+            >
+            </div>
+          </div>
+        </div>
+
+        <div class="grid sm:grid-cols-2 gap-3">
+          <!-- busiest pages -->
+          <div class="rounded-lg border border-base-300 p-3">
+            <div class="text-[11px] font-medium mb-2">Busiest pages</div>
+            <div class="space-y-1.5">
+              <div
+                :for={
+                  {path, count, width} <- [
+                    {"/", "9,412", 100},
+                    {"/pricing", "4,806", 51},
+                    {"/docs/quickstart", "3,271", 35},
+                    {"/blog/why-llms-txt", "2,118", 22},
+                    {"/changelog", "1,004", 11}
+                  ]
+                }
+                class="flex items-center gap-2"
+              >
+                <div class="flex-1 min-w-0 relative h-4">
+                  <div
+                    class="absolute inset-y-0 left-0 bg-primary/15 rounded"
+                    style={"width: #{width}%"}
+                  >
+                  </div>
+                  <span class="relative px-1.5 text-[10px] font-mono leading-4 truncate block">
+                    {path}
+                  </span>
+                </div>
+                <span class="text-[10px] tabular-nums text-base-content/60 w-10 text-right">
+                  {count}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- crawlers -->
+          <div class="rounded-lg border border-base-300 p-3">
+            <div class="text-[11px] font-medium mb-2">AI crawlers, named</div>
+            <div class="space-y-1.5">
+              <div
+                :for={
+                  {name, count} <- [
+                    {"ClaudeBot", "1,842"},
+                    {"GPTBot", "1,506"},
+                    {"PerplexityBot", "744"},
+                    {"Bytespider", "389"},
+                    {"CCBot", "201"}
+                  ]
+                }
+                class="flex items-center justify-between gap-2"
+              >
+                <span class="text-[10px] font-mono truncate">{name}</span>
+                <span class="text-[10px] tabular-nums text-base-content/60">{count}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- flow -->
+        <div class="rounded-lg border border-base-300 p-3">
+          <div class="text-[11px] font-medium mb-2">Page-to-page flow</div>
+          <div class="flex items-center gap-1.5 overflow-hidden text-[10px] font-mono">
+            <span
+              :for={{node, index} <- Enum.with_index(["/", "/pricing", "/docs", "/signup"])}
+              class="contents"
+            >
+              <span :if={index > 0} class="text-base-content/25">→</span>
+              <span class="px-2 py-1 rounded bg-base-200 whitespace-nowrap">{node}</span>
+            </span>
+            <span class="text-base-content/25">→</span>
+            <span class="px-2 py-1 rounded bg-success/15 text-success whitespace-nowrap">
+              converted
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
   attr :base_url, :string, required: true
   attr :prompt, :string, default: nil
   attr :creates_account, :boolean, default: true

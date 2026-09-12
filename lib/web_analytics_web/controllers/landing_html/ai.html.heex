@@ -17,10 +17,7 @@
     </div>
 
     <div class="mt-8 rounded-box bg-base-100 border border-base-300 p-5 sm:p-6">
-      <div class="text-xs uppercase tracking-wide text-base-content/60 mb-3">
-        This is the entire integration
-      </div>
-      <.integration_chat base_url={@base_url} />
+      <.dashboard_preview />
       <div class="mt-4 flex flex-wrap items-center gap-3">
         <.link navigate={~p"/dashboard"} class="btn btn-primary btn-sm">See it in the dashboard</.link>
         <a href={~p"/llms.txt"} class="btn btn-outline btn-sm font-mono text-xs">
@@ -264,6 +261,16 @@
       <pre class="mt-6 bg-base-200 rounded p-4 text-xs sm:text-sm overflow-x-auto"><code>{script_tag(@base_url, @site_key)}</code></pre>
       <a href={~p"/"} class="btn btn-outline btn-sm mt-5">Website analytics →</a>
     </div>
+  </section>
+
+  <!-- the integration, as the conversation it is -->
+  <section class="mx-auto max-w-6xl px-4 sm:px-6 py-16">
+    <h2 class="text-2xl font-semibold tracking-tight">This is the entire integration</h2>
+    <p class="mt-3 text-base-content/70 max-w-2xl mb-8">
+      Hand one line to your coding agent. It reads the contract, opens an account, wires up the
+      events, and updates your own llms.txt so the next agent does the same.
+    </p>
+    <.integration_chat base_url={@base_url} />
   </section>
 
   <!-- cta -->

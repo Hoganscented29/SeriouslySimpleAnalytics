@@ -50,47 +50,72 @@ defmodule WebAnalyticsWeb.LandingControllerTest do
     end
   end
 
-  describe "the integration, on both landing pages" do
-    # The hero is the same component on both, because the integration is the
-    # same act: hand one line to an agent.
-    for {label, path} <- [{"website", "/"}, {"AI", "/AI-Analytics-llms-txt"}] do
-      test "the #{label} page shows the prompt as something to hand over", %{conn: conn} do
-        html = conn |> get(unquote(path)) |> html_response(200)
+  describe "the integration conversation" do
+    # It lives on the AI page now: the website hero leads with the dashboard,
+    # since a visitor with a website wants to see what they get before being
+    # told how to wire it up.
+    test "is on the AI page, with the whole prompt", %{conn: conn} do
+      html = conn |> get(~p"/AI-Analytics-llms-txt") |> html_response(200)
 
-        assert html =~ "Read"
-        assert html =~ "instrument this project with"
-        # Naming the events keeps every integration measuring the same things.
-        assert html =~ "run started/completed with an outcome"
-        assert html =~ "Reuse one sid for the whole run"
-        assert html =~ "Never send credentials, prompts or completions"
-        assert html =~ "Update our llms.txt with the instructed changes"
-      end
-
-      test "the #{label} page reads as a conversation, not a snippet", %{conn: conn} do
-        html = conn |> get(unquote(path)) |> html_response(200)
-
-        assert html =~ "Your coding agent"
-        assert html =~ "role=\"img\"", "the window is an illustration and should say so"
-        assert html =~ "aria-label"
-      end
-
-      test "the #{label} page says llms.txt was updated and committed", %{conn: conn} do
-        html = conn |> get(unquote(path)) |> html_response(200)
-
-        # The step every agent so far has skipped, so the page shows it landing.
-        assert html =~ "llms.txt"
-        assert html =~ "Analytics section added · committed"
-        assert html =~ "Updated"
-      end
+      assert html =~ "instrument this project with"
+      # Naming the events keeps every integration measuring the same things.
+      assert html =~ "run started/completed with an outcome"
+      assert html =~ "Reuse one sid for the whole run"
+      assert html =~ "Never send credentials, prompts or completions"
+      assert html =~ "Update our llms.txt with the instructed changes"
     end
 
-    test "the prompt names this deployment, not the canonical host", %{conn: conn} do
-      html = conn |> get(~p"/") |> html_response(200)
+    test "reads as a conversation, not a snippet", %{conn: conn} do
+      html = conn |> get(~p"/AI-Analytics-llms-txt") |> html_response(200)
 
-      # A self-hosted instance must not point its own readers at our contract,
-      # so the host is this deployment's rather than the canonical one.
+      assert html =~ "Your coding agent"
+      assert html =~ "aria-label"
+    end
+
+    test "shows llms.txt updated and committed", %{conn: conn} do
+      html = conn |> get(~p"/AI-Analytics-llms-txt") |> html_response(200)
+
+      # The step every agent so far has skipped, so the page shows it landing.
+      assert html =~ "Analytics section added"
+      assert html =~ "committed"
+    end
+
+    test "names this deployment, not the canonical host", %{conn: conn} do
+      html = conn |> get(~p"/AI-Analytics-llms-txt") |> html_response(200)
+
+      # A self-hosted instance must not point its own readers at our contract.
       assert html =~ ~r{Read https?://[^/\s]+/llms\.txt and instrument}
       refute html =~ "Read https://seriouslysimpleanalytics.com/llms.txt and instrument"
+    end
+
+    test "is not on the website page, which leads with the dashboard", %{conn: conn} do
+      html = conn |> get(~p"/") |> html_response(200)
+
+      refute html =~ "Your coding agent"
+      refute html =~ "instrument this project with"
+    end
+  end
+
+  describe "the dashboard illustration" do
+    for {label, path} <- [{"website", "/"}, {"AI", "/AI-Analytics-llms-txt"}] do
+      test "tops the #{label} page, showing a tool in use", %{conn: conn} do
+        html = conn |> get(unquote(path)) |> html_response(200)
+
+        assert html =~ "Sessions over time"
+        assert html =~ "Busiest pages"
+        assert html =~ "AI crawlers, named"
+        # An empty dashboard sells nothing, so the illustration has traffic in it.
+        assert html =~ "12,480"
+      end
+
+      test "the #{label} page says it is a picture, not a report", %{conn: conn} do
+        html = conn |> get(unquote(path)) |> html_response(200)
+
+        # The numbers are invented. role="img" with a description is how a
+        # screen reader, and anyone reading the markup, is told that.
+        assert html =~ ~s|role="img"|
+        assert html =~ "An illustration of the dashboard"
+      end
     end
   end
 

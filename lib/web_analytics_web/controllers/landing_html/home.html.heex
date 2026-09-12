@@ -16,15 +16,12 @@
     </div>
 
     <div class="mt-8 rounded-box bg-base-100 border border-base-300 p-5 sm:p-6">
-      <div class="text-xs uppercase tracking-wide text-base-content/60 mb-3">
-        This is the entire integration
-      </div>
-      <.integration_chat base_url={@base_url} />
+      <.dashboard_preview />
       <div class="mt-4 flex flex-wrap items-center gap-3">
         <.cta current_scope={@current_scope} class="btn btn-primary btn-sm" />
         <.link href={~p"/demo"} class="btn btn-outline btn-sm">See it capturing, live</.link>
         <span class="text-sm text-base-content/50">
-          Hand it to your coding agent. It reads the rest.
+          One script tag. Everything above, from the first visit.
         </span>
       </div>
     </div>

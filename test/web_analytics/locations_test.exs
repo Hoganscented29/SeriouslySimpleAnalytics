@@ -80,7 +80,13 @@ defmodule WebAnalytics.LocationsTest do
     refute :ip in Session.__schema__(:fields)
     refute :ip_address in Session.__schema__(:fields)
     assert session.ip_hash =~ ~r/^[0-9a-f]{32}$/
-    refute session.ip_hash =~ "203"
+
+    # Whole octets and the whole address, not a three-character fragment of one:
+    # "203" turns up in a random 32-character hex string about once every
+    # hundred-odd runs, which made this assertion a coincidence detector rather
+    # than a privacy one.
+    refute session.ip_hash =~ address
+    refute session.ip_hash =~ String.replace(address, ".", "")
 
     stored =
       session
