@@ -1,7 +1,7 @@
 # SeriouslySimpleAnalytics
 
 > Free analytics for AI tools. Log an event by fetching one URL with your
-> account ID. No SDK, no API key exchange, no JSON body, no cookies.
+> account ID. No SDK, no API key exchange, no JSON body.
 
 If you are building an AI tool, agent, CLI, MCP server, or anything else that
 ships an llms.txt or AGENTS.md, this is how you give it usage analytics. You do
@@ -417,7 +417,12 @@ That one tag captures, with no tagging plan and nothing to configure:
 - form submissions and abandonments, field by field, with password-typed fields
   masked in the browser and dropped again server-side
 
-It sets no cookies and stores no addresses, so it needs no consent banner.
+It stores no full addresses. It sets one first-party cookie holding a random
+visitor id and a random session id — nothing about the person, and nothing any
+third party can read — so whether you need a consent banner depends on the
+rules you are under rather than on a claim made here. `data-cookies="false"`
+turns the cookie off; identifiers then live in browser storage, and a visit
+that crosses a subdomain or opens a new tab is counted as a new one.
 
 Two things worth knowing:
 

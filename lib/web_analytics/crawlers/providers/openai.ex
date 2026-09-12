@@ -558,7 +558,7 @@ defmodule WebAnalytics.Crawlers.Providers.OpenAI do
              "is not a person, but the same rules apply to everything here."},
           {:ul,
            [
-             "No cookies — identifiers live in browser storage, so there is no consent banner.",
+             "One first-party cookie carries the visitor and session identifiers across tabs and subdomains, which per-origin storage cannot. No third party sees it, and data-cookies=\"false\" turns it off.",
              "No full IP addresses stored — an address resolves a location in-request, then only a middle-masked copy and a salted hash are kept, with the salt rotating daily.",
              "Password fields are masked in the browser and dropped again server-side, so a stale snippet cannot defeat it.",
              "data-wa-ignore on any element, form or field excludes it entirely.",

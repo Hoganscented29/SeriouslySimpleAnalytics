@@ -94,9 +94,21 @@ defmodule WebAnalytics.Ingest do
   # IPv4 is dot-separated and IPv6 colon-separated, and the rule is the same
   # either way: keep the ends, hide the middle, keep the separators so it still
   # reads as an address.
+  #
+  # The exception is an IPv4-mapped IPv6 address — `::ffff:203.0.113.42`, which
+  # is the form a socket reports for an IPv4 client on a dual-stack listener,
+  # so it is the normal case rather than an oddity. Its last colon-group is an
+  # entire IPv4 address, and "keep the ends" would have kept all of it. Masking
+  # the mapped address on its own terms is the whole point of this clause.
   defp mask_groups(ip) do
-    separator = if String.contains?(ip, ":"), do: ":", else: "."
+    if String.contains?(ip, ":") and String.contains?(ip, ".") do
+      ip |> String.split(":") |> List.last() |> mask_separated(".")
+    else
+      mask_separated(ip, if(String.contains?(ip, ":"), do: ":", else: "."))
+    end
+  end
 
+  defp mask_separated(ip, separator) do
     case String.split(ip, separator) do
       # Nothing to hide between the ends, so hide everything past the first
       # group. Storing an address whole is the one outcome this prevents.

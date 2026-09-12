@@ -75,6 +75,9 @@
     // to be able to do that — otherwise the one page that claims to be running
     // the tag on you is the one page not running it.
     measureOnly: flag('measure-only', false),
+    // Cookies carry the visitor and the session across origins and tabs, which
+    // per-origin storage cannot. Set data-cookies="false" to do without.
+    cookies: flag('cookies', true),
     debug: flag('debug', false)
   };
 
@@ -176,6 +179,81 @@
     }
   }
 
+  // ---------------------------------------------------------------- cookies
+  //
+  // Storage is scoped to one origin, so a hop from www to checkout, or a link
+  // opened in a new tab, loses the visit entirely: every page becomes its own
+  // one-pageview session and the flow diagram has nothing to join up. A cookie
+  // on the registrable domain survives both.
+  //
+  // Off with data-cookies="false" for a deployment that cannot set one.
+
+  var COOKIE_VISITOR = 'wa_vid';
+  var COOKIE_SESSION = 'wa_sid';
+  var cookieDomainCache;
+
+  function readCookie(name) {
+    try {
+      var match = ('; ' + document.cookie).split('; ' + name + '=');
+      return match.length < 2 ? null : decodeURIComponent(match.pop().split(';').shift());
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Found by trying, not by a list of suffixes. A browser refuses to set a
+  // cookie on a public suffix, so the shortest candidate that sticks is the
+  // registrable domain — which is how this works for .co.uk without shipping
+  // the public suffix list.
+  function cookieDomain() {
+    if (cookieDomainCache !== undefined) return cookieDomainCache;
+    cookieDomainCache = null;
+
+    var host = location.hostname;
+    // An address has no registrable domain, and a single label (localhost) is
+    // already as broad as it can be.
+    if (!host || /^[\d.]+$/.test(host) || host.indexOf('.') === -1) return cookieDomainCache;
+
+    var parts = host.split('.');
+
+    for (var i = parts.length - 2; i >= 0; i--) {
+      var candidate = parts.slice(i).join('.');
+      try {
+        document.cookie = 'wa_d=1; domain=.' + candidate + '; path=/; SameSite=Lax';
+        if (readCookie('wa_d') === '1') {
+          document.cookie = 'wa_d=; domain=.' + candidate + '; path=/; Max-Age=0; SameSite=Lax';
+          cookieDomainCache = candidate;
+          return cookieDomainCache;
+        }
+      } catch (e) {
+        /* keep trying the next one up */
+      }
+    }
+
+    return cookieDomainCache;
+  }
+
+  function writeCookie(name, value, maxAgeSeconds) {
+    if (!config.cookies) return;
+
+    try {
+      var domain = cookieDomain();
+      var secure = location.protocol === 'https:' ? '; Secure' : '';
+
+      document.cookie =
+        name +
+        '=' +
+        encodeURIComponent(value) +
+        '; path=/; Max-Age=' +
+        maxAgeSeconds +
+        '; SameSite=Lax' +
+        (domain ? '; domain=.' + domain : '') +
+        secure;
+    } catch (e) {
+      /* a cookie the browser will not take costs us continuity, nothing more */
+    }
+  }
+
   function uuid() {
     if (window.crypto && window.crypto.randomUUID) {
       try {
@@ -192,23 +270,73 @@
     return bytes.join('');
   }
 
+  var VISITOR_TTL = 60 * 60 * 24 * 365;
+
   var visitorToken = (function () {
-    var stored = readStore('localStorage', VISITOR_KEY);
-    if (stored && stored.id) return stored.id;
-    var id = uuid();
+    // The cookie first: it is the only one of the three that a subdomain hop
+    // does not throw away.
+    var id = (config.cookies && readCookie(COOKIE_VISITOR)) || null;
+
+    if (!id) {
+      var stored = readStore('localStorage', VISITOR_KEY);
+      id = (stored && stored.id) || uuid();
+    }
+
     writeStore('localStorage', VISITOR_KEY, { id: id, first: Date.now() });
+    writeCookie(COOKIE_VISITOR, id, VISITOR_TTL);
     return id;
   })();
 
   // ---------------------------------------------------------------- state
   //
-  // The session lives in sessionStorage, which scopes it to this tab. That is
-  // deliberate: pageview sequence numbers have to be unique within a session,
-  // and two tabs sharing one token would interleave their sequences and corrupt
-  // the flow graph. Tabs are still tied together by the visitor token.
+  // The session lives in sessionStorage, which scopes it to this tab, and is
+  // mirrored to a cookie on the registrable domain.
+  //
+  // sessionStorage stays the authority for a document that already has one,
+  // because pageview sequence numbers have to be unique within a session and
+  // the server keys a pageview on (session, seq) — two documents numbering
+  // from 1 under one token would merge into a single row. The cookie is only
+  // read when this document has no session of its own, which is exactly the
+  // case the old design got wrong: a new tab, or a hop to another subdomain,
+  // started a fresh session and turned one visit into several one-page ones.
+  //
+  // Seeding from the cookie carries the sequence number on rather than
+  // restarting it, and reserves the next block immediately. Two tabs opened in
+  // the same instant can still race for a number; the cost is one merged
+  // pageview, against a whole lost session before.
 
   var now = Date.now();
   var stored = readStore('sessionStorage', SESSION_KEY);
+
+  if (!stored && config.cookies) {
+    var fromCookie = readCookie(COOKIE_SESSION);
+
+    if (fromCookie) {
+      var parts = fromCookie.split('.');
+      var token = parts[0];
+      var seq = parseInt(parts[1], 10);
+
+      if (token) {
+        stored = {
+          token: token,
+          seq: isNaN(seq) ? 0 : seq,
+          start: now,
+          last: now,
+          dwell: 0,
+          active: 0,
+          ticks: 0,
+          clicks: 0,
+          outbound: 0,
+          fromPath: null,
+          fromTitle: null,
+          // Whatever wrote the cookie had already reported, or there would be
+          // no cookie to read. So init does not need sending again.
+          reported: true
+        };
+      }
+    }
+  }
+
   var resumed = stored && now - (stored.last || 0) < config.sessionTimeoutMs;
 
   var session = resumed
@@ -242,6 +370,14 @@
   function persist() {
     session.last = Date.now();
     writeStore('sessionStorage', SESSION_KEY, session);
+
+    // A sliding lifetime equal to the session timeout, so the cookie stops
+    // existing at the same moment the session would have expired anyway.
+    writeCookie(
+      COOKIE_SESSION,
+      session.token + '.' + session.seq,
+      Math.round(config.sessionTimeoutMs / 1000)
+    );
   }
 
   // --------------------------------------------------------------- sending

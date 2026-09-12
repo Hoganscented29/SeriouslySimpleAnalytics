@@ -570,7 +570,7 @@ defmodule WebAnalytics.Crawlers.Providers.Anthropic do
              "stating."},
           {:ul,
            [
-             "No cookies. Identifiers live in browser storage, so there is no consent banner to show.",
+             "One first-party cookie holds the visitor and session identifiers, so a visit survives a new tab or a hop to another subdomain. Nothing is shared with a third party, and data-cookies=\"false\" turns it off.",
              "No full IP addresses stored. An address is used in-request to resolve a location; only a middle-masked copy and a salted hash are kept, and the salt rotates daily.",
              "Password fields are masked in the browser and dropped again server-side, so a stale snippet cannot defeat it.",
              "data-wa-ignore on any element, form or field excludes it entirely.",

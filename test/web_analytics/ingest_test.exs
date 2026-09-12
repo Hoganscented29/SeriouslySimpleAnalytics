@@ -370,6 +370,13 @@ defmodule WebAnalytics.IngestTest do
       # A fixed-width mask, so the length of what is hidden does not leak.
       assert WebAnalytics.Ingest.mask_ip("8.8.8.8") == "8.•••.•••.8"
 
+      # An IPv4 client on a dual-stack listener arrives in mapped form, which
+      # is the normal case behind a proxy rather than an oddity. Its last
+      # colon-group is a whole IPv4 address, so masking "between the ends"
+      # kept every digit of it.
+      assert WebAnalytics.Ingest.mask_ip("::ffff:203.0.113.42") == "203.•••.•••.42"
+      assert WebAnalytics.Ingest.mask_ip("::ffff:127.0.0.1") == "127.•••.•••.1"
+
       # Nothing gets through unmasked, whatever shape it arrives in.
       for input <- ["203.0.113.42", "8.8.8.8", "127.0.0.1", "localhost", "::1"] do
         refute WebAnalytics.Ingest.mask_ip(input) == input
