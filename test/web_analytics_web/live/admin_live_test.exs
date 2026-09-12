@@ -363,17 +363,17 @@ defmodule WebAnalyticsWeb.AdminLiveTest do
       assert flash["error"] =~ "No account with the ID"
     end
 
-    test "creating a site is refused while inspecting someone else's", %{
+    test "the dashboard offers no way to create a site from anyone's account", %{
       conn: conn,
       theirs: theirs,
       owner: owner
     } do
-      {:ok, live, html} = live(conn, ~p"/admin/accounts/#{theirs.key}")
+      {:ok, _live, html} = live(conn, ~p"/admin/accounts/#{theirs.key}")
 
+      # One account covers every domain the tag is deployed on — the host comes
+      # in with each session — so there is nothing to add and no button to
+      # press, in this view or anyone's own.
       refute html =~ "Add another site"
-
-      # The hidden button is not the control. The server refuses it too.
-      render_click(live, "add_site", %{})
 
       assert [%{id: id}] = WebAnalytics.Sites.list_sites_for_user(owner)
       assert id == theirs.id

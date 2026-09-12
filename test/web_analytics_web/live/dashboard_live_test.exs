@@ -232,6 +232,7 @@ defmodule WebAnalyticsWeb.DashboardLiveTest do
 
       [site] = WebAnalytics.Sites.list_sites_for_user(user)
       assert html =~ site.key
+      # Labelled once, at the top, beside the site it belongs to.
       assert html =~ "Account ID"
     end
 
@@ -241,7 +242,7 @@ defmodule WebAnalyticsWeb.DashboardLiveTest do
     } do
       {:ok, _live, html} = live(conn, ~p"/dashboard?site=dash")
 
-      assert html =~ "Instrument your AI tool"
+      assert html =~ "Integration Instructions"
       assert html =~ "Your coding agent"
       assert html =~ "Use account id #{site.key}"
       # The heredoc wraps, so assert a fragment that does not span a line break.

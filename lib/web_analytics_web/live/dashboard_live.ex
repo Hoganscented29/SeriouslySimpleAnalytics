@@ -158,28 +158,6 @@ defmodule WebAnalyticsWeb.DashboardLive do
     {:noreply, push_patch(socket, to: path_for(socket, %{"page" => nil}))}
   end
 
-  def handle_event("add_site", _params, %{assigns: %{viewing_as_admin: true}} = socket) do
-    # The button is hidden in the admin view, and a hidden button is not a
-    # control. Creating a site under an account you are only inspecting is
-    # nobody's intention.
-    {:noreply, put_flash(socket, :error, "Not while viewing another account.")}
-  end
-
-  def handle_event("add_site", _params, socket) do
-    user = socket.assigns.current_scope.user
-
-    case Sites.create_site_for_user(user) do
-      {:ok, site} ->
-        {:noreply,
-         socket
-         |> assign(:sites, Sites.list_sites_for_user(user))
-         |> push_patch(to: ~p"/dashboard?site=#{site.key}")}
-
-      {:error, _changeset} ->
-        {:noreply, put_flash(socket, :error, "Could not create another site")}
-    end
-  end
-
   # -- state ---------------------------------------------------------------
 
   defp resolve_site([], _key), do: nil

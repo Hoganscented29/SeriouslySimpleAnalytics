@@ -29,10 +29,11 @@
           </select>
         </form>
         <span
-          class="badge badge-outline font-mono text-xs"
-          title="Your account ID. Send it as uid= on every API call."
+          class="inline-flex items-center gap-1.5"
+          title="One ID for both the browser tracker and the AI event API. Send it as uid= on every API call."
         >
-          {@site.key}
+          <span class="text-xs text-base-content/50">Account ID</span>
+          <code class="badge badge-outline font-mono text-xs">{@site.key}</code>
         </span>
       </div>
 
@@ -1242,18 +1243,10 @@
       </div>
     </div>
 
-    <!-- account id + install -->
+    <!-- integration -->
     <div class="rounded-box bg-base-100 border border-base-300 px-4 py-4 space-y-4">
       <div>
-        <div class="text-sm font-medium">Account ID</div>
-        <p class="text-sm text-base-content/70 mt-1">
-          One ID for both the browser tracker and the AI event API. Everything below uses it.
-        </p>
-        <pre class="mt-2 p-3 rounded bg-base-200 text-sm overflow-x-auto"><code>{@site.key}</code></pre>
-      </div>
-
-      <div>
-        <div class="text-sm font-medium">Instrument your AI tool</div>
+        <div class="text-sm font-medium">Integration Instructions</div>
         <p class="text-sm text-base-content/70 mt-1 mb-3">
           Hand this to your coding agent. It reads the contract, wires up the events, and
           updates your llms.txt so the next agent does the same.
@@ -1263,35 +1256,6 @@
           prompt={agent_prompt(@site, base_url())}
           creates_account={false}
         />
-      </div>
-
-      <ul class="text-xs text-base-content/60 space-y-1 list-disc list-inside">
-        <li>
-          Pass the same <code class="font-mono">sid</code>
-          across one run or conversation and the flow report works.
-        </li>
-        <li>
-          <code class="font-mono">event=page_view</code>
-          with a <code class="font-mono">path</code>
-          is recorded as a real pageview.
-        </li>
-        <li>
-          Send your user's location as <code class="font-mono">c</code>, <code class="font-mono">cc</code>, <code class="font-mono">s_p</code>,
-          <code class="font-mono">n</code>
-          — a ping's own address is where your code runs.
-        </li>
-        <li>
-          Anything else you add is kept as an attribute, and shows up under Events.
-        </li>
-        <li>
-          Never put credentials, prompts or completions in a parameter.
-        </li>
-      </ul>
-
-      <div :if={!@viewing_as_admin} class="pt-1">
-        <button phx-click="add_site" class="btn btn-ghost btn-xs">
-          Add another site
-        </button>
       </div>
     </div>
   </div>
