@@ -363,8 +363,15 @@
       path: page.path,
       title: page.title,
       url: location.href.slice(0, 4096),
+      // Sent explicitly rather than left to be parsed back out of the URL,
+      // which is how the host came to be unavailable for grouping in the first
+      // place.
+      host: location.hostname || null,
+      proto: (location.protocol || '').replace(':', '') || null,
+      port: location.port ? parseInt(location.port, 10) : null,
       q: location.search || null,
       h: location.hash || null,
+      perf: performanceSnapshot(),
       ref: referrer || null,
       vh: window.innerHeight || null,
       dh: scrollMax.docHeight || null,
@@ -427,7 +434,11 @@
       d: session.dwell,
       am: session.active,
       pd: page ? page.dwell : 0,
-      pa: page ? page.active : 0
+      pa: page ? page.active : 0,
+      // Largest Contentful Paint is not final at load — it settles once the
+      // page stops changing — so it rides the heartbeat and the server keeps
+      // the largest value seen rather than the first.
+      lcp: largestPaint
     });
 
     persist();
@@ -1085,6 +1096,143 @@
     window.addEventListener('beforeunload', onPageHide);
   }
 
+  // Everything the browser will tell us about itself. Each reader is guarded
+  // separately: these APIs are uneven across browsers and a missing one must
+  // cost a null, not the whole payload.
+  function media(query) {
+    try {
+      return window.matchMedia ? window.matchMedia(query).matches : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function connection() {
+    try {
+      var c = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+      if (!c) return {};
+      return {
+        ct: c.effectiveType || null,
+        dl: typeof c.downlink === 'number' ? c.downlink : null,
+        rtt: typeof c.rtt === 'number' ? c.rtt : null,
+        sd: typeof c.saveData === 'boolean' ? c.saveData : null
+      };
+    } catch (e) {
+      return {};
+    }
+  }
+
+  // The user agent string is frozen and being stripped of detail, so take the
+  // structured version where it exists.
+  function clientHints() {
+    try {
+      var d = navigator.userAgentData;
+      if (!d) return {};
+      var brands = (d.brands || [])
+        .map(function (b) { return b.brand + ' ' + b.version; })
+        .join(', ');
+      return {
+        plat: d.platform || null,
+        mob: typeof d.mobile === 'boolean' ? d.mobile : null,
+        brands: brands ? brands.slice(0, 255) : null
+      };
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function orientation() {
+    try {
+      if (window.screen && window.screen.orientation && window.screen.orientation.type) {
+        return window.screen.orientation.type;
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function languages() {
+    try {
+      var list = navigator.languages;
+      return list && list.length ? list.join(',').slice(0, 255) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Navigation Timing. Rounded to whole milliseconds: sub-millisecond precision
+  // here is noise, and the raw values are high-resolution timers that have been
+  // used for fingerprinting.
+  function timings() {
+    try {
+      var nav = performance.getEntriesByType && performance.getEntriesByType('navigation')[0];
+      if (!nav) return {};
+
+      var ms = function (value) {
+        return typeof value === 'number' && value > 0 ? Math.round(value) : null;
+      };
+
+      return {
+        nt: nav.type || null,
+        ttfb: ms(nav.responseStart),
+        dci: ms(nav.domInteractive),
+        dcl: ms(nav.domContentLoadedEventEnd),
+        load: ms(nav.loadEventEnd),
+        tb: typeof nav.transferSize === 'number' ? nav.transferSize : null
+      };
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function paintTiming() {
+    try {
+      var entries = performance.getEntriesByType && performance.getEntriesByType('paint');
+      if (!entries) return null;
+      for (var i = 0; i < entries.length; i++) {
+        if (entries[i].name === 'first-contentful-paint') {
+          return Math.round(entries[i].startTime);
+        }
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Largest Contentful Paint is only final once the user interacts or the page
+  // is hidden, so it is observed in the background and read at send time rather
+  // than measured once at load.
+  var largestPaint = null;
+
+  function observeLargestPaint() {
+    try {
+      if (!window.PerformanceObserver) return;
+      var observer = new PerformanceObserver(function (list) {
+        var entries = list.getEntries();
+        if (entries.length) {
+          largestPaint = Math.round(entries[entries.length - 1].startTime);
+        }
+      });
+      observer.observe({ type: 'largest-contentful-paint', buffered: true });
+    } catch (e) {
+      /* Unsupported; the column stays null. */
+    }
+  }
+
+  var reportedTimings = false;
+
+  function performanceSnapshot() {
+    if (reportedTimings) return null;
+    reportedTimings = true;
+
+    var snapshot = timings();
+    var fcp = paintTiming();
+    if (fcp !== null) snapshot.fcp = fcp;
+    return snapshot;
+  }
+
   function start() {
     if (!resumed) {
       enqueue({
@@ -1100,10 +1248,22 @@
         tz: timezone(),
         utm: utmParams(),
         bot: automation,
-        hb: heartbeatMs
+        hb: heartbeatMs,
+        langs: languages(),
+        hc: typeof navigator.hardwareConcurrency === 'number' ? navigator.hardwareConcurrency : null,
+        dm: typeof navigator.deviceMemory === 'number' ? navigator.deviceMemory : null,
+        mtp: typeof navigator.maxTouchPoints === 'number' ? navigator.maxTouchPoints : null,
+        cd: window.screen ? window.screen.colorDepth : null,
+        so: orientation(),
+        ck: typeof navigator.cookieEnabled === 'boolean' ? navigator.cookieEnabled : null,
+        dark: media('(prefers-color-scheme: dark)'),
+        rm: media('(prefers-reduced-motion: reduce)'),
+        conn: connection(),
+        ch: clientHints()
       });
     }
 
+    observeLargestPaint();
     startPageview(document.referrer);
     bindEvents();
     wrapHistory();

@@ -14,6 +14,19 @@ defmodule WebAnalytics.Tracking.Pageview do
     field :path, :string
     field :title, :string
     field :url, :string
+    field :host, :string
+    field :protocol, :string
+    field :port, :integer
+
+    # Navigation Timing, so "the page was slow" stops being an anecdote.
+    field :navigation_type, :string
+    field :ttfb_ms, :integer
+    field :dom_interactive_ms, :integer
+    field :dom_content_loaded_ms, :integer
+    field :load_ms, :integer
+    field :fcp_ms, :integer
+    field :lcp_ms, :integer
+    field :transfer_bytes, :integer
     field :query, :string
     field :hash, :string
 

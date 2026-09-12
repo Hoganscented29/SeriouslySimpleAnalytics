@@ -155,9 +155,31 @@ defmodule WebAnalytics.Ingest.Normalizer do
     client_signal = string(event["bot"], @s)
     crawler = Crawler.classify(user_agent, client_signal)
 
+    connection = if is_map(event["conn"]), do: event["conn"], else: %{}
+    hints = if is_map(event["ch"]), do: event["ch"], else: %{}
+
     %{
       kind: :init,
       at: at,
+      # Everything the browser volunteered about itself. Bounded the same way
+      # every other client string is, because all of it is caller-controlled.
+      hardware_concurrency: integer(event["hc"]),
+      device_memory: float(event["dm"]),
+      max_touch_points: integer(event["mtp"]),
+      color_depth: integer(event["cd"]),
+      screen_orientation: string(event["so"], @s),
+      connection_type: string(connection["ct"], @s),
+      connection_downlink: float(connection["dl"]),
+      connection_rtt: integer(connection["rtt"]),
+      save_data: boolean(connection["sd"]),
+      prefers_dark: boolean(event["dark"]),
+      prefers_reduced_motion: boolean(event["rm"]),
+      languages: string(event["langs"], @text),
+      cookies_enabled: boolean(event["ck"]),
+      ua_platform: string(hints["plat"], @s),
+      ua_platform_version: string(hints["pv"], @s),
+      ua_mobile: boolean(hints["mob"]),
+      ua_brands: string(hints["brands"], @text),
       referrer: referrer,
       referrer_host: host(referrer),
       utm_source: string(utm["source"], @s),
@@ -199,12 +221,22 @@ defmodule WebAnalytics.Ingest.Normalizer do
         path: path,
         title: string(event["title"], @s),
         url: string(event["url"], @text),
+        host: string(event["host"], @s) || host(string(event["url"], @text)),
+        protocol: string(event["proto"], @s),
+        port: integer(event["port"]),
         query: string(event["q"], @text),
         hash: string(event["h"], @s),
         referrer: referrer,
         referrer_host: host(referrer),
         viewport_h: integer(event["vh"]),
         doc_height: integer(event["dh"]),
+        navigation_type: perf(event, "nt") |> to_string_or_nil(),
+        ttfb_ms: perf(event, "ttfb") |> to_integer_or_nil(),
+        dom_interactive_ms: perf(event, "dci") |> to_integer_or_nil(),
+        dom_content_loaded_ms: perf(event, "dcl") |> to_integer_or_nil(),
+        load_ms: perf(event, "load") |> to_integer_or_nil(),
+        fcp_ms: perf(event, "fcp") |> to_integer_or_nil(),
+        transfer_bytes: perf(event, "tb") |> to_integer_or_nil(),
         from_path: string(event["fp"], @s),
         from_title: string(event["ft"], @s)
       }
@@ -241,7 +273,10 @@ defmodule WebAnalytics.Ingest.Normalizer do
           session_dwell_ms: non_neg(event["d"]),
           session_active_ms: non_neg(event["am"]),
           pageview_dwell_ms: non_neg(event["pd"]),
-          pageview_active_ms: non_neg(event["pa"])
+          pageview_active_ms: non_neg(event["pa"]),
+          # Rides the heartbeat because it is not final at load: the largest
+          # element can change until the page stops rendering.
+          lcp_ms: non_neg(event["lcp"])
         }
 
       _ ->
@@ -451,6 +486,25 @@ defmodule WebAnalytics.Ingest.Normalizer do
   defp downcase(nil), do: nil
   defp downcase(value), do: String.downcase(value)
 
+  # A tri-state on purpose: false and "not reported" are different answers, and
+  # collapsing them would make an old browser look like a stated preference.
+  defp perf(event, key) do
+    case event["perf"] do
+      map when is_map(map) -> map[key]
+      _ -> nil
+    end
+  end
+
+  defp to_integer_or_nil(value), do: integer(value)
+
+  defp to_string_or_nil(nil), do: nil
+  defp to_string_or_nil(value), do: string(value, @s)
+
+  defp boolean(value) when is_boolean(value), do: value
+  defp boolean("true"), do: true
+  defp boolean("false"), do: false
+  defp boolean(_), do: nil
+
   defp number(value) when is_number(value), do: value
 
   defp number(value) when is_binary(value) do
@@ -491,6 +545,9 @@ defmodule WebAnalytics.Ingest.Normalizer do
     end
   end
 
+  # Always a float, never an integer that happens to be whole: insert_all
+  # bypasses casting, so a float column handed an integer raises and takes the
+  # entire batch with it. navigator.deviceMemory reports whole gigabytes.
   defp float(value) do
     case number(value) do
       nil -> nil

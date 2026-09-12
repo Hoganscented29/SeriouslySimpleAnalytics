@@ -235,4 +235,165 @@ defmodule WebAnalytics.IngestTest do
     refute hash == Ingest.hash_ip("203.0.113.10", site)
     assert Ingest.hash_ip(nil, site) == nil
   end
+
+  describe "client context capture" do
+    test "everything the browser volunteered is stored" do
+      site = site_fixture(%{key: "capture"})
+
+      {:ok, _} =
+        Ingest.submit_sync(
+          site,
+          %{
+            "k" => site.key,
+            "s" => "cap-1",
+            "t" => 1_000_000,
+            "e" => [
+              Map.merge(init_event(), %{
+                "langs" => "en-GB,en",
+                "hc" => 8,
+                # An integer, which is what navigator.deviceMemory reports. The
+                # column is a float and insert_all does not cast, so this is the
+                # value that used to take the whole batch down with it.
+                "dm" => 8,
+                "mtp" => 5,
+                "cd" => 24,
+                "so" => "portrait-primary",
+                "ck" => true,
+                "dark" => true,
+                "rm" => false,
+                "conn" => %{"ct" => "3g", "dl" => 1.5, "rtt" => 300, "sd" => true},
+                "ch" => %{"plat" => "Android", "mob" => true, "brands" => "Chromium 131"}
+              }),
+              Map.merge(pageview_event(1, "/pricing"), %{
+                "url" => "https://shop.example.com:8443/pricing",
+                "host" => "shop.example.com",
+                "proto" => "https",
+                "port" => 8443,
+                "perf" => %{
+                  "nt" => "reload",
+                  "ttfb" => 210,
+                  "dci" => 900,
+                  "dcl" => 950,
+                  "load" => 1400,
+                  "fcp" => 700,
+                  "tb" => 91_000
+                }
+              }),
+              tick_event(1, %{"lcp" => 1650})
+            ]
+          },
+          received_at: DateTime.utc_now()
+        )
+
+      session = Repo.one(from s in Session, where: s.token == "cap-1")
+
+      assert session.hardware_concurrency == 8
+      assert session.device_memory == 8.0
+      assert session.max_touch_points == 5
+      assert session.color_depth == 24
+      assert session.screen_orientation == "portrait-primary"
+      assert session.connection_type == "3g"
+      assert session.connection_downlink == 1.5
+      assert session.connection_rtt == 300
+      assert session.save_data == true
+      assert session.prefers_dark == true
+      assert session.prefers_reduced_motion == false
+      assert session.languages == "en-GB,en"
+      assert session.cookies_enabled == true
+      assert session.ua_platform == "Android"
+      assert session.ua_mobile == true
+      assert session.ua_brands == "Chromium 131"
+      assert session.host == "shop.example.com"
+
+      pageview = Repo.one(from p in Pageview, where: p.session_id == ^session.id)
+
+      assert pageview.host == "shop.example.com"
+      assert pageview.protocol == "https"
+      assert pageview.port == 8443
+      assert pageview.navigation_type == "reload"
+      assert pageview.ttfb_ms == 210
+      assert pageview.dom_interactive_ms == 900
+      assert pageview.dom_content_loaded_ms == 950
+      assert pageview.load_ms == 1400
+      assert pageview.fcp_ms == 700
+      assert pageview.transfer_bytes == 91_000
+      # Carried on the heartbeat, because it is not final at load.
+      assert pageview.lcp_ms == 1650
+    end
+
+    test "an old browser that reports none of it still records the visit" do
+      site = site_fixture(%{key: "sparse"})
+
+      {:ok, _} =
+        Ingest.submit_sync(site, payload(site, [init_event(), pageview_event(1, "/")]),
+          received_at: DateTime.utc_now()
+        )
+
+      session = Repo.one(from s in Session, where: s.site_id == ^site.id)
+
+      # Absent is a fact, not an error: false and "not reported" are different
+      # answers and must not collapse into each other.
+      assert session.hardware_concurrency == nil
+      assert session.prefers_dark == nil
+      assert session.connection_type == nil
+      assert session.id
+    end
+
+    test "the host falls back to the URL when the client does not send it" do
+      site = site_fixture(%{key: "fallback"})
+
+      {:ok, _} =
+        Ingest.submit_sync(
+          site,
+          payload(site, [
+            init_event(),
+            pageview_event(1, "/", %{"url" => "https://old-tag.example.com/"})
+          ]),
+          received_at: DateTime.utc_now()
+        )
+
+      # A page still running last month's wa.js sends no host field.
+      session = Repo.one(from s in Session, where: s.site_id == ^site.id)
+      assert session.host == "old-tag.example.com"
+    end
+
+    test "later ticks keep the largest paint, not the first" do
+      site = site_fixture(%{key: "lcp"})
+
+      {:ok, _} =
+        Ingest.submit_sync(
+          site,
+          payload(site, [
+            init_event(),
+            pageview_event(1, "/"),
+            tick_event(1, %{"lcp" => 800}),
+            tick_event(1, %{"lcp" => 2100}),
+            tick_event(1, %{"lcp" => 2100})
+          ]),
+          received_at: DateTime.utc_now()
+        )
+
+      session = Repo.one(from s in Session, where: s.site_id == ^site.id)
+      pageview = Repo.one(from p in Pageview, where: p.session_id == ^session.id)
+
+      assert pageview.lcp_ms == 2100
+    end
+
+    test "a browser without the observer leaves paint null rather than zero" do
+      site = site_fixture(%{key: "nolcp"})
+
+      {:ok, _} =
+        Ingest.submit_sync(
+          site,
+          payload(site, [init_event(), pageview_event(1, "/"), tick_event(1)]),
+          received_at: DateTime.utc_now()
+        )
+
+      session = Repo.one(from s in Session, where: s.site_id == ^site.id)
+      pageview = Repo.one(from p in Pageview, where: p.session_id == ^session.id)
+
+      # Zero would read as "painted instantly", which is the opposite of unknown.
+      assert pageview.lcp_ms == nil
+    end
+  end
 end

@@ -142,6 +142,7 @@ defmodule WebAnalytics.Ingest.Processor do
           ticks: metrics.ticks + 1,
           max_scroll_pct: max(metrics.max_scroll_pct, event.scroll_pct || 0),
           max_scroll_px: max(metrics.max_scroll_px, event.scroll_px || 0),
+          lcp_ms: max(metrics.lcp_ms, event.lcp_ms || 0),
           doc_height: event.doc_height || metrics.doc_height,
           last_at: event.at
       }
@@ -209,6 +210,7 @@ defmodule WebAnalytics.Ingest.Processor do
       clicks: 0,
       max_scroll_pct: 0,
       max_scroll_px: 0,
+      lcp_ms: 0,
       doc_height: nil,
       exit: false,
       last_at: nil
@@ -330,7 +332,11 @@ defmodule WebAnalytics.Ingest.Processor do
   @init_fields ~w(referrer referrer_host utm_source utm_medium utm_campaign utm_term
                   utm_content screen_w screen_h viewport_w viewport_h device_pixel_ratio
                   language timezone browser browser_version os device_type bot_ua
-                  crawler crawler_kind crawler_name client_signal heartbeat_ms)a
+                  crawler crawler_kind crawler_name client_signal heartbeat_ms
+                  hardware_concurrency device_memory max_touch_points color_depth
+                  screen_orientation connection_type connection_downlink connection_rtt
+                  save_data prefers_dark prefers_reduced_motion languages cookies_enabled
+                  ua_platform ua_platform_version ua_mobile ua_brands)a
 
   # Nils are dropped rather than written. `insert_all` bypasses schema defaults,
   # so an explicit nil would hit the NOT NULL on `bot_ua`; omitting the column
@@ -393,6 +399,29 @@ defmodule WebAnalytics.Ingest.Processor do
           accuracy_km: fragment("COALESCE(?, EXCLUDED.accuracy_km)", s.accuracy_km),
           geo_source: fragment("COALESCE(?, EXCLUDED.geo_source)", s.geo_source),
           host: fragment("COALESCE(?, EXCLUDED.host)", s.host),
+          hardware_concurrency:
+            fragment("COALESCE(?, EXCLUDED.hardware_concurrency)", s.hardware_concurrency),
+          device_memory: fragment("COALESCE(?, EXCLUDED.device_memory)", s.device_memory),
+          max_touch_points:
+            fragment("COALESCE(?, EXCLUDED.max_touch_points)", s.max_touch_points),
+          color_depth: fragment("COALESCE(?, EXCLUDED.color_depth)", s.color_depth),
+          screen_orientation:
+            fragment("COALESCE(?, EXCLUDED.screen_orientation)", s.screen_orientation),
+          connection_type: fragment("COALESCE(?, EXCLUDED.connection_type)", s.connection_type),
+          connection_downlink:
+            fragment("COALESCE(?, EXCLUDED.connection_downlink)", s.connection_downlink),
+          connection_rtt: fragment("COALESCE(?, EXCLUDED.connection_rtt)", s.connection_rtt),
+          save_data: fragment("COALESCE(?, EXCLUDED.save_data)", s.save_data),
+          prefers_dark: fragment("COALESCE(?, EXCLUDED.prefers_dark)", s.prefers_dark),
+          prefers_reduced_motion:
+            fragment("COALESCE(?, EXCLUDED.prefers_reduced_motion)", s.prefers_reduced_motion),
+          languages: fragment("COALESCE(?, EXCLUDED.languages)", s.languages),
+          cookies_enabled: fragment("COALESCE(?, EXCLUDED.cookies_enabled)", s.cookies_enabled),
+          ua_platform: fragment("COALESCE(?, EXCLUDED.ua_platform)", s.ua_platform),
+          ua_platform_version:
+            fragment("COALESCE(?, EXCLUDED.ua_platform_version)", s.ua_platform_version),
+          ua_mobile: fragment("COALESCE(?, EXCLUDED.ua_mobile)", s.ua_mobile),
+          ua_brands: fragment("COALESCE(?, EXCLUDED.ua_brands)", s.ua_brands),
           entry_path: fragment("COALESCE(?, EXCLUDED.entry_path)", s.entry_path),
           entry_title: fragment("COALESCE(?, EXCLUDED.entry_title)", s.entry_title),
           referrer: fragment("COALESCE(?, EXCLUDED.referrer)", s.referrer),
@@ -497,6 +526,16 @@ defmodule WebAnalytics.Ingest.Processor do
           path: pv.path,
           title: pv.title,
           url: pv.url,
+          host: pv.host,
+          protocol: pv.protocol,
+          port: pv.port,
+          navigation_type: pv.navigation_type,
+          ttfb_ms: pv.ttfb_ms,
+          dom_interactive_ms: pv.dom_interactive_ms,
+          dom_content_loaded_ms: pv.dom_content_loaded_ms,
+          load_ms: pv.load_ms,
+          fcp_ms: pv.fcp_ms,
+          transfer_bytes: pv.transfer_bytes,
           query: pv.query,
           hash: pv.hash,
           referrer: pv.referrer,
@@ -531,6 +570,18 @@ defmodule WebAnalytics.Ingest.Processor do
         set: [
           title: fragment("COALESCE(EXCLUDED.title, ?)", p.title),
           url: fragment("COALESCE(EXCLUDED.url, ?)", p.url),
+          host: fragment("COALESCE(EXCLUDED.host, ?)", p.host),
+          protocol: fragment("COALESCE(EXCLUDED.protocol, ?)", p.protocol),
+          port: fragment("COALESCE(EXCLUDED.port, ?)", p.port),
+          navigation_type: fragment("COALESCE(EXCLUDED.navigation_type, ?)", p.navigation_type),
+          ttfb_ms: fragment("COALESCE(EXCLUDED.ttfb_ms, ?)", p.ttfb_ms),
+          dom_interactive_ms:
+            fragment("COALESCE(EXCLUDED.dom_interactive_ms, ?)", p.dom_interactive_ms),
+          dom_content_loaded_ms:
+            fragment("COALESCE(EXCLUDED.dom_content_loaded_ms, ?)", p.dom_content_loaded_ms),
+          load_ms: fragment("COALESCE(EXCLUDED.load_ms, ?)", p.load_ms),
+          fcp_ms: fragment("COALESCE(EXCLUDED.fcp_ms, ?)", p.fcp_ms),
+          transfer_bytes: fragment("COALESCE(EXCLUDED.transfer_bytes, ?)", p.transfer_bytes),
           doc_height: fragment("COALESCE(EXCLUDED.doc_height, ?)", p.doc_height),
           viewport_h: fragment("COALESCE(EXCLUDED.viewport_h, ?)", p.viewport_h),
           from_path: fragment("COALESCE(?, EXCLUDED.from_path)", p.from_path),
@@ -589,6 +640,20 @@ defmodule WebAnalytics.Ingest.Processor do
           dynamic([p], fragment("GREATEST(?, ?)", p.max_scroll_px, ^metrics.max_scroll_px)),
         updated_at: dynamic([_p], type(^DateTime.utc_now(), :utc_datetime_usec))
       ]
+
+      # Only when something was reported: GREATEST against a zero default would
+      # write 0 for every browser that does not support the observer, turning
+      # "not measured" into "instant".
+      sets =
+        if metrics.lcp_ms > 0 do
+          Keyword.put(
+            sets,
+            :lcp_ms,
+            dynamic([p], fragment("GREATEST(COALESCE(?, 0), ?)", p.lcp_ms, ^metrics.lcp_ms))
+          )
+        else
+          sets
+        end
 
       sets =
         if metrics.doc_height do

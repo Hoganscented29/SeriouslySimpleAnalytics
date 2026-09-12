@@ -52,6 +52,27 @@ defmodule WebAnalytics.Tracking.Session do
     field :device_type, :string
     field :bot_ua, :boolean, default: false
 
+    # What the browser could tell us about the machine, the network and the
+    # person's stated preferences. All optional: an old browser reports less,
+    # and a missing value is a fact rather than an error.
+    field :hardware_concurrency, :integer
+    field :device_memory, :float
+    field :max_touch_points, :integer
+    field :color_depth, :integer
+    field :screen_orientation, :string
+    field :connection_type, :string
+    field :connection_downlink, :float
+    field :connection_rtt, :integer
+    field :save_data, :boolean
+    field :prefers_dark, :boolean
+    field :prefers_reduced_motion, :boolean
+    field :languages, :string
+    field :cookies_enabled, :boolean
+    field :ua_platform, :string
+    field :ua_platform_version, :string
+    field :ua_mobile, :boolean
+    field :ua_brands, :string
+
     field :crawler, :boolean, default: false
     field :crawler_kind, :string
     field :crawler_name, :string
