@@ -101,16 +101,29 @@ defmodule WebAnalyticsWeb.DashboardLiveTest do
     assert html =~ "Pricing"
   end
 
-  test "clicks can be segregated by id or class", %{conn: conn} do
+  test "the four labellings of a click are all on the page at once", %{conn: conn} do
+    {:ok, _live, html} = live(conn, ~p"/dashboard?site=dash&range=30d&tab=clicks")
+
+    # Which labelling is useful depends on the markup, and finding that out by
+    # clicking through a switcher means meeting three empty lists one at a time.
+    for title <- ["By name", "By id", "By class", "By selector"] do
+      assert html =~ title
+    end
+
+    assert html =~ "hero-cta"
+    assert html =~ "btn-primary"
+  end
+
+  test "clicks can still be segregated one at a time, in full", %{conn: conn} do
     {:ok, live, html} = live(conn, ~p"/dashboard?site=dash&range=30d&tab=clicks&clicks=id")
 
-    assert html =~ "Clicks by id"
+    assert html =~ "All clicks by id"
     assert html =~ "hero-cta"
 
     live |> element(~s|button[phx-value-clicks="class"]|) |> render_click()
 
     html = render(live)
-    assert html =~ "Clicks by class"
+    assert html =~ "All clicks by class"
     assert html =~ "btn-primary"
   end
 

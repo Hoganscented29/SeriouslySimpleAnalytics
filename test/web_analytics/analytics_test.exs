@@ -131,6 +131,30 @@ defmodule WebAnalytics.AnalyticsTest do
       refute "ignored-id" in names
     end
 
+    test "every labelling is available, and each says what it groups on", %{site: site} do
+      submit(site, [
+        init_event(),
+        pageview_event(1, "/labels"),
+        click_event(%{
+          "id" => "buy",
+          "cls" => ["btn", "btn-lg"],
+          "sel" => "main>button#buy",
+          "txt" => "Buy now"
+        }),
+        tick_event(1, %{"d" => 20_000})
+      ])
+
+      f = filters(site)
+      by = fn group -> f |> Analytics.clicks(group, 20) |> Enum.map(& &1.name) end
+
+      # Which one is useful depends on the markup, so all four have to work
+      # rather than the reader discovering three empty lists one at a time.
+      assert "buy" in by.(:id)
+      assert "btn-lg" in by.(:class)
+      assert "main>button#buy" in by.(:selector)
+      assert "Buy now" in by.(:text)
+    end
+
     test "a custom event is not a click and stays out of the report", %{site: site} do
       rows = Analytics.clicks(filters(site), :tag, 20)
 

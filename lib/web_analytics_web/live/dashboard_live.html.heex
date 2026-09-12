@@ -1248,8 +1248,30 @@
         </div>
       </div>
 
+      <%!-- Four labellings of the same clicks at once. Which one is useful
+      depends on the markup — a design system that names its buttons wants
+      class, a hand-written page wants id or text — and finding that out by
+      clicking through a switcher means discovering three empty lists one at a
+      time. Each says why it is empty rather than just being empty. --%>
+      <% breakdowns = @data[:click_breakdowns] || %{} %>
+      <div class="grid md:grid-cols-2 gap-4">
+        <.bar_list
+          :for={
+            {group, title, empty} <- [
+              {:name, "By name", "Nothing clicked yet"},
+              {:id, "By id", "No clicked element carried an id"},
+              {:class, "By class", "No clicked element carried a class"},
+              {:selector, "By selector", "No clicked element reported a selector"}
+            ]
+          }
+          title={title}
+          rows={Map.get(breakdowns, group, [])}
+          empty={empty}
+        />
+      </div>
+
       <.bar_list
-        title={"Clicks by #{@click_group}"}
+        title={"All clicks by #{@click_group}"}
         rows={@data[:clicks] || []}
         empty="No clicks captured yet"
       />

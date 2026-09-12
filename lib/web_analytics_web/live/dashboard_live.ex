@@ -492,6 +492,14 @@ defmodule WebAnalyticsWeb.DashboardLive do
   defp tab_data("clicks", filters, assigns) do
     %{
       clicks: Analytics.clicks(filters, assigns.click_group, 30),
+      # The same clicks under four labellings, side by side. One at a time
+      # meant clicking through the switcher to find out which way of naming an
+      # element your markup actually supports — and on a page with no ids, or
+      # no classes, that is three empty lists to discover one at a time.
+      click_breakdowns:
+        Map.new([:name, :id, :class, :selector], fn group ->
+          {group, Analytics.clicks(filters, group, 8)}
+        end),
       outbound: Analytics.outbound_links(filters, 20),
       click_types: Analytics.click_types(filters)
     }
