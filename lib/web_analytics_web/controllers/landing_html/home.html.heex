@@ -106,6 +106,14 @@
       traffic is sampled every 10 seconds rather than every second, so a crawl can't flood the
       collector.
     </p>
+    <p class="mt-3 text-base-content/70 max-w-2xl">
+      Worth being straight about the limit: this is a JavaScript tracker, so it sees the
+      automation that renders a page — headless browsers, monitoring agents, agent browsers.
+      A crawler that only fetches HTML never runs it, and no hosted JavaScript analytics sees
+      that, ours included. To count those, your server reports each hit to the
+      <a href={ai_path()} class="link">event API</a>
+      with <code class="font-mono text-xs">bot=</code>, which takes a few lines at your origin.
+    </p>
 
     <div class="mt-6 flex flex-wrap gap-2">
       <span

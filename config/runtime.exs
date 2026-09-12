@@ -23,6 +23,12 @@ end
 config :web_analytics, WebAnalyticsWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4001"))]
 
+# Dogfooding: this product measures itself. Read in every environment, because
+# an environment variable that quietly does nothing outside prod is worse than
+# one that is unset — you cannot tell the two apart from the outside. Unset
+# means no tag is rendered at all.
+config :web_analytics, :self_site_key, System.get_env("SSA_SELF_SITE_KEY")
+
 if config_env() == :dev do
   # Reload browser tabs when matching files change.
   config :web_analytics, WebAnalyticsWeb.Endpoint,

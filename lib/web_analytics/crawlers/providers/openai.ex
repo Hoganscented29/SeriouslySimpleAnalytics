@@ -130,14 +130,23 @@ defmodule WebAnalytics.Crawlers.Providers.OpenAI do
              "not filtered out — it never entered the system."},
           {:p,
            "This is why the usual advice to \"check your bot filter settings\" is beside the " <>
-             "point. There is nothing to unfilter. The only places this traffic is visible are " <>
-             "raw access logs and a tracker that classifies server-side, and of those two only " <>
-             "one produces something you can read without writing a log pipeline."},
+             "point. There is nothing to unfilter. The only place a non-rendering crawler is " <>
+             "visible at all is your own access log, because your origin is the only machine it " <>
+             "ever spoke to."},
           {:p,
-           "SeriouslySimpleAnalytics classifies at ingest, from the request itself. The " <>
-             "User-Agent header arrives with every request regardless of what the client can " <>
-             "execute, so a crawler that will never run a line of your JavaScript is still " <>
-             "identified by name, counted, and attributed to the pages it took."},
+           "That is true of this tool as well, and worth saying plainly rather than leaving you " <>
+             "to discover it. SeriouslySimpleAnalytics is a JavaScript tracker: it identifies " <>
+             "automated clients that execute JavaScript — headless Chrome, Playwright, " <>
+             "Lighthouse, monitoring agents, agent browsers that render before reading — and " <>
+             "names them. GPTBot is not one of those. No hosted JavaScript analytics sees it, " <>
+             "including ours."},
+          {:p,
+           "What closes the gap is reporting from the side that does see it. One request to the " <>
+             "ping API per crawler hit, sent from your own server with `bot=` and the agent " <>
+             "name, puts GPTBot, ChatGPT-User and OAI-SearchBot into the report below as they " <>
+             "arrive — no SDK, no log shipping, and the access log stays on your box. Failing " <>
+             "that, a case-insensitive grep for the three tokens answers the same question " <>
+             "once, by hand."},
           {:p,
            "The second half is keeping the two populations apart. GPTBot fetching four thousand " <>
              "pages in an afternoon is real traffic, but folding it into your visitor numbers " <>
@@ -152,9 +161,11 @@ defmodule WebAnalytics.Crawlers.Providers.OpenAI do
         heading: "How GPTBot is identified",
         body: [
           {:p,
-           "Classification happens at ingest against an ordered list of patterns, most specific " <>
-             "first. GPTBot, ChatGPT-User and OAI-SearchBot each have their own entry, each " <>
-             "resolving to its own display name, all three filed under the kind \"AI crawler\"."},
+           "Whatever reaches ingest carries a user agent — sent by a client that rendered the " <>
+             "page, or passed by your server when it reports a crawler hit — and that string is " <>
+             "classified against an ordered list of patterns, most specific first. GPTBot, " <>
+             "ChatGPT-User and OAI-SearchBot each have their own entry, each resolving to its " <>
+             "own display name, all three filed under the kind \"AI crawler\"."},
           {:p,
            "Ordering is what makes the list correct rather than approximately correct. A " <>
              "catch-all rule matching anything containing \"bot\" would swallow OAI-SearchBot " <>
@@ -586,8 +597,10 @@ defmodule WebAnalytics.Crawlers.Providers.OpenAI do
          "any training."},
       {"Why doesn't GPTBot show up in Google Analytics?",
        "Because JavaScript analytics only records clients that execute JavaScript, and GPTBot " <>
-         "does not. The requests happened and your server served them, but the tracker never " <>
-         "ran. Detection has to happen server-side, from the request itself."},
+         "does not. The requests happened and your server served them, but no tracker ran. The " <>
+         "same limit applies here: what this tool catches by itself is automation that renders. " <>
+         "For GPTBot you report each hit from your own server to the ping API, or read your " <>
+         "access log."},
       {"Does GPTBot respect robots.txt?",
        "OpenAI's published policy is that all three of its crawlers do, each addressed by its " <>
          "own token. Whether a rule you wrote actually took effect is worth confirming: note " <>
@@ -647,9 +660,10 @@ defmodule WebAnalytics.Crawlers.Providers.OpenAI do
          "from a search surface without preventing any training, which is rarely what the " <>
          "person writing the rule intended."},
       {"Does this work behind a CDN?",
-       "Yes, as long as the original client address is forwarded to your application. If it is " <>
-         "not, every request will appear to come from your edge and the location data will be " <>
-         "wrong, though agent detection still works because it reads the User-Agent header."}
+       "The browser tracker does, since it runs in the visitor's browser. Forward the original " <>
+         "client address or every visit appears to come from your edge. If you report crawler " <>
+         "hits from your origin, remember a CDN answers many of them itself — those never reach " <>
+         "your server, so they are absent from anything your server reports."}
     ]
   end
 end

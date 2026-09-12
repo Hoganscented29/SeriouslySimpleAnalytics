@@ -151,11 +151,13 @@ defmodule WebAnalytics.Crawlers.Providers.Perplexity do
              "browsers. So the picture most site owners have is half a picture, and it is the " <>
              "flattering half."},
           {:p,
-           "Detecting server-side fixes it. The User-Agent header arrives with every request " <>
-             "regardless of what the client can execute, so classification at ingest sees " <>
-             "everything a JavaScript tracker cannot. Both halves of the relationship end up in " <>
-             "the same dashboard, which is the only arrangement in which the trade-off can " <>
-             "actually be judged."},
+           "This tool has the same blind spot, and you should know that before relying on it. " <>
+             "It is a JavaScript tracker: it names the automated clients that render a page — " <>
+             "headless browsers, monitoring agents, agent browsers — and PerplexityBot is not " <>
+             "among them. The referral half lands in your reports on its own; the crawl half " <>
+             "only does if your own server reports it, with one ping per hit carrying `bot=`. " <>
+             "That is the arrangement in which both halves can actually be compared, and it " <>
+             "takes a few lines at your origin rather than a log pipeline."},
           {:p,
            "Keeping them apart matters just as much. A crawler is not a visitor. Mixing them " <>
              "gives you a bounce rate polluted by a client that cannot bounce and a session " <>
@@ -168,9 +170,11 @@ defmodule WebAnalytics.Crawlers.Providers.Perplexity do
         heading: "How PerplexityBot is identified",
         body: [
           {:p,
-           "Detection runs at ingest against an ordered list of patterns, most specific first. " <>
-             "PerplexityBot and Perplexity-User each have their own entry and their own display " <>
-             "name, both filed under the kind \"AI crawler\"."},
+           "Whatever reaches ingest carries a user agent — from a client that rendered the " <>
+             "page, or from your own server reporting a crawler hit — and it is classified " <>
+             "against an ordered list of patterns, most specific first. PerplexityBot and " <>
+             "Perplexity-User each have their own entry and their own display name, both filed " <>
+             "under the kind \"AI crawler\"."},
           {:p,
            "The ordering is the mechanism. A catch-all rule matching anything containing " <>
              "\"bot\" would swallow PerplexityBot into an unclassified bucket, and a " <>
@@ -592,8 +596,9 @@ defmodule WebAnalytics.Crawlers.Providers.Perplexity do
          "you the answer, and neither gives it alone."},
       {"Why doesn't PerplexityBot show in Google Analytics?",
        "Because JavaScript analytics only records clients that execute JavaScript, and " <>
-         "PerplexityBot does not. Your server handled the request but the tracker never ran. " <>
-         "Detection has to happen server-side, from the request itself."},
+         "PerplexityBot does not. Your server handled the request but no tracker ran — and the " <>
+         "same is true here, since this is a JavaScript tracker too. To see it, report each hit " <>
+         "from your own server to the ping API with `bot=`, or read your access log."},
       {"Can I see which of my pages Perplexity cites?",
        "Not directly — citations happen inside Perplexity's product. But the pages-taken list " <>
          "is a close proxy, because Perplexity fetches what it intends to use, and your " <>
@@ -647,9 +652,10 @@ defmodule WebAnalytics.Crawlers.Providers.Perplexity do
          "This is the trade-off in its clearest form, and it is why the crawl and referral " <>
          "numbers have to be read together rather than separately."},
       {"Does this work behind a CDN?",
-       "Yes, provided the original client address is forwarded to your application. If it is " <>
-         "not, every request appears to come from your edge and location data will be wrong, " <>
-         "though agent detection still works because it reads the User-Agent header."}
+       "The browser tracker does, since it runs in the visitor's browser. Forward the original " <>
+         "client address or every visit appears to come from your edge. If you report crawler " <>
+         "hits from your origin, note that a CDN answers many of them without ever consulting " <>
+         "your server, so those hits are absent from anything your server can report."}
     ]
   end
 end

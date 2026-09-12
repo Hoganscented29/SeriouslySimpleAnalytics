@@ -12,6 +12,23 @@ defmodule WebAnalyticsWeb.Layouts do
   embed_templates "layouts/*"
 
   @doc """
+  This site's own tracking tag.
+
+  An analytics product that does not measure itself is taking its customers'
+  word for whether it works. Rendered only when SSA_SELF_SITE_KEY names an
+  account, so a clone or a self-hosted copy reports nowhere by default rather
+  than into ours.
+  """
+  def self_tracking(assigns) do
+    assigns = assign(assigns, :key, Application.get_env(:web_analytics, :self_site_key))
+
+    ~H"""
+    <script :if={@key} src={~p"/wa.js"} data-site={@key} defer>
+    </script>
+    """
+  end
+
+  @doc """
   Renders your app layout.
 
   This function is typically invoked from every template,

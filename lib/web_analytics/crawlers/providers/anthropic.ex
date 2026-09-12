@@ -145,11 +145,24 @@ defmodule WebAnalytics.Crawlers.Providers.Anthropic do
              "looks, because reading them means either grep or a log pipeline that costs more " <>
              "than the question is worth."},
           {:p,
-           "SeriouslySimpleAnalytics closes the gap by classifying on the server side, at " <>
-             "ingest, from the request itself. A crawler that never runs the tracker script is " <>
-             "still a request your server handled, and that request carries a User-Agent header " <>
-             "saying exactly who it is. The classification happens there, which is why it works " <>
-             "for clients that will never run a line of your JavaScript."},
+           "Be clear about what this tool can and cannot see, because the honest answer is " <>
+             "narrower than the pitch usually given. SeriouslySimpleAnalytics is a JavaScript " <>
+             "tracker, so it identifies the automated clients that do execute JavaScript — " <>
+             "headless Chrome, Playwright, Lighthouse, monitoring agents, and the agent " <>
+             "browsers that render a page before reading it. Those are named, counted and kept " <>
+             "out of your human numbers."},
+          {:p,
+           "ClaudeBot is not one of them. It fetches HTML and does not run scripts, so the " <>
+             "tracker never fires and the visit does not reach us at all. No hosted JavaScript " <>
+             "analytics can see it, ours included: the request goes to your server, and your " <>
+             "server is the only thing that ever knows about it."},
+          {:p,
+           "So there are two ways to get ClaudeBot into this report, and both start at your " <>
+             "origin. Read your own access logs — a case-insensitive grep for Claude catches " <>
+             "every agent on this page. Or report it from your server as it happens, with one " <>
+             "request per hit to the ping API, passing `bot=` and the agent name. That endpoint " <>
+             "is documented in llms.txt, takes no SDK, and turns your access log into the " <>
+             "report below without shipping the log anywhere."},
           {:p,
            "The second half of the fix is not mixing the two populations. A crawler is not a " <>
              "visitor, and averaging them produces numbers that describe nobody: a bounce rate " <>
@@ -163,11 +176,12 @@ defmodule WebAnalytics.Crawlers.Providers.Anthropic do
         heading: "How SeriouslySimpleAnalytics identifies Claude Bot",
         body: [
           {:p,
-           "Detection runs at ingest, before anything is written. Each request's User-Agent is " <>
-             "tested against an ordered list of patterns, most specific first, and the first " <>
-             "match assigns both a name and a kind. Claude Bot's kind is \"AI crawler\", which " <>
-             "is the same bucket as GPTBot and PerplexityBot and a different bucket from " <>
-             "Googlebot, Ahrefs, or a Slack link unfurler."},
+           "Whatever reaches ingest — a beacon from a client that rendered the page, or a ping " <>
+             "your server sent on a crawler's behalf — carries a user agent, and that string is " <>
+             "tested against an ordered list of patterns, most specific first. The first match " <>
+             "assigns a name and a kind. Claude Bot's kind is \"AI crawler\", the same bucket as " <>
+             "GPTBot and PerplexityBot and a different one from Googlebot, Ahrefs, or a Slack " <>
+             "link unfurler."},
           {:p,
            "That ordering matters more than it sounds. A naive detector that looks for the " <>
              "substring \"bot\" first would file Claude-SearchBot as an unclassified bot and " <>
@@ -585,10 +599,12 @@ defmodule WebAnalytics.Crawlers.Providers.Anthropic do
          "token case-insensitively rather than on the full string, because version numbers " <>
          "change."},
       {"Why doesn't Google Analytics show Claude Bot?",
-       "Because JavaScript-based analytics only records visitors that execute JavaScript, and " <>
-         "ClaudeBot does not. The traffic is real and your server handled it, but the tracker " <>
-         "never ran, so it was never recorded. Detection has to happen server-side, at ingest, " <>
-         "from the request itself."},
+       "Because JavaScript analytics only records clients that execute JavaScript, and " <>
+         "ClaudeBot does not. The traffic is real and your server handled it, but no tracker " <>
+         "ran, so nothing was recorded. That applies to this tool too where the crawler does " <>
+         "not render: to see ClaudeBot you either read your own access logs or report each hit " <>
+         "from your server to the ping API. What the tracker catches on its own is the " <>
+         "automation that does run JavaScript."},
       {"Does Claude Bot respect robots.txt?",
        "Anthropic's published policy is that its crawlers obey robots.txt, and each agent can " <>
          "be addressed separately by name. Whether a rule you wrote actually took effect is an " <>
@@ -633,9 +649,11 @@ defmodule WebAnalytics.Crawlers.Providers.Anthropic do
          "tells you which of your content is actually being taken, which is frequently not the " <>
          "content you would have guessed."},
       {"Does this work if my site is server-rendered, static, or behind a CDN?",
-       "Yes. Detection happens from the request that reaches your application, so the rendering " <>
-         "model does not matter. Behind a CDN, make sure the original client address is " <>
-         "forwarded, or every request will appear to come from your edge."},
+       "The browser tracker works on any of them, because it runs in the visitor's browser " <>
+         "rather than in your stack. Behind a CDN, make sure the original client address is " <>
+         "forwarded or every visit appears to come from your edge. If you are reporting crawler " <>
+         "hits from your own server, a CDN matters more: cached responses never reach your " <>
+         "origin, so the hits you report are only the ones that missed the cache."},
       {"What about the other AI crawlers?",
        "The same report covers GPTBot, PerplexityBot, Bytespider, CCBot, Amazonbot, " <>
          "Meta-ExternalAgent and the rest, each named individually. There is a page for each " <>

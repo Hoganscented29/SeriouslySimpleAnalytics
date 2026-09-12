@@ -12,7 +12,11 @@ import Config
 # placeholder nobody owns.
 config :web_analytics,
   mail_from: "logan@csuitenecessities.com",
-  mail_from_name: "SeriouslySimpleAnalytics"
+  mail_from_name: "SeriouslySimpleAnalytics",
+  # The account this site reports its own traffic to. nil means no tag is
+  # rendered at all — a fresh clone or a self-hoster must not report into
+  # somebody else's account by inheriting a default.
+  self_site_key: nil
 
 config :web_analytics, :scopes,
   user: [
