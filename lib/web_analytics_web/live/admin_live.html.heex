@@ -51,9 +51,9 @@
     <!-- what is narrowing the view -->
     <div
       :if={Admin.scoped?(@scope)}
-      class="rounded-box border-2 border-warning bg-warning/10 px-4 py-3 flex flex-wrap items-center gap-3"
+      class="rounded-box wa-filter-notice border-2 px-4 py-3 flex flex-wrap items-center gap-3"
     >
-      <span class="badge badge-warning badge-sm font-medium">Filtered</span>
+      <span class="wa-filter-chip badge badge-sm font-medium">Filtered</span>
       <span :if={@scope.domain} class="text-sm">
         domain <code class="font-mono font-medium">{@scope.domain}</code>
       </span>
@@ -65,7 +65,7 @@
         hidden while filtered.
       </span>
       <span class="flex-1"></span>
-      <button phx-click="clear_filter" class="btn btn-xs btn-warning">Clear</button>
+      <button phx-click="clear_filter" class="wa-filter-action btn btn-xs">Clear</button>
     </div>
 
     <!-- live: on its own clock, refreshed on every tick -->
@@ -108,13 +108,13 @@
 
         <div
           :if={Map.get(@scope, :origins, []) != [] or Map.get(@scope, :sessions, []) != []}
-          class="flex items-center gap-3 flex-wrap text-xs rounded-box border-2 border-warning bg-warning/10 px-3 py-2"
+          class="flex items-center gap-3 flex-wrap text-xs rounded-box wa-filter-notice border-2 px-3 py-2"
         >
-          <span class="badge badge-warning badge-sm font-medium">Filtered</span>
+          <span class="wa-filter-chip badge badge-sm font-medium">Filtered</span>
           <span :if={@scope.sessions != []}>{length(@scope.sessions)} session(s) held back</span>
           <span :if={@scope.origins != []}>{length(@scope.origins)} origin(s) held back</span>
           <span class="flex-1"></span>
-          <button phx-click="clear_row_filters" class="btn btn-xs btn-warning">Remove filter</button>
+          <button phx-click="clear_row_filters" class="wa-filter-action btn btn-xs">Remove filter</button>
         </div>
 
         <div class="overflow-x-auto">
@@ -714,7 +714,7 @@
         <h2 class="text-sm font-medium">Most recent sessions</h2>
         <span
           :if={@scope.origins != [] or @scope.sessions != []}
-          class="badge badge-warning badge-sm font-medium"
+          class="wa-filter-chip badge badge-sm font-medium"
         >
           Filtered
         </span>
@@ -727,7 +727,7 @@
         <button
           :if={@scope.origins != [] or @scope.sessions != []}
           phx-click="clear_row_filters"
-          class="btn btn-xs btn-warning"
+          class="wa-filter-action btn btn-xs"
         >
           Remove filter
         </button>

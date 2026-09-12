@@ -1065,11 +1065,28 @@ defmodule WebAnalytics.Analytics do
           type: e.type,
           at: e.occurred_at,
           path: e.path,
+          title: e.title,
           text: e.text,
+          href: e.href,
+          href_host: e.href_host,
+          outbound: e.outbound,
+          trigger: e.trigger,
+          tag: e.tag,
+          scroll_pct: e.scroll_pct,
+          # How far into the pageview it happened, which is the difference
+          # between a click someone went looking for and one they hit on
+          # arrival.
+          ms_since_pageview: e.ms_since_pageview,
           attrs: e.data_attrs,
+          # The session, so a run of events can be read as one run rather than
+          # as a list of unrelated things that happened.
+          session_token: s.token,
           project: s.project,
           channel: s.channel,
           crawler_name: s.crawler_name,
+          browser: s.browser,
+          device_type: s.device_type,
+          host: s.host,
           country: s.country,
           city: s.city
         }

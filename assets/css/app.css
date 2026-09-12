@@ -356,3 +356,59 @@
   /* The halo is decoration; it must never swallow a click on the label. */
   pointer-events: none;
 }
+
+/* The filter notice announces itself, then gets out of the way.
+   Red on arrival, because a report quietly hiding rows should say so where a
+   reader cannot miss it. Grey a moment later, because it is a state they chose
+   rather than an error, and a permanently red box on a view somebody
+   deliberately set up is scolding them for it.
+   `forwards` holds the settled end state. LiveView patches these elements
+   rather than recreating them, so the fade runs once when the notice appears
+   instead of flashing on every refresh. */
+@keyframes wa-filter-settle {
+  0% {
+    border-color: var(--color-error);
+    background-color: color-mix(in oklab, var(--color-error) 14%, transparent);
+  }
+  100% {
+    border-color: var(--color-base-300);
+    background-color: color-mix(in oklab, var(--color-base-content) 7%, transparent);
+  }
+}
+
+@keyframes wa-filter-settle-solid {
+  0% {
+    background-color: var(--color-error);
+    color: var(--color-error-content);
+  }
+  100% {
+    background-color: var(--color-base-300);
+    color: var(--color-base-content);
+  }
+}
+
+.wa-filter-notice {
+  animation: wa-filter-settle 2.6s ease-out forwards;
+}
+
+.wa-filter-chip,
+.wa-filter-action {
+  animation: wa-filter-settle-solid 2.6s ease-out forwards;
+}
+
+/* Straight to the settled state, which is the resting one anyway — so this
+   loses the attention-grabbing half and keeps the legible half. */
+@media (prefers-reduced-motion: reduce) {
+  .wa-filter-notice,
+  .wa-filter-chip,
+  .wa-filter-action {
+    animation: none;
+    border-color: var(--color-base-300);
+  }
+
+  .wa-filter-chip,
+  .wa-filter-action {
+    background-color: var(--color-base-300);
+    color: var(--color-base-content);
+  }
+}

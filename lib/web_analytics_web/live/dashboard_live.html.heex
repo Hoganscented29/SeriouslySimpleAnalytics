@@ -5,7 +5,7 @@
       :if={@viewing_as_admin}
       class="rounded-box border border-warning/50 bg-warning/10 px-4 py-3 flex flex-wrap items-center gap-x-3 gap-y-2"
     >
-      <span class="badge badge-warning badge-sm font-medium">Admin view</span>
+      <span class="wa-filter-chip badge badge-sm font-medium">Admin view</span>
       <span :if={@own_account} class="text-sm">
         Your own account, opened through admin.
       </span>
@@ -241,10 +241,10 @@
       <summary class="px-4 py-3 cursor-pointer flex items-center gap-3 flex-wrap text-xs">
         <span class="uppercase tracking-wide text-base-content/60">Origins</span>
         <span class="text-base-content/40">{length(origins)} seen</span>
-        <span :if={suggested != []} class="badge badge-warning badge-sm gap-1">
+        <span :if={suggested != []} class="wa-filter-chip badge badge-sm gap-1">
           {length(suggested)} worth excluding
         </span>
-        <span :if={excluded != []} class="badge badge-warning badge-sm">
+        <span :if={excluded != []} class="wa-filter-chip badge badge-sm">
           {length(excluded)} excluded
         </span>
       </summary>
@@ -254,11 +254,15 @@
           <button
             :if={suggested != []}
             phx-click="exclude_suggested_origins"
-            class="btn btn-xs btn-warning btn-outline"
+            class="wa-filter-action btn btn-xs btn-outline"
           >
             Exclude all {length(suggested)} suggested
           </button>
-          <button :if={excluded != []} phx-click="clear_origins" class="btn btn-xs btn-warning">
+          <button
+            :if={excluded != []}
+            phx-click="clear_origins"
+            class="wa-filter-action btn btn-xs"
+          >
             Clear exclusions
           </button>
         </div>
@@ -372,9 +376,9 @@
       <div class="rounded-box bg-base-100 border border-base-300">
         <div
           :if={@filters.exclude_sessions != [] or @filters.exclude_origins != []}
-          class="px-4 py-2 border-b-2 border-warning bg-warning/10 flex items-center gap-3 flex-wrap text-xs"
+          class="px-4 py-2 wa-filter-notice border-b-2 flex items-center gap-3 flex-wrap text-xs"
         >
-          <span class="badge badge-warning badge-sm font-medium">Filtered</span>
+          <span class="wa-filter-chip badge badge-sm font-medium">Filtered</span>
           <span :if={@filters.exclude_sessions != []}>
             {length(@filters.exclude_sessions)} session(s) held back
           </span>
@@ -382,7 +386,7 @@
             {length(@filters.exclude_origins)} origin(s) held back
           </span>
           <span class="flex-1"></span>
-          <button phx-click="clear_row_filters" class="btn btn-xs btn-warning">Remove filter</button>
+          <button phx-click="clear_row_filters" class="wa-filter-action btn btn-xs">Remove filter</button>
         </div>
         <div class="overflow-x-auto">
           <table class="table table-sm">
@@ -771,19 +775,28 @@
           <table class="table table-sm table-pin-rows">
             <thead>
               <tr>
-                <th>When</th>
+                <th title="Hover any time for the exact moment, in UTC">When</th>
                 <th>Event</th>
-                <th>Project</th>
+                <th>On</th>
+                <th>Detail</th>
                 <th>Attributes</th>
+                <th>Session</th>
                 <th>Where</th>
               </tr>
             </thead>
             <tbody>
-              <tr :for={event <- @data[:recent_events] || []}>
-                <td class="whitespace-nowrap text-base-content/60 text-xs">
-                  {Calendar.strftime(event.at, "%b %d %H:%M:%S")}
+              <tr :for={event <- @data[:recent_events] || []} class="hover">
+                <%!-- Relative, because "4m ago" is the question a reader of a
+                live stream is actually asking, with the exact moment on hover
+                for the one time they need to line it up against something
+                else. --%>
+                <td
+                  class="whitespace-nowrap text-base-content/60 text-xs"
+                  title={"#{Calendar.strftime(event.at, "%Y-%m-%d %H:%M:%S")} UTC"}
+                >
+                  {relative(event.at)}
                 </td>
-                <td>
+                <td class="whitespace-nowrap">
                   <button
                     phx-click="select_event"
                     phx-value-event={event.name}
@@ -791,11 +804,55 @@
                   >
                     {event.name}
                   </button>
+                  <span
+                    :if={event.type && event.type != "custom"}
+                    class="badge badge-xs badge-ghost ml-1"
+                  >
+                    {event.type}
+                  </span>
+                  <span :if={event.outbound} class="badge badge-xs badge-outline ml-1">out</span>
                 </td>
-                <td class="text-xs text-base-content/60">
-                  {event.project || event.channel || "web"}
-                  <span :if={event.crawler_name} class="badge badge-xs badge-outline ml-1">
-                    {event.crawler_name}
+                <%!-- Where in the project it happened, and how far into the
+                pageview: a click four seconds in and one four minutes in are
+                different events with the same name. --%>
+                <td class="text-xs max-w-[12rem]">
+                  <%!-- An AI tool reporting a run has no page, and printing
+                  "(none)" against every one of its events is a column of noise
+                  claiming something is missing when nothing is. --%>
+                  <div
+                    :if={event.path}
+                    class="font-mono truncate"
+                    title={event.title || event.path}
+                  >
+                    {event.path}
+                  </div>
+                  <div class="text-base-content/40 text-[10px]">
+                    {event.project || event.channel || "web"}
+                    <span :if={event.ms_since_pageview}>
+                      · {duration(event.ms_since_pageview)} in
+                    </span>
+                    <span :if={event.scroll_pct && event.scroll_pct > 0}>
+                      · {event.scroll_pct}% down
+                    </span>
+                  </div>
+                </td>
+                <%!-- What was actually clicked or fetched. For an AI tool this
+                is usually empty and the attributes carry the meaning; for a
+                website it is the label on the thing. --%>
+                <td class="text-xs max-w-[14rem]">
+                  <div :if={event.text} class="truncate" title={event.text}>{event.text}</div>
+                  <div
+                    :if={event.href}
+                    class="font-mono text-[10px] text-base-content/50 truncate"
+                    title={event.href}
+                  >
+                    {event.href_host || event.href}
+                  </div>
+                  <span
+                    :if={is_nil(event.text) and is_nil(event.href)}
+                    class="text-base-content/30"
+                  >
+                    —
                   </span>
                 </td>
                 <td class="font-mono text-[11px] text-base-content/70 max-w-md">
@@ -807,8 +864,21 @@
                     <span class="text-base-content/50">{key}=</span>{value}
                   </span>
                 </td>
+                <%!-- Enough of the token to see that six events belong to one
+                run, without a column of forty hex characters. --%>
+                <td class="font-mono text-[10px] text-base-content/50 whitespace-nowrap">
+                  <span title={event.session_token}>
+                    {String.slice(event.session_token || "", 0, 8)}
+                  </span>
+                </td>
                 <td class="text-xs text-base-content/60 whitespace-nowrap">
-                  {[event.city, event.country] |> Enum.reject(&is_nil/1) |> Enum.join(", ")}
+                  <div>
+                    {[event.city, event.country] |> Enum.reject(&is_nil/1) |> Enum.join(", ")}
+                  </div>
+                  <div class="text-[10px] text-base-content/40">
+                    {display_name(event.browser)}
+                    <span :if={event.crawler_name}>· {event.crawler_name}</span>
+                  </div>
                 </td>
               </tr>
             </tbody>
@@ -1444,9 +1514,9 @@
       <div class="rounded-box bg-base-100 border border-base-300">
         <div
           :if={@filters.exclude_sessions != [] or @filters.exclude_origins != []}
-          class="px-4 py-2 border-b-2 border-warning bg-warning/10 flex items-center gap-3 flex-wrap text-xs"
+          class="px-4 py-2 wa-filter-notice border-b-2 flex items-center gap-3 flex-wrap text-xs"
         >
-          <span class="badge badge-warning badge-sm font-medium">Filtered</span>
+          <span class="wa-filter-chip badge badge-sm font-medium">Filtered</span>
           <span :if={@filters.exclude_sessions != []}>
             {length(@filters.exclude_sessions)} session(s) held back
           </span>
@@ -1454,7 +1524,7 @@
             {length(@filters.exclude_origins)} origin(s) held back
           </span>
           <span class="flex-1"></span>
-          <button phx-click="clear_row_filters" class="btn btn-xs btn-warning">Remove filter</button>
+          <button phx-click="clear_row_filters" class="wa-filter-action btn btn-xs">Remove filter</button>
         </div>
         <div class="overflow-x-auto">
           <table class="table table-sm">
