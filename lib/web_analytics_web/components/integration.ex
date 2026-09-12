@@ -273,19 +273,38 @@ defmodule WebAnalyticsWeb.IntegrationComponents do
           <div
             :for={
               stat <- [
-                {"Runs", thousands(runs), "+24%"},
-                {"Tool calls", thousands(tool_calls), "#{Float.round(tool_calls / runs, 1)} per run"},
-                {"Completed", "#{Float.round(completed / runs * 100, 1)}%", "outcome=success"},
-                {"Median run", "8.4s", "start to finish"}
+                {"Runs", thousands(runs), "+24%", nil},
+                {"Tool calls", thousands(tool_calls), "#{Float.round(tool_calls / runs, 1)} per run",
+                 nil},
+                # The two a reader judges the tool by, coloured so they are found
+                # without reading the other two first.
+                {"Completed", "#{Float.round(completed / runs * 100, 1)}%", "outcome=success", :good},
+                {"Median run", "8.4s", "start to finish", :slow}
               ]
             }
-            class="rounded-lg border border-base-300 px-3 py-2"
+            <div
+            class={[
+              "rounded-lg px-3 py-2 border",
+              elem(stat, 3) == :good && "border-teal-500/40 bg-teal-500/10",
+              elem(stat, 3) == :slow && "border-rose-500/40 bg-rose-500/10",
+              is_nil(elem(stat, 3)) && "border-base-300"
+            ]}
           >
             <div class="text-[10px] text-base-content/50">{elem(stat, 0)}</div>
-            <div class="text-base sm:text-lg font-semibold tabular-nums leading-tight">
+            <div class={[
+              "text-base sm:text-lg font-semibold tabular-nums leading-tight",
+              elem(stat, 3) == :good && "text-teal-600 dark:text-teal-400",
+              elem(stat, 3) == :slow && "text-rose-600 dark:text-rose-400"
+            ]}>
               {elem(stat, 1)}
             </div>
-            <div class="text-[10px] text-success">{elem(stat, 2)}</div>
+            <div class={[
+              "text-[10px]",
+              elem(stat, 3) == :slow && "text-rose-600/70 dark:text-rose-400/70",
+              elem(stat, 3) != :slow && "text-success"
+            ]}>
+              {elem(stat, 2)}
+            </div>
           </div>
         </div>
 
