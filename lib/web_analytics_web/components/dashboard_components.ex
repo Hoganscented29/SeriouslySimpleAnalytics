@@ -596,6 +596,118 @@ defmodule WebAnalyticsWeb.DashboardComponents do
 
   # -- anomaly badge -------------------------------------------------------
 
+  attr :series, :list, required: true, doc: "one entry per bucket, oldest first"
+  attr :grain, :atom, required: true
+  attr :label, :string, required: true
+  attr :value_key, :atom, default: :sum
+
+  @doc """
+  A numeric attribute over time, one bar per hour or per day.
+
+  Scaled to its own peak, with every bucket present — a day that earned nothing
+  is the point of a chart of earnings. A zero still gets a visible tick, so a
+  quiet stretch reads as measured and empty rather than as missing. The tooltip
+  carries the bucket's total, its count and its average, because a spike of
+  sats can be one large payout or forty small ones and those mean different
+  things.
+  """
+  def metric_chart(assigns) do
+    values = Enum.map(assigns.series, &(Map.get(&1, assigns.value_key) || 0))
+    peak = Enum.max(values, fn -> 0 end)
+
+    assigns =
+      assigns
+      |> assign(:values, values)
+      |> assign(:peak, peak)
+      |> assign(:scale, if(peak > 0, do: peak, else: 1))
+      |> assign(:total, Enum.sum(values))
+      |> assign(:first_at, assigns.series |> List.first() |> then(&(&1 && &1.at)))
+      |> assign(:last_at, assigns.series |> List.last() |> then(&(&1 && &1.at)))
+
+    ~H"""
+    <div class="rounded-box bg-base-100 border border-base-300 p-4">
+      <div class="flex items-baseline justify-between gap-3 flex-wrap mb-3">
+        <span class="text-sm font-medium">{@label}</span>
+        <span class="text-xs text-base-content/50 tabular-nums">
+          {if @peak > 0, do: "peak #{metric_value(@peak)} per #{@grain}", else: "nothing yet"}
+        </span>
+      </div>
+
+      <div :if={@series == []} class="py-10 text-center text-sm text-base-content/50">
+        No values reported in this range.
+      </div>
+
+      <div :if={@series != []}>
+        <div class="flex items-end gap-[2px] h-40 border-b border-base-300">
+          <div
+            :for={{point, value} <- Enum.zip(@series, @values)}
+            class="flex-1 min-w-0 flex items-end h-full"
+            title={bucket_title(point, @grain)}
+          >
+            <div
+              class={[
+                "w-full rounded-t-sm transition-colors",
+                value > 0 && "bg-primary/80 hover:bg-primary",
+                value == 0 && "bg-base-content/15 hover:bg-base-content/30"
+              ]}
+              style={
+                if value > 0,
+                  do: "height: #{max(round(value * 100 / @scale), 2)}%",
+                  else: "height: 3px"
+              }
+            >
+            </div>
+          </div>
+        </div>
+
+        <div class="flex justify-between text-[10px] text-base-content/40 mt-1.5 tabular-nums">
+          <span>{bucket_label(@first_at, @grain)}</span>
+          <span :if={@total != 0}>total {metric_value(@total)}</span>
+          <span>{bucket_label(@last_at, @grain)}</span>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  defp bucket_label(nil, _grain), do: ""
+  defp bucket_label(at, :hour), do: Calendar.strftime(at, "%b %d %H:00")
+  defp bucket_label(at, :day), do: Calendar.strftime(at, "%b %d")
+
+  defp bucket_title(point, grain) do
+    base = "#{bucket_label(point.at, grain)} UTC · total #{metric_value(point.sum)}"
+
+    if point.count > 0,
+      do: "#{base} · #{point.count} reported · avg #{metric_value(point.avg)}",
+      else: "#{base} · nothing reported"
+  end
+
+  @doc """
+  A metric value for display: grouped thousands, and a fraction only when there
+  is one, so 24000 sats reads "24,000" and 19.99 dollars keeps its cents.
+  """
+  def metric_value(nil), do: "—"
+
+  def metric_value(value) when is_integer(value), do: number(value)
+
+  def metric_value(value) when is_float(value) and value < 0, do: "-" <> metric_value(-value)
+
+  def metric_value(value) when is_float(value) do
+    rounded = Float.round(value, 2)
+
+    if rounded == trunc(rounded) do
+      number(trunc(rounded))
+    else
+      # Formatted from cents so the fraction is always exactly two digits and
+      # never a float's idea of 0.1 + 0.2.
+      cents = round(rounded * 100)
+
+      "#{number(div(cents, 100))}.#{cents |> rem(100) |> Integer.to_string() |> String.pad_leading(2, "0")}"
+    end
+  end
+
+  def metric_value(value), do: to_string(value)
+
   attr :series, :list, required: true, doc: "one entry per minute, oldest first"
   attr :value_key, :atom, default: :sessions
   attr :label, :string, default: "Sessions open, per minute"
@@ -743,6 +855,12 @@ defmodule WebAnalyticsWeb.DashboardComponents do
   @doc "Thousands-separated integer."
   def number(nil), do: "0"
   def number(value) when is_float(value), do: number(round(value))
+
+  # The sign is set aside before grouping. Grouping the digits with the minus
+  # still attached treated it as a fourth digit, so -123 came out "-,123" —
+  # harmless while every number here was a count, and wrong the moment a metric
+  # can be a refund.
+  def number(value) when is_integer(value) and value < 0, do: "-" <> number(-value)
 
   def number(value) when is_integer(value) do
     value

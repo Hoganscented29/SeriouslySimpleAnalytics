@@ -16,7 +16,7 @@ defmodule WebAnalyticsWeb.DashboardLive do
   alias WebAnalytics.Ingest.Crawler
   alias WebAnalytics.Sites
 
-  @tabs ~w(live overview pages events flow locations clicks forms sessions anomalies crawlers)
+  @tabs ~w(live overview pages events metrics flow locations clicks forms sessions anomalies crawlers)
   @click_groups ~w(name id class text selector tag)
   @location_levels ~w(country region county city)
   @flow_modes ~w(pages events)
@@ -108,6 +108,8 @@ defmodule WebAnalyticsWeb.DashboardLive do
       |> assign(:selected_page, params["page"])
       |> assign(:selected_event, params["event"])
       |> assign(:flow_mode, flow_mode(params["flow"]))
+      |> assign(:metric, blank_to_nil(params["metric"]))
+      |> assign(:grain, grain(params["grain"], params["range"]))
       |> assign(:project, blank_to_nil(params["project"]))
       |> assign(:anomaly_labels, Anomaly.labels())
       |> assign(:crawler_labels, Crawler.labels())
@@ -142,6 +144,14 @@ defmodule WebAnalyticsWeb.DashboardLive do
   @impl true
   def handle_event("dwell_range", %{"dmin" => min, "dmax" => max}, socket) do
     {:noreply, push_patch(socket, to: path_for(socket, %{"dmin" => min, "dmax" => max}))}
+  end
+
+  def handle_event("select_metric", %{"metric" => metric}, socket) do
+    {:noreply, push_patch(socket, to: path_for(socket, %{"metric" => metric}))}
+  end
+
+  def handle_event("grain", %{"grain" => grain}, socket) do
+    {:noreply, push_patch(socket, to: path_for(socket, %{"grain" => grain}))}
   end
 
   def handle_event("reset_dwell", _params, socket) do
@@ -301,6 +311,21 @@ defmodule WebAnalyticsWeb.DashboardLive do
 
   defp last_dwell_bucket, do: length(Analytics.dwell_bucket_labels()) - 1
 
+  # Hourly for the short ranges and daily for the long ones, unless the reader
+  # has chosen: a month in hourly bars is seven hundred slivers, and a day in
+  # daily bars is one.
+  defp grain(value, _range) when value in ["hour", "day"], do: String.to_existing_atom(value)
+  defp grain(_value, range) when range in ["1h", "24h"], do: :hour
+  defp grain(_value, _range), do: :day
+
+  # Dropped from the URL at the range's own default, like every other control
+  # here: a shared link carrying each default is longer and says less.
+  defp grain_param(%{assigns: %{grain: grain, filters: %{range: range}}}) do
+    if grain == grain(nil, range), do: nil, else: Atom.to_string(grain)
+  end
+
+  defp grain_param(_socket), do: nil
+
   # Hex hashes, so anything else in the parameter is somebody editing the URL
   # by hand and is dropped rather than sent to the database.
   defp origins_param(nil), do: []
@@ -383,7 +408,9 @@ defmodule WebAnalyticsWeb.DashboardLive do
       "dmin" => dwell_param(socket, :dwell_min, 0),
       "dmax" => dwell_param(socket, :dwell_max, last_dwell_bucket()),
       "noip" => list_param(socket, :exclude_origins),
-      "nosess" => list_param(socket, :exclude_sessions)
+      "nosess" => list_param(socket, :exclude_sessions),
+      "metric" => socket.assigns[:metric],
+      "grain" => grain_param(socket)
     }
 
     query =
@@ -516,6 +543,23 @@ defmodule WebAnalyticsWeb.DashboardLive do
     %{
       sessions: Analytics.recent_sessions(filters, 60),
       anomalies: Analytics.anomaly_breakdown(filters)
+    }
+  end
+
+  defp tab_data("metrics", filters, assigns) do
+    metrics = Analytics.metrics(filters)
+
+    # The chosen key if it still has numbers in this range, otherwise the one
+    # reported most. A stale ?metric= from a shared link should land on
+    # something rather than on an empty chart naming a key that is not there.
+    selected =
+      Enum.find(metrics, &(&1.key == assigns.metric)) || List.first(metrics)
+
+    %{
+      metrics: metrics,
+      selected_metric: selected,
+      metric_series:
+        selected && Analytics.metric_series(filters, selected.key, granularity: assigns.grain)
     }
   end
 

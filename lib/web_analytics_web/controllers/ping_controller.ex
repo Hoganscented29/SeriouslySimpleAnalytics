@@ -170,10 +170,29 @@ defmodule WebAnalyticsWeb.PingController do
   # Anything the caller invented, kept as attributes.
   defp extras(params) do
     params
-    |> Enum.reject(fn {key, _value} -> key in @reserved end)
+    |> Enum.reject(fn {key, value} -> key in @reserved or is_nil(value) end)
     |> Enum.take(20)
-    |> Map.new(fn {key, value} -> {to_string(key), to_string(value)} end)
+    |> Map.new(fn {key, value} -> {to_string(key), attribute_value(value)} end)
   end
+
+  # A query string only ever carries strings, but a JSON body carries whatever
+  # the caller put in it. to_string/1 has no clause for a map or a list, so
+  # "meta": {"repo": "x"} raised — and the whole ping was lost with a 500, not
+  # just the field that could not be stored. An agent posting structured
+  # context would have been silently dropping every event it sent.
+  #
+  # Nested values are kept as their JSON rather than thrown away, capped so one
+  # large blob cannot bloat a row. They never become metrics — a key is a
+  # metric only when its values are plain numbers — which is correct: there is
+  # nothing to sum in an object.
+  defp attribute_value(value) when is_binary(value), do: value
+  defp attribute_value(value) when is_number(value) or is_boolean(value), do: to_string(value)
+
+  defp attribute_value(value) when is_map(value) or is_list(value) do
+    value |> Jason.encode!() |> String.slice(0, 1_000)
+  end
+
+  defp attribute_value(value), do: inspect(value)
 
   @doc false
   # A session id from the caller is authoritative. Without one, pings are grouped

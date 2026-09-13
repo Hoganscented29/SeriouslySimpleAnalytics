@@ -458,6 +458,58 @@ defmodule WebAnalyticsWeb.PingControllerTest do
     assert event_for("run-8").name == "posted"
   end
 
+  describe "a JSON body" do
+    defp post_json(conn, body) do
+      conn =
+        conn
+        |> put_req_header("content-type", "application/json")
+        |> post("/api/ping", Jason.encode!(body))
+
+      Collector.flush_sync()
+      conn
+    end
+
+    test "keeps numbers as attributes the metrics can sum", %{conn: conn, site: site} do
+      conn =
+        post_json(conn, %{
+          "uid" => site.key,
+          "event" => "pr_merged",
+          "sid" => "run-9",
+          "sats" => 1500,
+          "usd" => 2.5,
+          "prs" => 1
+        })
+
+      assert response(conn, 204)
+
+      assert event_for("run-9").data_attrs == %{"sats" => "1500", "usd" => "2.5", "prs" => "1"}
+    end
+
+    # A nested value used to raise in to_string/1 and lose the entire ping.
+    test "stores nested values as JSON instead of failing the ping", %{conn: conn, site: site} do
+      conn =
+        post_json(conn, %{
+          "uid" => site.key,
+          "event" => "pr_merged",
+          "sid" => "run-10",
+          "sats" => 1500,
+          "meta" => %{"repo" => "x"},
+          "tags" => ["a", "b"],
+          "draft" => false,
+          "note" => nil
+        })
+
+      assert response(conn, 204)
+
+      assert event_for("run-10").data_attrs == %{
+               "sats" => "1500",
+               "meta" => ~s({"repo":"x"}),
+               "tags" => ~s(["a","b"]),
+               "draft" => "false"
+             }
+    end
+  end
+
   test "is reachable cross-origin", %{conn: conn, site: site} do
     conn =
       conn

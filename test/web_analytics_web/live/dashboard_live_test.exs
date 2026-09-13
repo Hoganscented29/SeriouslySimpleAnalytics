@@ -56,6 +56,50 @@ defmodule WebAnalyticsWeb.DashboardLiveTest do
     }
   end
 
+  describe "metrics tab" do
+    defp report_numbers(site, name, data) do
+      submit(site, [
+        init_event(),
+        %{"n" => "event", "t" => 1_000_000, "name" => name, "pv" => 0, "data" => data}
+      ])
+    end
+
+    test "says how to report a number when there are none", %{conn: conn} do
+      {:ok, _live, html} = live(conn, ~p"/dashboard?site=dash&range=30d&tab=metrics")
+
+      assert html =~ "No numeric values in this range"
+      assert html =~ "sats=1500"
+    end
+
+    test "totals each numeric key and charts the one picked", %{conn: conn, site: site} do
+      report_numbers(site, "pr_merged", %{"sats" => "1500", "prs" => "1", "repo" => "a"})
+      report_numbers(site, "pr_merged", %{"sats" => "2500", "prs" => "1", "repo" => "b"})
+
+      {:ok, live, html} = live(conn, ~p"/dashboard?site=dash&range=30d&tab=metrics")
+
+      # The label key never becomes a card; the quantities do, with their totals.
+      refute html =~ ~s(phx-value-metric="repo")
+      assert html =~ ~s(phx-value-metric="sats")
+      assert html =~ "4,000"
+      # Both were reported twice; the tie goes to the key, not to chance.
+      assert html =~ "prs per day"
+
+      html = live |> element(~s(button[phx-value-metric="sats"])) |> render_click()
+      assert html =~ "sats per day"
+      assert html =~ "peak 4,000 per day"
+      # In the URL, so a reload or a shared link charts the same thing.
+      assert live
+             |> assert_patch()
+             |> URI.parse()
+             |> Map.fetch!(:query)
+             |> URI.decode_query()
+             |> Map.fetch!("metric") == "sats"
+
+      html = live |> element(~s(button[phx-value-grain="hour"])) |> render_click()
+      assert html =~ "sats per hour"
+    end
+  end
+
   test "renders the overview without crawler traffic", %{conn: conn} do
     {:ok, _live, html} = live(conn, ~p"/dashboard?site=dash&range=30d")
 

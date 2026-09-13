@@ -7,6 +7,7 @@ defmodule WebAnalytics.AnalyticsTest do
   alias WebAnalytics.Analytics.AnomalyWorker
   alias WebAnalytics.Ingest
   alias WebAnalytics.Repo
+  alias WebAnalytics.Tracking.Event
   alias WebAnalytics.Tracking.Session
 
   setup do
@@ -101,6 +102,101 @@ defmodule WebAnalytics.AnalyticsTest do
       # well outside the thirty seconds.
       assert live.sessions > live.live_sessions
       assert Enum.any?(live.sessions_list, &(&1.id == older.id))
+    end
+  end
+
+  describe "numeric metrics" do
+    defp report(site, name, data, at \\ DateTime.utc_now()) do
+      token = "metric-#{System.unique_integer([:positive])}"
+      t = DateTime.to_unix(at, :millisecond)
+
+      {:ok, _} =
+        Ingest.submit_sync(
+          site,
+          payload(site, [%{"n" => "event", "t" => t, "name" => name, "pv" => 0, "data" => data}],
+            token: token
+          ),
+          received_at: at
+        )
+
+      Repo.update_all(from(e in Event, join: s in assoc(e, :session), where: s.token == ^token),
+        set: [occurred_at: at]
+      )
+    end
+
+    test "sums a numeric attribute, and keeps its fraction", %{site: site} do
+      report(site, "invoice", %{"usd" => "19.99"})
+      report(site, "invoice", %{"usd" => "5.01"})
+
+      [usd] = site |> filters() |> Analytics.metrics() |> Enum.filter(&(&1.key == "usd"))
+
+      # Rounded to an integer, 19.99 + 5.01 would be 20 + 5 — right by luck —
+      # but the average would be 12 or 13 and the minimum 5.
+      assert usd.sum == 25
+      assert usd.avg == 12.5
+      assert usd.min == 5.01
+      assert usd.max == 19.99
+      assert usd.count == 2
+    end
+
+    test "leaves out a key that is a label rather than a quantity", %{site: site} do
+      report(site, "pr_merged", %{"sats" => "1500", "outcome" => "success"})
+      report(site, "pr_merged", %{"sats" => "2500", "outcome" => "failed"})
+
+      keys = site |> filters() |> Analytics.metrics() |> Enum.map(& &1.key)
+
+      assert "sats" in keys
+      refute "outcome" in keys
+    end
+
+    test "a stray non-number does not abort the query or the sum", %{site: site} do
+      # The cast sits behind a CASE, which Postgres will not evaluate for a row
+      # it does not apply to. Behind a WHERE, one "abc" could stop the scan.
+      for v <- ["100", "200", "300", "400", "500", "600", "700", "800", "900", "1000", "abc"] do
+        report(site, "tip", %{"amount" => v})
+      end
+
+      [amount] = site |> filters() |> Analytics.metrics() |> Enum.filter(&(&1.key == "amount"))
+
+      assert amount.sum == 5500
+      assert amount.count == 10
+    end
+
+    test "every day in the window is present, including the empty ones", %{site: site} do
+      now = DateTime.utc_now()
+
+      report(site, "pr_merged", %{"sats" => "1000"}, DateTime.add(now, -3 * 86_400, :second))
+      report(site, "pr_merged", %{"sats" => "2000"}, DateTime.add(now, -1 * 86_400, :second))
+
+      series =
+        site
+        |> filters(%{range: "7d"})
+        |> Analytics.metric_series("sats", granularity: :day)
+
+      # A day that earned nothing is the point of a chart of earnings, and one
+      # that closed over the gap would draw a quiet week as a busy one.
+      assert length(series) == 4
+      assert Enum.map(series, & &1.sum) == [1000, 0, 2000, 0]
+      assert Enum.at(series, 1).avg == nil
+    end
+
+    test "can be narrowed to one event", %{site: site} do
+      report(site, "pr_merged", %{"sats" => "1500"})
+      report(site, "payout", %{"sats" => "4000"})
+
+      all = site |> filters() |> Analytics.metric_series("sats", granularity: :day)
+
+      merged =
+        site
+        |> filters()
+        |> Analytics.metric_series("sats", granularity: :day, event: "pr_merged")
+
+      assert (all |> List.last()).sum == 5500
+      assert (merged |> List.last()).sum == 1500
+    end
+
+    test "nothing numeric means no series rather than a row of zeros", %{site: site} do
+      assert Analytics.metric_series(filters(site), "sats", granularity: :day) == []
     end
   end
 

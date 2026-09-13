@@ -898,6 +898,86 @@
       </div>
     </div>
 
+    <!-- ============================== METRICS ============================ -->
+    <div :if={@tab == "metrics"} class="space-y-6">
+      <% metrics = @data[:metrics] || [] %>
+      <% selected = @data[:selected_metric] %>
+
+      <%!-- Nothing numeric yet: say how to get some rather than showing an
+      empty chart. The example is the kind of thing this tab is for. --%>
+      <div
+        :if={metrics == []}
+        class="rounded-box bg-base-100 border border-base-300 px-5 py-6 space-y-3"
+      >
+        <h2 class="text-sm font-medium">No numeric values in this range</h2>
+        <p class="text-sm text-base-content/70">
+          Add any number to an event and it is summed, averaged and graphed here — no schema,
+          no setup. Keys whose values are nearly always numbers show up on their own.
+        </p>
+        <pre class="bg-base-200 rounded p-3 text-xs overflow-x-auto"><code>GET /api/ping?uid={@site.key}&amp;type=ai&amp;project=marketplace&amp;event=pr_merged&amp;sats=1500&amp;prs=1&amp;c=…&amp;cc=…&amp;s_p=…&amp;n=…</code></pre>
+      </div>
+
+      <div :if={metrics != []} class="space-y-6">
+        <%!-- One card per numeric key. Clicking one charts it; the card carries
+        the total because that is the number most people came for, with the
+        count and the range underneath for when the total alone misleads. --%>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <button
+            :for={metric <- metrics}
+            phx-click="select_metric"
+            phx-value-metric={metric.key}
+            class={[
+              "rounded-box border p-4 text-left transition-colors",
+              selected && selected.key == metric.key &&
+                "border-primary bg-primary/5 hover:bg-primary/10",
+              !(selected && selected.key == metric.key) &&
+                "border-base-300 bg-base-100 hover:border-primary/50 hover:bg-base-200/70"
+            ]}
+          >
+            <div class="font-mono text-xs text-base-content/60">{metric.key}</div>
+            <div class="text-2xl font-semibold tabular-nums mt-1">{metric_value(metric.sum)}</div>
+            <div class="text-[11px] text-base-content/50 mt-0.5 tabular-nums">
+              {number(metric.count)} reported · avg {metric_value(metric.avg)}
+            </div>
+            <div class="text-[10px] text-base-content/40 tabular-nums">
+              {metric_value(metric.min)} – {metric_value(metric.max)}
+            </div>
+          </button>
+        </div>
+
+        <div :if={selected} class="space-y-2">
+          <div class="flex items-center gap-3 flex-wrap">
+            <span class="text-sm text-base-content/60">Per</span>
+            <div class="join">
+              <button
+                :for={grain <- Analytics.granularities()}
+                phx-click="grain"
+                phx-value-grain={grain}
+                class={[
+                  "btn btn-xs join-item capitalize",
+                  @grain == grain && "btn-active btn-primary"
+                ]}
+              >
+                {grain}
+              </button>
+            </div>
+          </div>
+
+          <.metric_chart
+            series={@data[:metric_series] || []}
+            grain={@grain}
+            label={"#{selected.key} per #{@grain}"}
+          />
+
+          <p class="text-xs text-base-content/50">
+            Sums every event in the range that carried <code class="font-mono">{selected.key}</code>,
+            whatever the event was called. Hover a bar for its count and average — a spike can be
+            one large value or many small ones.
+          </p>
+        </div>
+      </div>
+    </div>
+
     <!-- ================================ FLOW ============================= -->
     <div :if={@tab == "flow"} class="space-y-6">
       <!-- pages or events: both are flows, and a tool with no pages has only one -->

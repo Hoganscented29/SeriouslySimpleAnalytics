@@ -971,6 +971,174 @@ defmodule WebAnalytics.Analytics do
     |> Enum.sort_by(& &1.count, :desc)
   end
 
+  # A value counts as a number if it is one, whole or decimal, optionally
+  # negative. Deliberately narrow: exponents and thousands separators are rare
+  # in telemetry and wide patterns start matching things like version strings.
+  @numeric ~S"^-?[0-9]+(\.[0-9]+)?$"
+
+  # A key is offered as a metric only when nearly all of its values are numbers.
+  # outcome=success never is, which is the obvious case; the less obvious one is
+  # a key that is mostly labels with the odd digit in it, which would graph as a
+  # sum of whatever happened to parse.
+  @metric_share 0.9
+
+  @doc """
+  Attribute keys whose values are numbers, with their totals.
+
+  Attributes have always been stored — any parameter the API does not reserve
+  lands on the event — but only ever reported as categories: sats=1500 came
+  back as "the value 1500 occurred three times", which says nothing about how
+  many sats there were. A key that carries a quantity wants a sum, an average
+  and a shape over time, and this is how the dashboard finds out which keys do.
+
+  The cast is behind a CASE rather than a WHERE or a FILTER. Postgres promises
+  not to evaluate a CASE branch that does not apply, so a key holding "abc" in
+  one row can never abort the whole query mid-scan.
+  """
+  def metrics(f) do
+    Repo.all(
+      from e in events_scope(f),
+        cross_join: kv in fragment("jsonb_each_text(?)", e.data_attrs),
+        group_by: fragment("?", field(kv, :key)),
+        select: %{
+          key: fragment("?", field(kv, :key)),
+          seen: count(e.id),
+          numeric:
+            fragment(
+              "count(*) FILTER (WHERE ? ~ ?)",
+              field(kv, :value),
+              ^@numeric
+            ),
+          sum:
+            fragment(
+              "sum(CASE WHEN ? ~ ? THEN (?)::numeric END)",
+              field(kv, :value),
+              ^@numeric,
+              field(kv, :value)
+            ),
+          avg:
+            fragment(
+              "avg(CASE WHEN ? ~ ? THEN (?)::numeric END)",
+              field(kv, :value),
+              ^@numeric,
+              field(kv, :value)
+            ),
+          min:
+            fragment(
+              "min(CASE WHEN ? ~ ? THEN (?)::numeric END)",
+              field(kv, :value),
+              ^@numeric,
+              field(kv, :value)
+            ),
+          max:
+            fragment(
+              "max(CASE WHEN ? ~ ? THEN (?)::numeric END)",
+              field(kv, :value),
+              ^@numeric,
+              field(kv, :value)
+            )
+        }
+    )
+    |> Enum.filter(&(&1.seen > 0 and &1.numeric / &1.seen >= @metric_share))
+    |> Enum.map(fn row ->
+      %{
+        key: row.key,
+        count: row.numeric,
+        sum: to_metric(row.sum),
+        avg: to_metric(row.avg),
+        min: to_metric(row.min),
+        max: to_metric(row.max)
+      }
+    end)
+    # Keys reported together tie on count — sats and prs on every merged PR —
+    # and the first card is the one charted, so a tie must not be decided by
+    # whatever order Postgres grouped them in.
+    |> Enum.sort_by(&{-&1.count, &1.key})
+  end
+
+  @granularities %{hour: 3_600, day: 86_400}
+
+  @doc """
+  One numeric attribute over time: its total, average and count per bucket.
+
+  Buckets are an hour or a day, chosen by the caller, and every bucket in the
+  window is present — including the empty ones — because a day that earned
+  nothing is the point of a chart of earnings, and one that closed over it
+  would draw a quiet week as a busy one.
+
+  The window starts at the first bucket with data rather than at the start of
+  the range, so "all time" in hourly buckets is the hours that have happened
+  rather than every hour since 1970. It is capped all the same.
+  """
+  def metric_series(f, key, opts \\ []) do
+    granularity = Keyword.get(opts, :granularity, :day)
+    event = Keyword.get(opts, :event)
+    unit = Atom.to_string(granularity)
+    width = Map.fetch!(@granularities, granularity)
+    cap = Keyword.get(opts, :max_buckets, 180)
+
+    query =
+      from(e in events_scope(f),
+        where: fragment("(?->>?) ~ ?", e.data_attrs, ^key, ^@numeric),
+        group_by: selected_as(:bucket),
+        order_by: selected_as(:bucket),
+        select: %{
+          bucket: selected_as(fragment("date_trunc(?, ?)", ^unit, e.occurred_at), :bucket),
+          sum: fragment("sum((?->>?)::numeric)", e.data_attrs, ^key),
+          avg: fragment("avg((?->>?)::numeric)", e.data_attrs, ^key),
+          count: count(e.id)
+        }
+      )
+
+    query = if event, do: where(query, [e], e.name == ^event), else: query
+
+    rows =
+      query
+      |> Repo.all()
+      |> Map.new(fn row -> {truncate_to(row.bucket, width), row} end)
+
+    fill_series(rows, f, width, cap)
+  end
+
+  defp fill_series(rows, _f, _width, _cap) when map_size(rows) == 0, do: []
+
+  defp fill_series(rows, f, width, cap) do
+    first = rows |> Map.keys() |> Enum.min()
+    last = f.to |> DateTime.to_unix() |> div(width) |> Kernel.*(width)
+    count = min(div(last - first, width) + 1, cap)
+    start = last - (count - 1) * width
+
+    for i <- 0..(count - 1) do
+      at = start + i * width
+
+      case Map.get(rows, at) do
+        nil ->
+          %{at: DateTime.from_unix!(at), sum: 0, avg: nil, count: 0}
+
+        row ->
+          %{
+            at: DateTime.from_unix!(at),
+            sum: to_metric(row.sum),
+            avg: to_metric(row.avg),
+            count: row.count
+          }
+      end
+    end
+  end
+
+  # date_trunc comes back without a zone, so Postgres hands over a
+  # NaiveDateTime while the window is built from a DateTime. Both are UTC.
+  defp truncate_to(%NaiveDateTime{} = at, width) do
+    at |> DateTime.from_naive!("Etc/UTC") |> truncate_to(width)
+  end
+
+  defp truncate_to(%DateTime{} = at, width) do
+    at |> DateTime.to_unix() |> div(width) |> Kernel.*(width)
+  end
+
+  @doc "The granularities a metric series can be drawn at."
+  def granularities, do: [:hour, :day]
+
   @doc """
   Event-to-event transitions inside a session.
 
@@ -1902,4 +2070,19 @@ defmodule WebAnalytics.Analytics do
   defp to_number(%Decimal{} = value), do: value |> Decimal.to_float() |> round()
   defp to_number(value) when is_float(value), do: round(value)
   defp to_number(value), do: value
+
+  # to_number/1 rounds to an integer, which is right for milliseconds and wrong
+  # for anything a caller measures: amount=19.99 summed as a whole number is a
+  # different amount. A metric keeps its fraction, to four places, and a whole
+  # value reads as an integer so a count of sats is not "24000.0".
+  defp to_metric(nil), do: nil
+
+  defp to_metric(%Decimal{} = value),
+    do: value |> Decimal.round(4) |> Decimal.to_float() |> tidy()
+
+  defp to_metric(value) when is_float(value), do: tidy(value)
+  defp to_metric(value), do: value
+
+  defp tidy(value) when value == trunc(value), do: trunc(value)
+  defp tidy(value), do: Float.round(value, 4)
 end

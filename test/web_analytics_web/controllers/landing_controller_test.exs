@@ -357,6 +357,25 @@ defmodule WebAnalyticsWeb.LandingControllerTest do
       refute body =~ "you can pass this integration downstream"
     end
 
+    test "says numeric attributes are summed and graphed", %{conn: conn} do
+      body = conn |> get(~p"/llms.txt") |> response(200)
+
+      # An agent reporting earnings has to know the number will be added up,
+      # or it sends a running balance and the chart counts it over and over.
+      assert body =~ "Numbers are summed and graphed"
+      assert body =~ "not a running total"
+      assert body =~ "sats=1500"
+    end
+
+    test "the travelling block carries the metrics rule too", %{conn: conn} do
+      body = conn |> get(~p"/llms.txt") |> response(200)
+      [_, block] = String.split(body, "--- copy from here ---", parts: 2)
+      [block, _] = String.split(block, "--- copy to here ---", parts: 2)
+
+      assert block =~ "summed and charted"
+      assert block =~ "never a running"
+    end
+
     test "shows how to instrument a command without editing it", %{conn: conn} do
       body = conn |> get(~p"/llms.txt") |> response(200)
 

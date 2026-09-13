@@ -151,6 +151,38 @@ schema to extend and nothing to configure:
 
 Up to 20 extra parameters per ping.
 
+### Numbers are summed and graphed
+
+**Any attribute whose values are numbers becomes a metric.** Nothing to declare:
+send the number, and the dashboard's Metrics tab shows its total, average,
+count and range, and charts the total per hour or per day.
+
+```
+&event=pr_merged&sats=1500&prs=1
+&event=project_created&projects=1
+&event=invoice&usd=19.99
+```
+
+That is how to report a quantity — money earned, items produced, tokens used —
+rather than just the fact that something happened. A few rules that decide
+whether it charts the way you mean:
+
+- **Send the amount for this one event, not a running total.** The dashboard
+  sums what you send. `sats=1500` on each of three PRs charts 4,500; sending the
+  balance each time would chart the balance three times over.
+- **Use one key per quantity, the same key everywhere.** `sats` on both
+  `pr_merged` and `payout` is summed together, which is what you want for
+  "sats per day" — and each can still be charted on its own by event.
+- **Plain numbers only.** `1500`, `19.99`, `-40`. No units, currency symbols or
+  thousands separators: `1,500` and `$19.99` are labels, and a label is never
+  summed.
+- **Keep labels and numbers in different keys.** A key is treated as a metric
+  when nearly all of its values are numbers, so `outcome=success` stays a
+  category and never turns into a sum.
+- **Count something by sending 1.** `prs=1` per merged PR charts PRs per day.
+  The event count alone gives the same number; a count key is for when one
+  event can represent several of something.
+
 ## Location is yours to send, not ours to guess
 
 **Send `c`, `cc`, `s_p` and `n` on every ping.** They describe where your *user*
@@ -505,6 +537,11 @@ service. No SDK, no API key exchange, no JSON body. Follow these steps in order.
 
    Report `run_completed` only on the success path and your completion rate is
    100% and means nothing. Any extra parameter you add is kept as an attribute.
+
+   A numeric attribute is summed and charted per hour or day, so report
+   quantities as plain numbers on the event that produced them: `sats=1500`,
+   `prs=1`, `usd=19.99`. Send the amount for that one event, never a running
+   total — the dashboard does the adding.
 
    If what you want to measure is a command rather than a function — a CLI, a
    build step, a deploy script, a cron job — there may be no dispatch point to
