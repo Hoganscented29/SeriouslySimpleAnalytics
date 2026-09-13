@@ -597,8 +597,37 @@ defmodule WebAnalytics.Ingest.Normalizer do
 
   defp host(url) do
     case URI.parse(url) do
-      %URI{host: host} when is_binary(host) and host != "" -> String.downcase(host)
-      _ -> nil
+      %URI{host: host} when is_binary(host) and host != "" ->
+        String.downcase(host)
+
+      # A mailto or tel URL has no host — the whole destination sits in the
+      # path. Left at nil, a site whose calls to action are all mailto links
+      # gets an Outbound destinations table of blank rows: the clicks are all
+      # there, and the column naming where they went says nothing.
+      #
+      # The mail domain is the useful answer, since it is what groups a run of
+      # "email us" links together the way a hostname groups ordinary outbound
+      # ones. tel has nothing to group by, so it says so rather than inventing
+      # a host out of a phone number.
+      %URI{scheme: "mailto", path: path} when is_binary(path) ->
+        path
+        |> String.split("?", parts: 2)
+        |> hd()
+        |> String.split(",")
+        |> hd()
+        |> String.split("@")
+        |> List.last()
+        |> String.downcase()
+        |> presence()
+
+      %URI{scheme: "tel"} ->
+        "tel"
+
+      _ ->
+        nil
     end
   end
+
+  defp presence(""), do: nil
+  defp presence(value), do: value
 end

@@ -14,6 +14,38 @@ defmodule WebAnalytics.Ingest.NormalizerTest do
     Map.merge(%{"k" => "test", "s" => "tok", "t" => 1_000, "e" => events}, extra)
   end
 
+  describe "where an outbound click went" do
+    test "a mailto link is grouped by its mail domain" do
+      # A site whose calls to action are all mailto links got an Outbound
+      # destinations table of blank rows: every click was recorded, and the one
+      # column saying where they went was empty, because a mailto URL has no
+      # host — the destination is all in the path.
+      assert click_href_host("mailto:sales@example.com") == "example.com"
+      assert click_href_host("mailto:Sales@Example.COM?subject=Hi") == "example.com"
+      assert click_href_host("mailto:a@example.com,b@other.com") == "example.com"
+    end
+
+    test "a tel link says so rather than inventing a host from a number" do
+      assert click_href_host("tel:+15551234567") == "tel"
+    end
+
+    test "an ordinary link still uses its hostname" do
+      assert click_href_host("https://News.YCombinator.com/item?id=1") == "news.ycombinator.com"
+    end
+
+    test "a malformed mailto gives nothing rather than something wrong" do
+      assert click_href_host("mailto:") == nil
+      assert click_href_host("mailto:notanaddress") == "notanaddress"
+    end
+
+    defp click_href_host(href) do
+      {:ok, batch} =
+        normalize(payload([%{"n" => "click", "t" => 1_000, "k" => "outbound", "href" => href}]))
+
+      batch.events |> Enum.find(&(&1.kind == :click)) |> Map.get(:href_host)
+    end
+  end
+
   test "rejects a payload with no session token" do
     assert {:error, :missing_session_token} = normalize(payload([], %{"s" => nil}))
     assert {:error, :missing_session_token} = normalize(payload([], %{"s" => "  "}))
