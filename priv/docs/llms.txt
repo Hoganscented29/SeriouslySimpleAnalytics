@@ -172,7 +172,8 @@ whether it charts the way you mean:
   balance each time would chart the balance three times over.
 - **Use one key per quantity, the same key everywhere.** `sats` on both
   `pr_merged` and `payout` is summed together, which is what you want for
-  "sats per day" — and each can still be charted on its own by event.
+  "sats per day". If two amounts must never be added up, give them different
+  keys: `sats_earned` and `sats_spent`.
 - **Plain numbers only.** `1500`, `19.99`, `-40`. No units, currency symbols or
   thousands separators: `1,500` and `$19.99` are labels, and a label is never
   summed.
