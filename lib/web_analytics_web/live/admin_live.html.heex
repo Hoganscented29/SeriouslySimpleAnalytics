@@ -117,6 +117,7 @@
           <button phx-click="clear_row_filters" class="wa-filter-action btn btn-xs">Remove filter</button>
         </div>
 
+        <% live_users? = Enum.any?(@live.sessions_list, & &1.user_id) %>
         <div class="overflow-x-auto">
           <table class="table table-xs">
             <thead>
@@ -124,6 +125,7 @@
                 <th title="Untick to leave this session out of the report"></th>
                 <th>Last seen</th>
                 <th>Account</th>
+                <th :if={live_users?}>User</th>
                 <th>Domain</th>
                 <th>Project</th>
                 <th>On</th>
@@ -161,6 +163,19 @@
                   >
                     {session.site}
                   </.link>
+                </td>
+                <%!-- Opens that account's dashboard already narrowed to the
+                user, on their timeline — the admin view has no per-user
+                filter of its own, and one account's user means nothing
+                across every account at once. --%>
+                <td :if={live_users?}>
+                  <.user_chip
+                    user={session.user_id}
+                    navigate={
+                      session.user_id &&
+                        ~p"/admin/accounts/#{session.key}?#{[tab: "users", user: session.user_id]}"
+                    }
+                  />
                 </td>
                 <td class="font-mono text-[11px] max-w-[10rem] truncate">
                   {session.host || "—"}
@@ -758,6 +773,7 @@
           Remove filter
         </button>
       </div>
+      <% recent_users? = Enum.any?(@detail.recent_sessions, & &1.user_id) %>
       <div class="overflow-x-auto max-h-96 overflow-y-auto">
         <table class="table table-xs table-pin-rows">
           <thead>
@@ -765,6 +781,7 @@
               <th title="Untick to leave this session out of the report"></th>
               <th>Last seen</th>
               <th>Site</th>
+              <th :if={recent_users?}>User</th>
               <th>Channel</th>
               <th>Entry</th>
               <th>Referrer</th>
@@ -787,6 +804,15 @@
               </td>
               <td class="whitespace-nowrap text-base-content/60">{ago(row.last_seen_at)}</td>
               <td class="max-w-[10rem] truncate">{row.site}</td>
+              <td :if={recent_users?}>
+                <.user_chip
+                  user={row.user_id}
+                  navigate={
+                    row.user_id &&
+                      ~p"/admin/accounts/#{row.key}?#{[tab: "users", user: row.user_id]}"
+                  }
+                />
+              </td>
               <td>
                 <span class="text-[11px]">{row.project || channel_label(row.channel)}</span>
                 <span :if={row.crawler_name} class="badge badge-xs badge-outline ml-1">

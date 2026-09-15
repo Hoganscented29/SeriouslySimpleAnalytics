@@ -56,6 +56,94 @@ defmodule WebAnalyticsWeb.DashboardLiveTest do
     }
   end
 
+  describe "users" do
+    defp act_as(site, user, name, data \\ %{}, traits \\ %{}) do
+      submit_as(site, user, traits, [
+        init_event(),
+        %{"n" => "event", "t" => 1_000_000, "name" => name, "data" => data}
+      ])
+    end
+
+    defp submit_as(site, user, traits, events) do
+      {:ok, _} =
+        Ingest.submit_sync(site, payload(site, events),
+          received_at: DateTime.utc_now(),
+          channel: "ai",
+          project: "mailer",
+          user_id: user,
+          user_traits: traits
+        )
+    end
+
+    test "explains how to identify users when nobody has been", %{conn: conn} do
+      {:ok, _live, html} = live(conn, ~p"/dashboard?site=dash&range=30d&tab=users")
+
+      assert html =~ "No identified users in this range"
+      assert html =~ "user=acct_42"
+    end
+
+    test "lists users, and narrows everything to one when clicked", %{conn: conn, site: site} do
+      act_as(site, "acct_42", "message_sent", %{"recipients" => "3"}, %{"domain" => "acme.com"})
+      act_as(site, "acct_42", "folder_created")
+      act_as(site, "acct_77", "message_sent")
+
+      {:ok, live, html} = live(conn, ~p"/dashboard?site=dash&range=30d&tab=users")
+
+      assert html =~ "Identified users"
+      assert html =~ "acct_42"
+      assert html =~ "acct_77"
+      assert html =~ "acme.com"
+      refute html =~ "user-banner"
+
+      html =
+        live
+        |> element(~s(#users-table button[phx-value-user="acct_42"]))
+        |> render_click()
+
+      # The banner says who, on every tab, and the timeline shows what they did.
+      assert html =~ "user-banner"
+      assert html =~ "One user"
+      assert html =~ "folder_created"
+      assert html =~ "recipients="
+      refute html =~ "acct_77"
+
+      query = live |> assert_patch() |> URI.parse() |> Map.fetch!(:query) |> URI.decode_query()
+      assert query["user"] == "acct_42"
+
+      # Another tab keeps the user, and its numbers are theirs alone.
+      html = live |> element(~s(button[phx-value-tab="events"])) |> render_click()
+      assert html =~ "user-banner"
+      refute html =~ "acct_77"
+
+      html = live |> element("#user-banner button", "Show everyone") |> render_click()
+      refute html =~ "user-banner"
+    end
+
+    test "shows the user on session and live rows only once someone has one", %{
+      conn: conn,
+      site: site
+    } do
+      {:ok, _live, html} = live(conn, ~p"/dashboard?site=dash&range=30d&tab=sessions")
+      refute html =~ "<th>User</th>"
+
+      act_as(site, "acct_42", "message_sent")
+
+      {:ok, _live, html} = live(conn, ~p"/dashboard?site=dash&range=30d&tab=sessions")
+      assert html =~ "<th>User</th>"
+      assert html =~ ~s(phx-value-user="acct_42")
+
+      {:ok, _live, html} = live(conn, ~p"/dashboard?site=dash&tab=live")
+      assert html =~ ~s(phx-value-user="acct_42")
+    end
+
+    test "a user with nothing in the range says so rather than showing zeros", %{conn: conn} do
+      {:ok, _live, html} = live(conn, ~p"/dashboard?site=dash&range=30d&user=nobody")
+
+      assert html =~ "user-banner"
+      assert html =~ "Nothing from this user in the selected range"
+    end
+  end
+
   describe "metrics tab" do
     defp report_numbers(site, name, data) do
       submit(site, [

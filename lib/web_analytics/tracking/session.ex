@@ -14,6 +14,10 @@ defmodule WebAnalytics.Tracking.Session do
     field :channel, :string
     field :agent_name, :string
     field :contact_email, :string
+    # Who the session is about, in the caller's own terms — see the ping API's
+    # `user` parameter. Nil for every browser visit.
+    field :user_id, :string
+    field :user_traits, :map, default: %{}
 
     field :started_at, :utc_datetime_usec
     field :last_seen_at, :utc_datetime_usec

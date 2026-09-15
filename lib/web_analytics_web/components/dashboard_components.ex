@@ -28,6 +28,75 @@ defmodule WebAnalyticsWeb.DashboardComponents do
     """
   end
 
+  # -- users ---------------------------------------------------------------
+
+  attr :user, :string, default: nil
+  attr :selected, :boolean, default: false
+  attr :navigate, :string, default: nil, doc: "a link to follow instead of filtering in place"
+
+  @doc """
+  An identified user, as something to click.
+
+  Wherever a session or event shows who it was about, clicking the name narrows
+  the whole dashboard to that user — which is the reason to send a user id at
+  all. Clicking the one already selected clears it, like every other row
+  filter here. A session with no user renders a dash.
+  """
+  def user_chip(%{user: nil} = assigns) do
+    ~H"""
+    <span class="text-base-content/30">—</span>
+    """
+  end
+
+  def user_chip(%{navigate: to} = assigns) when is_binary(to) do
+    ~H"""
+    <.link
+      navigate={@navigate}
+      title={"Open this account's dashboard for #{@user}"}
+      class="inline-flex items-center gap-1 max-w-[14rem] rounded-full px-2 py-0.5 font-mono text-[11px] font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+    >
+      <.icon name="hero-user-micro" class="w-3 h-3 shrink-0" />
+      <span class="truncate">{@user}</span>
+    </.link>
+    """
+  end
+
+  def user_chip(assigns) do
+    ~H"""
+    <button
+      type="button"
+      phx-click="select_user"
+      phx-value-user={@user}
+      title={if @selected, do: "Show everyone again", else: "Show only #{@user}"}
+      class={[
+        "inline-flex items-center gap-1 max-w-[14rem] rounded-full px-2 py-0.5",
+        "font-mono text-[11px] font-medium transition-colors",
+        @selected && "bg-primary text-primary-content hover:bg-primary/80",
+        !@selected && "bg-primary/10 text-primary hover:bg-primary/20"
+      ]}
+    >
+      <.icon name="hero-user-micro" class="w-3 h-3 shrink-0" />
+      <span class="truncate">{@user}</span>
+    </button>
+    """
+  end
+
+  attr :traits, :map, default: %{}
+  attr :class, :string, default: nil
+
+  @doc "The identifiers sent alongside a user id, as `key value` pairs."
+  def user_traits(assigns) do
+    ~H"""
+    <span :if={@traits == %{}} class="text-base-content/30">—</span>
+    <span :if={@traits != %{}} class={["inline-flex flex-wrap gap-x-3 gap-y-0.5", @class]}>
+      <span :for={{key, value} <- Enum.sort(@traits)} class="whitespace-nowrap">
+        <span class="text-base-content/50">{key}</span>
+        <span class="font-mono">{value}</span>
+      </span>
+    </span>
+    """
+  end
+
   # -- ranked bar list -----------------------------------------------------
 
   attr :rows, :list, required: true

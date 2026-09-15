@@ -202,6 +202,120 @@ defmodule WebAnalyticsWeb.PingControllerTest do
     end
   end
 
+  describe "user" do
+    test "records who the session is about, and their other identifiers", %{
+      conn: conn,
+      site: site
+    } do
+      ping(conn, %{
+        "uid" => site.key,
+        "event" => "message_sent",
+        "sid" => "mail-1",
+        "user" => "acct_42",
+        "user_domain" => "acme.com",
+        "user_address" => "mbx_901",
+        "recipients" => "3"
+      })
+
+      session = session("mail-1")
+      assert session.user_id == "acct_42"
+      assert session.user_traits == %{"domain" => "acme.com", "address" => "mbx_901"}
+      # Counted as a visitor, so "visitors" means people for a tool that says
+      # who it acts for.
+      assert session.visitor_token == "acct_42"
+
+      # The id itself is the session's; the other identifiers stay on the event
+      # too, where every attribute breakdown can already use them.
+      assert event_for("mail-1").data_attrs == %{
+               "user_domain" => "acme.com",
+               "user_address" => "mbx_901",
+               "recipients" => "3"
+             }
+    end
+
+    test "accepts user_id, userid and the older visitor", %{conn: conn, site: site} do
+      for {key, sid} <- [{"user_id", "u-1"}, {"userid", "u-2"}, {"visitor", "u-3"}] do
+        ping(conn, %{"uid" => site.key, "event" => "x", "sid" => sid, key => "person-#{sid}"})
+        assert session(sid).user_id == "person-#{sid}"
+      end
+    end
+
+    test "fills in a user sent partway through, and merges later identifiers", %{
+      conn: conn,
+      site: site
+    } do
+      ping(conn, %{"uid" => site.key, "event" => "opened", "sid" => "late"})
+      assert session("late").user_id == nil
+
+      ping(conn, %{"uid" => site.key, "event" => "signed_in", "sid" => "late", "user" => "u9"})
+      ping(conn, %{"uid" => site.key, "event" => "x", "sid" => "late", "user_domain" => "a.io"})
+
+      ping(conn, %{
+        "uid" => site.key,
+        "event" => "y",
+        "sid" => "late",
+        "user" => "someone-else",
+        "user_plan" => "pro"
+      })
+
+      session = session("late")
+      # The first user a session names stays its user.
+      assert session.user_id == "u9"
+      assert session.user_traits == %{"domain" => "a.io", "plan" => "pro"}
+    end
+
+    # Pings that arrive between two flushes are merged before they are written,
+    # which is a second place the user could be lost.
+    test "keeps the user when buffered pings are merged", %{conn: conn, site: site} do
+      get(conn, "/api/ping?uid=#{site.key}&event=opened&sid=buffered&user_domain=a.io")
+      get(conn, "/api/ping?uid=#{site.key}&event=signed_in&sid=buffered&user=u7")
+      get(conn, "/api/ping?uid=#{site.key}&event=z&sid=buffered&user_address=m1")
+      Collector.flush_sync()
+
+      session = session("buffered")
+      assert session.user_id == "u7"
+      assert session.user_traits == %{"domain" => "a.io", "address" => "m1"}
+    end
+
+    # One backend reporting for many people sends every ping from one address.
+    # Grouped by address, they were one session doing everything at once.
+    test "splits automatic sessions by user", %{conn: conn, site: site} do
+      for user <- ["alice", "bob", "alice"] do
+        ping(conn, %{"uid" => site.key, "project" => "mailer", "event" => "sent", "user" => user})
+      end
+
+      users =
+        Repo.all(
+          from s in Session,
+            where: s.site_id == ^site.id,
+            group_by: s.user_id,
+            select: {s.user_id, count(s.id)}
+        )
+
+      assert Enum.sort(users) == [{"alice", 1}, {"bob", 1}]
+    end
+
+    test "takes a numeric user id from a JSON body", %{conn: conn, site: site} do
+      conn
+      |> put_req_header("content-type", "application/json")
+      |> post(
+        "/api/ping",
+        Jason.encode!(%{
+          "uid" => site.key,
+          "event" => "x",
+          "sid" => "json-user",
+          "user" => 42,
+          "user_seats" => 5
+        })
+      )
+
+      Collector.flush_sync()
+
+      assert session("json-user").user_id == "42"
+      assert session("json-user").user_traits == %{"seats" => "5"}
+    end
+  end
+
   describe "location" do
     test "records the city, county, state and nation the caller supplies", %{
       conn: conn,

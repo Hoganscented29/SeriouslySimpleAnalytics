@@ -157,6 +157,14 @@ defmodule WebAnalytics.Ingest.Collector do
                 visitor_token: batch.visitor_token || existing.visitor_token,
                 ip_hash: batch.ip_hash || existing.ip_hash,
                 ip_masked: batch.ip_masked || existing.ip_masked,
+                # The same precedence the session upsert applies, so merging
+                # two pings before the write cannot change who a session is.
+                user_id: Map.get(existing, :user_id) || Map.get(batch, :user_id),
+                user_traits:
+                  Map.merge(
+                    Map.get(existing, :user_traits) || %{},
+                    Map.get(batch, :user_traits) || %{}
+                  ),
                 received_at: batch.received_at
             }
 

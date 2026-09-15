@@ -69,6 +69,8 @@ defmodule WebAnalytics.Ingest.Normalizer do
            channel: string(Keyword.get(opts, :channel), @s) || "web",
            agent_name: string(Keyword.get(opts, :agent_name), @s),
            contact_email: string(Keyword.get(opts, :contact_email), @s),
+           user_id: string(Keyword.get(opts, :user_id), @s),
+           user_traits: user_traits(Keyword.get(opts, :user_traits)),
            received_at: received_at,
            location: resolve_location(Keyword.get(opts, :location), events),
            events: events
@@ -484,6 +486,27 @@ defmodule WebAnalytics.Ingest.Normalizer do
 
   defp string(value, max) when is_number(value), do: string(to_string(value), max)
   defp string(_, _), do: nil
+
+  @max_user_traits 10
+
+  # The identifiers that travel with a user id. Bounded like data attributes —
+  # a count and a length — because the whole map is rewritten onto the session
+  # row on every batch that carries one.
+  defp user_traits(traits) when is_map(traits) do
+    traits
+    |> Enum.flat_map(fn {key, value} ->
+      case {string(to_string(key), 64), string(value, @s)} do
+        {nil, _} -> []
+        {_, nil} -> []
+        pair -> [pair]
+      end
+    end)
+    |> Enum.sort()
+    |> Enum.take(@max_user_traits)
+    |> Map.new()
+  end
+
+  defp user_traits(_), do: %{}
 
   defp downcase(nil), do: nil
   defp downcase(value), do: String.downcase(value)

@@ -101,6 +101,28 @@ defmodule WebAnalyticsWeb.AdminLiveTest do
       assert html =~ "This deployment"
     end
 
+    test "shows who an identified session was about, linked to their timeline", %{
+      conn: conn,
+      site: site
+    } do
+      {:ok, _} =
+        Ingest.submit_sync(
+          site,
+          payload(site, [
+            init_event(),
+            %{"n" => "event", "t" => 1_000_000, "name" => "message_sent", "data" => %{}}
+          ]),
+          received_at: DateTime.utc_now(),
+          channel: "ai",
+          user_id: "acct_42"
+        )
+
+      {:ok, _live, html} = live(conn, ~p"/admin")
+
+      assert html =~ "acct_42"
+      assert html =~ ~s(href="/admin/accounts/#{site.key}?tab=users&amp;user=acct_42")
+    end
+
     test "separates crawler traffic from the rest", %{conn: conn} do
       {:ok, live, _html} = live(conn, ~p"/admin")
       counters = :sys.get_state(live.pid).socket.assigns.counters
@@ -314,7 +336,7 @@ defmodule WebAnalyticsWeb.AdminLiveTest do
     end
 
     test "every tab works, on someone else's account", %{conn: conn, theirs: theirs} do
-      for tab <- ~w(overview pages flow locations clicks forms sessions crawlers) do
+      for tab <- ~w(overview users pages flow locations clicks forms sessions crawlers) do
         {:ok, _live, html} = live(conn, ~p"/admin/accounts/#{theirs.key}?tab=#{tab}")
         assert html =~ "Admin view"
       end

@@ -73,6 +73,9 @@ defmodule WebAnalytics.Analytics do
       project: Map.get(opts, :project),
       # And one tag can be deployed on several hostnames. Same rule: nil is all.
       host: Map.get(opts, :host),
+      # One identified user, from the ping API's `user` parameter. Narrows every
+      # report to what that one person or account did.
+      user: Map.get(opts, :user),
       group_by: Map.get(opts, :group_by, :path),
       # Origins to leave out. Hashes, not addresses — see origins/2.
       exclude_origins: opts |> Map.get(:exclude_origins, []) |> List.wrap() |> Enum.uniq(),
@@ -203,6 +206,7 @@ defmodule WebAnalytics.Analytics do
     |> filter_sessions(f)
     |> filter_project(f)
     |> filter_host(f)
+    |> filter_user(f)
   end
 
   defp filter_project(query, %{project: project}) when is_binary(project),
@@ -224,6 +228,16 @@ defmodule WebAnalytics.Analytics do
     do: where(query, [session: s], s.host == ^host)
 
   defp filter_joined_host(query, _f), do: query
+
+  defp filter_user(query, %{user: user}) when is_binary(user),
+    do: where(query, [s], s.user_id == ^user)
+
+  defp filter_user(query, _f), do: query
+
+  defp filter_joined_user(query, %{user: user}) when is_binary(user),
+    do: where(query, [session: s], s.user_id == ^user)
+
+  defp filter_joined_user(query, _f), do: query
 
   defp filter_anomalies(query, %{exclude_anomalies: true}),
     do: where(query, [s], not s.anomalous)
@@ -312,6 +326,7 @@ defmodule WebAnalytics.Analytics do
     |> filter_joined_sessions(f)
     |> filter_joined_project(f)
     |> filter_joined_host(f)
+    |> filter_joined_user(f)
   end
 
   defp events_scope(f) do
@@ -328,6 +343,7 @@ defmodule WebAnalytics.Analytics do
     |> filter_joined_sessions(f)
     |> filter_joined_project(f)
     |> filter_joined_host(f)
+    |> filter_joined_user(f)
   end
 
   defp forms_scope(f) do
@@ -344,6 +360,7 @@ defmodule WebAnalytics.Analytics do
     |> filter_joined_sessions(f)
     |> filter_joined_project(f)
     |> filter_joined_host(f)
+    |> filter_joined_user(f)
   end
 
   # -- overview ------------------------------------------------------------
@@ -364,6 +381,7 @@ defmodule WebAnalytics.Analytics do
           select: %{
             sessions: count(s.id),
             visitors: count(s.visitor_token, :distinct),
+            users: count(s.user_id, :distinct),
             pageviews: coalesce(sum(s.pageview_count), 0),
             clicks: coalesce(sum(s.click_count), 0),
             outbound: coalesce(sum(s.outbound_count), 0),
@@ -1276,6 +1294,7 @@ defmodule WebAnalytics.Analytics do
           # The session, so a run of events can be read as one run rather than
           # as a list of unrelated things that happened.
           session_token: s.token,
+          user_id: s.user_id,
           project: s.project,
           channel: s.channel,
           crawler_name: s.crawler_name,
@@ -1411,6 +1430,7 @@ defmodule WebAnalytics.Analytics do
       |> filter_sessions(f)
       |> filter_project(f)
       |> filter_host(f)
+      |> filter_user(f)
 
     totals =
       Repo.one(
@@ -1561,6 +1581,7 @@ defmodule WebAnalytics.Analytics do
       )
       |> filter_project(f)
       |> filter_host(f)
+      |> filter_user(f)
 
     rows =
       Repo.all(
@@ -1759,6 +1780,105 @@ defmodule WebAnalytics.Analytics do
         select: %{name: coalesce(s.channel, "web"), count: count(s.id)}
     )
   end
+
+  # -- users ---------------------------------------------------------------
+
+  @user_sorts [:recent, :sessions, :events]
+
+  @doc "The orders `users/3` can list in."
+  def user_sorts, do: @user_sorts
+
+  @doc """
+  Identified users: everyone a session was attributed to with the ping API's
+  `user` parameter, with what each of them did in the range.
+
+  Sessions without a user are left out rather than lumped into an "anonymous"
+  row — a browser visit has no user by construction, and a row holding most of
+  the traffic would push every real one down the list.
+
+  `traits` are the other identifiers sent alongside (`user_domain=`,
+  `user_address=`), merged across the user's sessions with the newest value
+  winning, so a domain sent last week and an address sent today both show.
+  """
+  def users(f, limit \\ 50, sort \\ :recent) do
+    events =
+      from [e, session: s] in events_scope(f),
+        where: not is_nil(s.user_id) and not is_nil(e.name),
+        group_by: s.user_id,
+        select: %{user_id: s.user_id, events: count(e.id), last_event_at: max(e.occurred_at)}
+
+    rows =
+      Repo.all(
+        from s in sessions_scope(f),
+          left_join: ev in subquery(events),
+          on: ev.user_id == s.user_id,
+          where: not is_nil(s.user_id),
+          group_by: s.user_id,
+          order_by: ^user_order(sort),
+          limit: ^limit,
+          select: %{
+            user_id: s.user_id,
+            sessions: count(s.id),
+            pageviews: coalesce(sum(s.pageview_count), 0),
+            events: coalesce(max(ev.events), 0),
+            active_ms: coalesce(sum(s.active_ms), 0),
+            first_seen: min(s.started_at),
+            last_seen: max(s.last_seen_at),
+            projects: fragment("array_remove(array_agg(DISTINCT ?), NULL)", s.project),
+            channels: fragment("array_remove(array_agg(DISTINCT ?), NULL)", s.channel),
+            places:
+              fragment(
+                "array_remove(array_agg(DISTINCT COALESCE(?, ?)), NULL)",
+                s.city,
+                s.country
+              )
+          }
+      )
+
+    traits = user_traits(f, Enum.map(rows, & &1.user_id))
+
+    Enum.map(rows, &Map.put(&1, :traits, Map.get(traits, &1.user_id, %{})))
+  end
+
+  defp user_order(:sessions), do: [desc: dynamic([s], count(s.id)), asc: dynamic([s], s.user_id)]
+
+  defp user_order(:events),
+    do: [
+      desc: dynamic([s, ev], coalesce(max(ev.events), 0)),
+      asc: dynamic([s], s.user_id)
+    ]
+
+  defp user_order(_recent),
+    do: [desc: dynamic([s], max(s.last_seen_at)), asc: dynamic([s], s.user_id)]
+
+  # jsonb_object_agg keeps the last value it sees for a repeated key, so
+  # ordering the aggregate by time is what makes the newest value win.
+  defp user_traits(_f, []), do: %{}
+
+  defp user_traits(f, user_ids) do
+    Repo.all(
+      from s in sessions_scope(f),
+        cross_join: kv in fragment("jsonb_each_text(?)", s.user_traits),
+        where: s.user_id in ^user_ids,
+        group_by: s.user_id,
+        select:
+          {s.user_id,
+           fragment(
+             "jsonb_object_agg(?, ? ORDER BY ?)",
+             field(kv, :key),
+             field(kv, :value),
+             s.last_seen_at
+           )}
+    )
+    |> Map.new()
+  end
+
+  @doc "One user's row from `users/3`, for the profile shown while filtered to them."
+  def user_profile(%{user: user} = f) when is_binary(user) do
+    f |> users(1) |> List.first()
+  end
+
+  def user_profile(_f), do: nil
 
   # -- locations -----------------------------------------------------------
 

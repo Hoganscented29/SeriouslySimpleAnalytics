@@ -28,7 +28,7 @@ defmodule WebAnalyticsWeb.PingController do
 
   @reserved ~w(uid id site u type channel project app event name sid session path page
                title ref referrer visitor v format bot agent ai tz timezone
-               email contact
+               email contact user user_id userid
                c city cc county s_p state province region n nation country)
 
   # A 1x1 transparent GIF, for callers that can only embed an image.
@@ -52,6 +52,8 @@ defmodule WebAnalyticsWeb.PingController do
 
         Ingest.submit(site, payload(params, received_at, session_token(params, site, ip_hash)),
           received_at: received_at,
+          user_id: user_id(params),
+          user_traits: user_traits(params),
           ip_hash: ip_hash,
           ip_masked: Ingest.mask_ip(ip),
           location: location(params, conn, ip),
@@ -62,6 +64,52 @@ defmodule WebAnalyticsWeb.PingController do
         )
 
         respond(conn, params)
+    end
+  end
+
+  # -- user ----------------------------------------------------------------
+
+  @doc false
+  # The caller's own ID for who this ping is about: an account, a customer, a
+  # mailbox. Accepted as a number as well as a string, because a JSON body
+  # carries ids as numbers far more often than not, and param/2 — built for
+  # query strings — would drop `"user": 42` without a word.
+  #
+  # `visitor` is the older name for the same idea and still counts, so a tool
+  # already sending it shows up by user without changing anything.
+  defp user_id(params) do
+    Enum.find_value(~w(user user_id userid visitor), fn key ->
+      case Map.get(params, key) do
+        value when is_integer(value) -> Integer.to_string(value)
+        value when is_binary(value) -> blank_to_nil(value)
+        _ -> nil
+      end
+    end)
+  end
+
+  @doc false
+  # Every other identifier, by prefix: user_domain, user_address, user_plan.
+  # One convention rather than a fixed list, because what identifies a user is
+  # the caller's business — an email provider has an account, a domain and an
+  # address; a marketplace has a seller and a wallet.
+  #
+  # They stay on the event as ordinary attributes too. This copy is what lets
+  # the dashboard show them beside the user without reading every event.
+  defp user_traits(params) do
+    params
+    |> Enum.filter(fn {key, value} ->
+      is_binary(key) and String.starts_with?(key, "user_") and key not in @reserved and
+        (is_binary(value) or is_number(value) or is_boolean(value))
+    end)
+    |> Map.new(fn {key, value} ->
+      {String.replace_prefix(key, "user_", ""), to_string(value)}
+    end)
+  end
+
+  defp blank_to_nil(value) do
+    case String.trim(value) do
+      "" -> nil
+      trimmed -> trimmed
     end
   end
 
@@ -117,7 +165,10 @@ defmodule WebAnalyticsWeb.PingController do
     %{
       "k" => account_id(params),
       "s" => token,
-      "v" => param(params, ~w(visitor v)),
+      # A user id is the best visitor identity a ping can have: it is what makes
+      # "visitors" count people rather than sessions for a tool that says who
+      # it is acting for.
+      "v" => param(params, ~w(visitor v)) || user_id(params),
       "t" => now,
       "e" => [init_event(params, now) | [body_event(event_name, path, params, now)]]
     }
@@ -210,9 +261,12 @@ defmodule WebAnalyticsWeb.PingController do
     end
   end
 
+  # A user id comes first. A backend reporting for many users sends every ping
+  # from one address, and grouping by address would fold all of them into a
+  # single session — one "user" doing everything at once.
   defp derived_token(params, site, ip_hash) do
     project = param(params, ~w(project app)) || "-"
-    who = param(params, ~w(visitor v)) || ip_hash || "anon"
+    who = user_id(params) || param(params, ~w(visitor v)) || ip_hash || "anon"
     window = div(System.system_time(:second), @session_window_seconds)
 
     digest =

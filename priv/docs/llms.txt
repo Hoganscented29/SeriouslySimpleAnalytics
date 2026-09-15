@@ -131,12 +131,14 @@ curl "https://seriouslysimpleanalytics.com/api/ping?uid=acct_123&type=ai&project
 | `n` | yes | Your user's **nation**. A name or an ISO code — `United States`, `USA` and `US` all work. Also accepted as `nation`, `country`. |
 | `event` | recommended | What happened, e.g. `page_view`, `tool_called`, `run_completed`. Defaults to `ping`. |
 | `project` | recommended | Which of your things this is. One account can report for many projects and they stay separate in reports. Also accepted as `app`. |
+| `user` | recommended | Who this event is about, as your own ID for them — an account, a customer, a mailbox. The dashboard lists every user and can narrow every report to one. Not the same as `uid`, which is *your* account. Also accepted as `user_id`. See "Users". |
+| `user_*` | no | Any other identifier for that user, e.g. `user_domain`, `user_address`, `user_plan`. Shown beside the user in the dashboard. |
 | `type` | no | The channel. Use `ai` for an AI tool. Defaults to `ai` on this endpoint. Also accepted as `channel`. |
 | `name` | recommended | The name of the AI or tool reporting, e.g. `Claude Code`. Also accepted as `agent`, `ai`. |
 | `sid` | no | A session ID. Pings sharing one are grouped into a single session — a conversation, a run, a CLI invocation. Without it, pings from the same caller and project are grouped automatically over a rolling 30 minutes. |
 | `path` | no | A screen, route, or step. See the page_view note below. |
 | `title` | no | A human-readable name for the path. |
-| `visitor` | no | A stable ID for the same end user across sessions. Use something you already have; do not invent an identifier to track someone with. |
+| `visitor` | no | The older name for `user`, and still accepted as one. Send `user` instead. |
 | `ref` | no | Where this came from. |
 | `tz` | no | An IANA time zone, e.g. `Europe/Berlin`. Used only for a country-level location guess. |
 | `format` | no | `gif` returns a 1×1 transparent GIF for `<img>` embedding; `json` returns `{"ok":true}`. Default is an empty http 204. |
@@ -184,6 +186,42 @@ whether it charts the way you mean:
   The event count alone gives the same number; a count key is for when one
   event can represent several of something.
 
+## Users: who an event is about
+
+**If your tool acts for users or accounts, send `user` on every event.** It is
+your own ID for whoever the event is about, and it is what turns a pile of
+events into the behaviour of individual people:
+
+```
+&event=message_sent&user=acct_42&user_domain=acme.com&user_address=mbx_901
+```
+
+The dashboard's Users tab lists everyone identified — sessions, events, projects,
+first and last seen — and clicking one narrows every other report to them: their
+events as a timeline, their numbers on the Metrics tab, their flow. The user
+also shows on each row of the live and session lists.
+
+- **`user` is the main ID; anything else goes in a key starting with `user_`.**
+  There is no fixed list. An email provider might send the account as `user`
+  and the domain and mailbox as `user_domain` and `user_address`; a marketplace
+  the seller as `user` and `user_wallet`. The newest value of each is shown
+  beside the user, and each is also kept on the event like any other attribute.
+- **Use an ID you already have, and the same one every time.** A database id,
+  an account number. Do not generate one per run — that is a new user per run.
+- **Prefer an opaque ID to a name or an email address.** `acct_42` and
+  `mbx_901` answer every analytics question an address would, and an address is
+  personal data that then sits in URLs and logs. Send one only if your privacy
+  policy already covers sharing it with an analytics provider.
+- **`uid` is not `user`.** `uid` is your SeriouslySimpleAnalytics account and is
+  the same on every ping; `user` is whoever that ping is about and changes from
+  one to the next. Mixing them up sends every event to the wrong place.
+- **One session belongs to one user.** Without `sid`, sessions are grouped per
+  user automatically, so a backend reporting for thousands of people gets
+  thousands of sessions rather than one. With `sid`, do not reuse a session ID
+  across users: a session keeps the first user it was sent.
+
+`user` is accepted as a number in a JSON body as well as a string.
+
 ## Location is yours to send, not ours to guess
 
 **Send `c`, `cc`, `s_p` and `n` on every ping.** They describe where your *user*
@@ -223,9 +261,9 @@ like; they are grouped by name in the dashboard.
 
 ## Sessions and flow
 
-Pings are grouped into sessions automatically. Consecutive pings from the same
-caller and project within a rolling 30 minutes become one session, so page flow
-works without you tracking anything. That window tumbles rather than slides, so
+Pings are grouped into sessions automatically. Consecutive pings for the same
+`user` — or, without one, from the same caller — and project within a rolling 30
+minutes become one session, so page flow works without you tracking anything. That window tumbles rather than slides, so
 a long run can straddle a boundary and split in two.
 
 Pass `sid` when you want exact control — one conversation, one job, one CLI
@@ -543,6 +581,11 @@ service. No SDK, no API key exchange, no JSON body. Follow these steps in order.
    quantities as plain numbers on the event that produced them: `sats=1500`,
    `prs=1`, `usd=19.99`. Send the amount for that one event, never a running
    total — the dashboard does the adding.
+
+   If the project acts for users or accounts, add `user=` with your own ID for
+   whoever each event is about — the same ID every time — and any other
+   identifier as `user_domain=`, `user_address=` and so on. Prefer an opaque ID
+   to an email address. `user` is not `uid`: `uid` is the account above.
 
    If what you want to measure is a command rather than a function — a CLI, a
    build step, a deploy script, a cron job — there may be no dispatch point to

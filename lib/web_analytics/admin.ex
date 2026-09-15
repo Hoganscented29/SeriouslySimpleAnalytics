@@ -222,6 +222,7 @@ defmodule WebAnalytics.Admin do
             key: site.key,
             host: s.host,
             project: s.project,
+            user_id: s.user_id,
             channel: s.channel,
             crawler: s.crawler,
             crawler_name: s.crawler_name,
@@ -557,8 +558,10 @@ defmodule WebAnalytics.Admin do
         select: %{
           id: s.id,
           site: site.name,
+          key: site.key,
           channel: s.channel,
           project: s.project,
+          user_id: s.user_id,
           crawler_name: s.crawler_name,
           country: s.country,
           city: s.city,

@@ -16,7 +16,7 @@ defmodule WebAnalyticsWeb.DashboardLive do
   alias WebAnalytics.Ingest.Crawler
   alias WebAnalytics.Sites
 
-  @tabs ~w(live overview pages events metrics flow locations clicks forms sessions anomalies crawlers)
+  @tabs ~w(live overview users pages events metrics flow locations clicks forms sessions anomalies crawlers)
   @click_groups ~w(name id class text selector tag)
   @location_levels ~w(country region county city)
   @flow_modes ~w(pages events)
@@ -110,6 +110,7 @@ defmodule WebAnalyticsWeb.DashboardLive do
       |> assign(:flow_mode, flow_mode(params["flow"]))
       |> assign(:metric, blank_to_nil(params["metric"]))
       |> assign(:grain, grain(params["grain"], params["range"]))
+      |> assign(:user_sort, user_sort(params["usort"]))
       |> assign(:project, blank_to_nil(params["project"]))
       |> assign(:anomaly_labels, Anomaly.labels())
       |> assign(:crawler_labels, Crawler.labels())
@@ -250,6 +251,17 @@ defmodule WebAnalyticsWeb.DashboardLive do
     {:noreply, push_patch(socket, to: path_for(socket, %{"project" => next}))}
   end
 
+  # Toggles like the domain and project rows: the chip on a row that is already
+  # the selected user is how a reader gets back to everyone.
+  def handle_event("select_user", %{"user" => user}, socket) do
+    next = if socket.assigns.filters.user == user, do: nil, else: user
+    {:noreply, push_patch(socket, to: path_for(socket, %{"user" => next}))}
+  end
+
+  def handle_event("clear_user", _params, socket) do
+    {:noreply, push_patch(socket, to: path_for(socket, %{"user" => nil}))}
+  end
+
   def handle_event("clear_event", _params, socket) do
     {:noreply, push_patch(socket, to: path_for(socket, %{"event" => nil}))}
   end
@@ -272,6 +284,10 @@ defmodule WebAnalyticsWeb.DashboardLive do
 
   defp click_group(value) when value in @click_groups, do: String.to_existing_atom(value)
   defp click_group(_), do: :name
+
+  defp user_sort(value) do
+    Enum.find(Analytics.user_sorts(), :recent, &(Atom.to_string(&1) == value))
+  end
 
   defp flow_mode(value) when value in @flow_modes, do: value
   defp flow_mode(_), do: "pages"
@@ -297,6 +313,7 @@ defmodule WebAnalyticsWeb.DashboardLive do
       exclude_crawlers: params["crawlers"] != "include",
       project: blank_to_nil(params["project"]),
       host: blank_to_nil(params["domain"]),
+      user: blank_to_nil(params["user"]),
       dwell_min: params["dmin"] || 0,
       dwell_max: params["dmax"] || last_dwell_bucket(),
       exclude_origins: origins_param(params["noip"]),
@@ -410,7 +427,13 @@ defmodule WebAnalyticsWeb.DashboardLive do
       "noip" => list_param(socket, :exclude_origins),
       "nosess" => list_param(socket, :exclude_sessions),
       "metric" => socket.assigns[:metric],
-      "grain" => grain_param(socket)
+      "grain" => grain_param(socket),
+      "user" => socket.assigns.filters && socket.assigns.filters.user,
+      "usort" =>
+        if(socket.assigns[:user_sort] in [nil, :recent],
+          do: nil,
+          else: to_string(socket.assigns.user_sort)
+        )
     }
 
     query =
@@ -438,7 +461,10 @@ defmodule WebAnalyticsWeb.DashboardLive do
         overview: Analytics.overview(filters),
         projects: Analytics.projects(filters),
         domains: Analytics.domains(filters),
-        channels: Analytics.channels(filters)
+        channels: Analytics.channels(filters),
+        # For the banner every tab shows while narrowed to one user. Only then:
+        # unfiltered, there is no one to profile and no query to run.
+        user_profile: Analytics.user_profile(filters)
       }
       |> Map.merge(tab_data(socket.assigns.tab, filters, socket.assigns))
 
@@ -454,6 +480,21 @@ defmodule WebAnalyticsWeb.DashboardLive do
       devices: Analytics.session_breakdown(filters, :device_type, 4),
       anomalies: Analytics.anomaly_breakdown(filters)
     }
+  end
+
+  # Everyone identified, or — narrowed to one user — what that user did: their
+  # events as a timeline, what they did most, and the numbers they reported.
+  defp tab_data("users", %{user: user} = filters, _assigns) when is_binary(user) do
+    %{
+      recent_events: Analytics.recent_events(filters, 60),
+      events: Analytics.events(filters, 12),
+      metrics: Analytics.metrics(filters),
+      sessions: Analytics.recent_sessions(filters, 20)
+    }
+  end
+
+  defp tab_data("users", filters, assigns) do
+    %{users: Analytics.users(filters, 100, assigns.user_sort)}
   end
 
   defp tab_data("pages", filters, _assigns) do

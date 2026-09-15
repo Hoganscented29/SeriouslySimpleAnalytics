@@ -47,6 +47,8 @@ defmodule WebAnalytics.Ingest.Processor do
       channel: Map.get(batch, :channel),
       agent_name: Map.get(batch, :agent_name),
       contact_email: Map.get(batch, :contact_email),
+      user_id: Map.get(batch, :user_id),
+      user_traits: Map.get(batch, :user_traits) || %{},
       location: Map.get(batch, :location),
       received_at: batch.received_at,
       init: nil,
@@ -313,6 +315,8 @@ defmodule WebAnalytics.Ingest.Processor do
       |> put_unless_nil(:channel, plan.channel)
       |> put_unless_nil(:agent_name, plan.agent_name)
       |> put_unless_nil(:contact_email, plan.contact_email)
+      |> put_unless_nil(:user_id, plan.user_id)
+      |> Map.put(:user_traits, plan.user_traits)
       |> Map.merge(location_attrs(plan.location))
       # The host comes off a pageview's URL, the only place the client tells us
       # which domain the tag is deployed on. Normally that is the entry
@@ -407,6 +411,13 @@ defmodule WebAnalytics.Ingest.Processor do
           channel: fragment("COALESCE(?, EXCLUDED.channel)", s.channel),
           agent_name: fragment("COALESCE(?, EXCLUDED.agent_name)", s.agent_name),
           contact_email: fragment("COALESCE(?, EXCLUDED.contact_email)", s.contact_email),
+          # First user wins, like every identity field: a session is one
+          # person's, and a run that identifies partway through fills the gap
+          # rather than being reassigned by whichever ping came last.
+          user_id: fragment("COALESCE(?, EXCLUDED.user_id)", s.user_id),
+          # Traits merge instead, newest value per key — an address can be
+          # added on a later ping without dropping the domain sent earlier.
+          user_traits: fragment("? || EXCLUDED.user_traits", s.user_traits),
           country_code: fragment("COALESCE(?, EXCLUDED.country_code)", s.country_code),
           country: fragment("COALESCE(?, EXCLUDED.country)", s.country),
           region: fragment("COALESCE(?, EXCLUDED.region)", s.region),

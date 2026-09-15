@@ -105,6 +105,90 @@ defmodule WebAnalytics.AnalyticsTest do
     end
   end
 
+  describe "users" do
+    defp act_as(site, user, name, data \\ %{}, opts \\ []) do
+      {:ok, _} =
+        Ingest.submit_sync(
+          site,
+          payload(
+            site,
+            [init_event(), %{"n" => "event", "t" => 1_000_000, "name" => name, "data" => data}],
+            token: Keyword.get(opts, :token, "u-#{System.unique_integer([:positive])}")
+          ),
+          received_at: DateTime.utc_now(),
+          channel: "ai",
+          project: Keyword.get(opts, :project, "mailer"),
+          user_id: user,
+          user_traits: Keyword.get(opts, :traits, %{})
+        )
+    end
+
+    test "lists each identified user with what they did", %{site: site} do
+      act_as(site, "acct_1", "message_sent", %{}, traits: %{"domain" => "acme.com"})
+      act_as(site, "acct_1", "message_sent", %{}, traits: %{"address" => "mbx_9"})
+      act_as(site, "acct_1", "folder_created", %{}, project: "calendar")
+      act_as(site, "acct_2", "message_sent")
+
+      users = site |> filters() |> Analytics.users()
+
+      # The setup's anonymous browser visits are not a user, and not a row.
+      assert users |> Enum.map(& &1.user_id) |> Enum.sort() == ["acct_1", "acct_2"]
+
+      one = Enum.find(users, &(&1.user_id == "acct_1"))
+      assert one.sessions == 3
+      assert one.events == 3
+      assert Enum.sort(one.projects) == ["calendar", "mailer"]
+      # Identifiers sent on different sessions are merged, not the last one only.
+      assert one.traits == %{"domain" => "acme.com", "address" => "mbx_9"}
+    end
+
+    test "orders by recent activity, sessions or events", %{site: site} do
+      act_as(site, "busy", "a")
+      act_as(site, "busy", "b")
+      act_as(site, "chatty", "a", %{}, token: "chatty-run")
+      act_as(site, "chatty", "b", %{}, token: "chatty-run")
+      act_as(site, "chatty", "c", %{}, token: "chatty-run")
+
+      ids = fn sort ->
+        site |> filters() |> Analytics.users(10, sort) |> Enum.map(& &1.user_id)
+      end
+
+      assert ids.(:sessions) == ["busy", "chatty"]
+      assert ids.(:events) == ["chatty", "busy"]
+    end
+
+    test "the newest value of an identifier wins", %{site: site} do
+      act_as(site, "acct_1", "a", %{}, traits: %{"plan" => "free"}, token: "old")
+      act_as(site, "acct_1", "b", %{}, traits: %{"plan" => "pro"}, token: "new")
+
+      Repo.update_all(from(s in Session, where: s.token == "old"),
+        set: [last_seen_at: DateTime.add(DateTime.utc_now(), -3_600)]
+      )
+
+      [user] = site |> filters() |> Analytics.users()
+      assert user.traits == %{"plan" => "pro"}
+    end
+
+    test "a user filter narrows every report to that user", %{site: site} do
+      act_as(site, "acct_1", "message_sent", %{"sats" => "10"})
+      act_as(site, "acct_1", "message_sent", %{"sats" => "15"})
+      act_as(site, "acct_2", "message_sent", %{"sats" => "999"})
+
+      f = filters(site, %{user: "acct_1"})
+
+      assert Analytics.overview(f).sessions == 2
+      assert Analytics.overview(f).users == 1
+      assert [%{name: "message_sent", count: 2}] = Analytics.events(f, 10)
+      assert [%{key: "sats", sum: 25}] = Analytics.metrics(f)
+      assert f |> Analytics.recent_sessions() |> Enum.map(& &1.user_id) == ["acct_1", "acct_1"]
+      assert Analytics.user_profile(f).user_id == "acct_1"
+
+      # Unfiltered, both users and the anonymous browser visits are back.
+      assert Analytics.overview(filters(site)).users == 2
+      assert Analytics.user_profile(filters(site)) == nil
+    end
+  end
+
   describe "numeric metrics" do
     defp report(site, name, data, at \\ DateTime.utc_now()) do
       token = "metric-#{System.unique_integer([:positive])}"

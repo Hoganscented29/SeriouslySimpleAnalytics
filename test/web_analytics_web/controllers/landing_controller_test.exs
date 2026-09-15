@@ -376,6 +376,28 @@ defmodule WebAnalyticsWeb.LandingControllerTest do
       assert block =~ "never a running"
     end
 
+    test "llms.txt explains identifying users, and that user is not uid", %{conn: conn} do
+      body = conn |> get(~p"/llms.txt") |> response(200)
+
+      assert body =~ "## Users: who an event is about"
+      assert body =~ "| `user` | recommended |"
+      assert body =~ "`user_domain`"
+      # The one mistake that sends every event to the wrong account.
+      assert body =~ "`uid` is not `user`"
+      assert body =~ "Prefer an opaque ID"
+
+      [_, block] = String.split(body, "--- copy from here ---", parts: 2)
+      [block, _] = String.split(block, "--- copy to here ---", parts: 2)
+      assert block =~ "user="
+      assert block =~ "`user` is not `uid`"
+    end
+
+    test "the AI page lists the user parameter", %{conn: conn} do
+      html = conn |> get(~p"/AI-Analytics-llms-txt") |> html_response(200)
+
+      assert html =~ "user · user_*"
+    end
+
     test "shows how to instrument a command without editing it", %{conn: conn} do
       body = conn |> get(~p"/llms.txt") |> response(200)
 
