@@ -12,17 +12,27 @@ defmodule WebAnalyticsWeb.Plugs.Cors do
   @behaviour Plug
 
   @impl true
-  def init(opts), do: opts
+  def init(opts) do
+    %{
+      methods: Keyword.get(opts, :methods, "POST, GET, OPTIONS"),
+      headers: Keyword.get(opts, :headers, "content-type"),
+      expose: Keyword.get(opts, :expose)
+    }
+  end
 
   @impl true
-  def call(conn, _opts) do
+  def call(conn, opts) do
     conn
     |> put_resp_header("access-control-allow-origin", origin(conn))
-    |> put_resp_header("access-control-allow-methods", "POST, GET, OPTIONS")
-    |> put_resp_header("access-control-allow-headers", "content-type")
+    |> put_resp_header("access-control-allow-methods", opts.methods)
+    |> put_resp_header("access-control-allow-headers", opts.headers)
     |> put_resp_header("access-control-max-age", "86400")
+    |> expose(opts.expose)
     |> handle_preflight()
   end
+
+  defp expose(conn, nil), do: conn
+  defp expose(conn, headers), do: put_resp_header(conn, "access-control-expose-headers", headers)
 
   defp origin(conn) do
     case get_req_header(conn, "origin") do

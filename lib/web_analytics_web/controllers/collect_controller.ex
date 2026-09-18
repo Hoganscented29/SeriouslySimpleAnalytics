@@ -11,6 +11,7 @@ defmodule WebAnalyticsWeb.CollectController do
 
   alias WebAnalytics.Ingest
   alias WebAnalytics.Sites
+  alias WebAnalyticsWeb.ClientIP
 
   def create(conn, params) do
     received_at = DateTime.utc_now()
@@ -20,7 +21,7 @@ defmodule WebAnalyticsWeb.CollectController do
         accepted(conn)
 
       site ->
-        ip = client_ip(conn)
+        ip = ClientIP.get(conn)
 
         Ingest.submit(site, params,
           received_at: received_at,
@@ -40,22 +41,4 @@ defmodule WebAnalyticsWeb.CollectController do
     |> put_resp_header("cache-control", "no-store")
     |> send_resp(204, "")
   end
-
-  # `x-forwarded-for` is client-controlled and only trusted when the deployment
-  # says it sits behind a proxy that overwrites it. The value is never stored
-  # raw — it is salted and hashed — so a spoofed header costs nothing beyond a
-  # slightly noisier anomaly signal.
-  defp client_ip(conn) do
-    if Application.get_env(:web_analytics, :trust_proxy_headers, false) do
-      case get_req_header(conn, "x-forwarded-for") do
-        [value | _] -> value |> String.split(",") |> List.first() |> String.trim()
-        [] -> remote_ip(conn)
-      end
-    else
-      remote_ip(conn)
-    end
-  end
-
-  defp remote_ip(%Plug.Conn{remote_ip: nil}), do: nil
-  defp remote_ip(%Plug.Conn{remote_ip: ip}), do: ip |> :inet.ntoa() |> to_string()
 end

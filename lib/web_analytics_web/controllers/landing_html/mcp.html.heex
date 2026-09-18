@@ -1,0 +1,156 @@
+<div class="min-h-screen bg-base-200/40">
+  <.site_header current_scope={@current_scope} active={:mcp} />
+
+  <!-- hero -->
+  <section class="mx-auto max-w-6xl px-4 sm:px-6 pt-16 pb-10">
+    <div class="max-w-4xl">
+      <h1 class="badge badge-primary badge-outline mb-4">Analytics MCP Server</h1>
+      <h2 class="text-3xl sm:text-5xl font-semibold tracking-tight leading-tight">
+        Your analytics, inside Claude, Cursor and ChatGPT
+      </h2>
+      <p class="mt-5 text-lg text-base-content/70 leading-relaxed">
+        SeriouslySimpleAnalytics is a free, unlimited Model Context Protocol server for web
+        analytics and AI agent analytics. Your assistant can create an account, add tracking
+        to a project, record events, and answer "how is my site doing?" from real traffic —
+        visitors, top pages, referrers, custom events, revenue metrics, individual users and
+        AI crawlers.
+      </p>
+    </div>
+
+    <div class="mt-8 rounded-box bg-base-100 border border-base-300 p-5 sm:p-6 space-y-3">
+      <div class="text-xs uppercase tracking-wide text-base-content/60">Remote MCP endpoint</div>
+      <div class="relative">
+        <pre
+          id="mcp-endpoint"
+          class="bg-base-200 rounded-box p-4 pr-24 font-mono text-sm overflow-x-auto"
+        ><code>{@base_url}/mcp</code></pre>
+        <button
+          type="button"
+          data-copy="mcp-endpoint"
+          class="btn btn-sm btn-primary absolute top-2.5 right-3"
+        >
+          Copy
+        </button>
+      </div>
+      <p class="text-sm text-base-content/70">
+        Streamable HTTP. Tracking tools need nothing; report tools need your account's API key as
+        <code class="font-mono bg-base-200 rounded px-1">Authorization: Bearer ssa_…</code>
+        — create one on <.link navigate={~p"/getting-started"} class="link">Getting started</.link>, or let
+        <code class="font-mono bg-base-200 rounded px-1">create_analytics_account</code>
+        hand your assistant one.
+      </p>
+      <p class="text-xs text-base-content/50">
+        Listed in the official MCP Registry as <code class="font-mono">com.seriouslysimpleanalytics/analytics</code>.
+      </p>
+    </div>
+  </section>
+
+  <!-- install -->
+  <section id="install" class="border-y border-base-300 bg-base-100">
+    <div class="mx-auto max-w-6xl px-4 sm:px-6 py-16">
+      <h3 class="text-2xl font-semibold tracking-tight">Connect it</h3>
+      <p class="mt-3 text-base-content/70 max-w-2xl">
+        Any MCP client that speaks Streamable HTTP works. In Claude or ChatGPT, add a custom
+        connector with the endpoint above: tracking works straight away, and the report tools
+        need a client that can send a header.
+      </p>
+
+      <div class="mt-8 grid lg:grid-cols-3 gap-4">
+        <div
+          :for={{{client, config}, index} <- Enum.with_index(mcp_clients(@base_url))}
+          class="rounded-box border border-base-300 bg-base-200/40 p-4 space-y-2 min-w-0"
+        >
+          <div class="flex items-center justify-between gap-2">
+            <h4 class="text-sm font-medium">{client}</h4>
+            <button type="button" data-copy={"mcp-client-#{index}"} class="btn btn-xs">Copy</button>
+          </div>
+          <pre
+            id={"mcp-client-#{index}"}
+            class="bg-base-100 rounded p-3 text-xs overflow-x-auto"
+          ><code>{config}</code></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- tools -->
+  <section id="tools" class="mx-auto max-w-6xl px-4 sm:px-6 py-16">
+    <h3 class="text-2xl font-semibold tracking-tight">{length(@tools)} tools</h3>
+    <p class="mt-3 text-base-content/70 max-w-2xl">
+      Three that write, which need no key, and the rest read the reports your dashboard shows.
+      Every report narrows by time range, project, domain and user.
+    </p>
+
+    <div class="mt-8 overflow-x-auto rounded-box border border-base-300 bg-base-100">
+      <table class="table table-sm">
+        <thead>
+          <tr>
+            <th>Tool</th>
+            <th>What it answers</th>
+            <th>Key</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr :for={tool <- @tools} class="transition-colors hover:bg-base-200 align-top">
+            <td class="whitespace-nowrap">
+              <div class="font-mono text-xs font-medium">{tool["name"]}</div>
+              <div class="text-xs text-base-content/50">{tool["title"]}</div>
+            </td>
+            <td class="text-sm text-base-content/70 min-w-[20rem]">
+              {String.replace_suffix(tool["description"], " Needs the account's API key.", "")}
+            </td>
+            <td class="text-xs whitespace-nowrap">
+              {if tool["annotations"]["readOnlyHint"] and tool["name"] != "get_integration_guide",
+                do: "API key",
+                else: "none"}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- questions -->
+  <section class="border-t border-base-300 bg-base-100">
+    <div class="mx-auto max-w-6xl px-4 sm:px-6 py-16 grid md:grid-cols-2 gap-8">
+      <div>
+        <h3 class="text-lg font-semibold">What does it cost?</h3>
+        <p class="mt-2 text-base-content/70">
+          Nothing, and there is no traffic cap. The MCP server, the website tracker and the
+          event API are the same free account.
+        </p>
+      </div>
+      <div>
+        <h3 class="text-lg font-semibold">What can it track?</h3>
+        <p class="mt-2 text-base-content/70">
+          Websites, through one script tag, and anything else through one URL: AI agents, MCP
+          servers, CLIs, backends and cron jobs. Pageviews, custom events, numeric metrics like
+          revenue or tokens, and per-user activity.
+        </p>
+      </div>
+      <div>
+        <h3 class="text-lg font-semibold">Why is the API key only for reading?</h3>
+        <p class="mt-2 text-base-content/70">
+          An account ID is public — it sits in the page source of every tracked site — so it can
+          only ever allow sending. Reading a report back needs a secret, shown once and stored
+          only as a hash.
+        </p>
+      </div>
+      <div>
+        <h3 class="text-lg font-semibold">Is there a non-MCP way in?</h3>
+        <p class="mt-2 text-base-content/70">
+          Yes. <a href={~p"/llms.txt"} class="link font-mono">llms.txt</a>
+          documents the plain HTTP event API, and the
+          <.link navigate={~p"/dashboard"} class="link">dashboard</.link>
+          shows everything the tools read.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <.site_footer />
+
+  <%!-- Carries the copy buttons, as on the other landing pages. --%>
+  <script src={~p"/wa-live.js"} defer>
+  </script>
+</div>

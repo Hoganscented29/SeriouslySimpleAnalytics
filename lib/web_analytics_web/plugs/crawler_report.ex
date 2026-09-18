@@ -20,6 +20,7 @@ defmodule WebAnalyticsWeb.Plugs.CrawlerReport do
   alias WebAnalytics.Ingest
   alias WebAnalytics.Ingest.Crawler
   alias WebAnalytics.Sites
+  alias WebAnalyticsWeb.ClientIP
 
   @behaviour Plug
 
@@ -70,7 +71,7 @@ defmodule WebAnalyticsWeb.Plugs.CrawlerReport do
 
   defp report(conn, site, user_agent, verdict) do
     now = DateTime.utc_now()
-    ip = client_ip(conn)
+    ip = ClientIP.get(conn)
     ip_hash = Ingest.hash_ip(ip, site)
     unix_ms = DateTime.to_unix(now, :millisecond)
 
@@ -122,17 +123,6 @@ defmodule WebAnalyticsWeb.Plugs.CrawlerReport do
     case get_req_header(conn, "referer") do
       [value | _] -> value
       [] -> nil
-    end
-  end
-
-  defp client_ip(conn) do
-    if Application.get_env(:web_analytics, :trust_proxy_headers, false) do
-      case get_req_header(conn, "x-forwarded-for") do
-        [value | _] -> value |> String.split(",") |> List.first() |> String.trim()
-        [] -> conn.remote_ip |> :inet.ntoa() |> to_string()
-      end
-    else
-      conn.remote_ip |> :inet.ntoa() |> to_string()
     end
   end
 end
