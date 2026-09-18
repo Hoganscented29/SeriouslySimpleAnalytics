@@ -42,11 +42,11 @@ defmodule WebAnalyticsWeb.LandingController do
 
   def mcp(conn, _params) do
     conn
-    |> assign(:page_title, "Analytics MCP Server — free web & AI agent analytics")
+    |> assign(:page_title, "Free MCP Server for AI Agent Analytics — SeriouslySimpleAnalytics")
     |> assign(
       :page_description,
-      "A free remote MCP server for web analytics and AI agent analytics. Track events, " <>
-        "pageviews, users and revenue, and ask Claude, Cursor, VS Code or ChatGPT about your traffic."
+      "Free, open-source MCP server for web and AI agent analytics. Track events, pageviews " <>
+        "and per-user activity, and ask Claude, Cursor, VS Code or ChatGPT about your traffic."
     )
     |> assign(:base_url, base_url(conn))
     |> assign(:tools, WebAnalyticsWeb.MCP.Tools.definitions())

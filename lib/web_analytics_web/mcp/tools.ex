@@ -90,11 +90,11 @@ defmodule WebAnalyticsWeb.MCP.Tools do
         "title" => "Create a free analytics account",
         "access" => :open,
         "description" =>
-          "Create a free, unlimited SeriouslySimpleAnalytics account for web analytics and AI agent " <>
-            "analytics, with no signup form. Returns the account ID used to track events and install " <>
-            "the website tag, an API key for reading reports through this server, and a one-time " <>
-            "claim link to the dashboard (or emails a sign-in link when `email` is given). Create " <>
-            "one account per project and reuse it — never one per run.",
+          "Create a free analytics account, no card required and no signup form, for web analytics " <>
+            "and AI agent analytics. Returns the account ID used to track events and install the " <>
+            "website tag, an API key for reading reports through this server, and a one-time claim " <>
+            "link to the dashboard (or emails a sign-in link when `email` is given). Create one " <>
+            "account per project and reuse it — never one per run.",
         "inputSchema" => %{
           "type" => "object",
           "properties" => %{
@@ -311,8 +311,9 @@ defmodule WebAnalyticsWeb.MCP.Tools do
       read_tool(
         "get_metrics",
         "Metrics: revenue, tokens, counts",
-        "Numbers sent as event attributes, summed: revenue, sats, tokens, PRs, latency — each with " <>
-          "total, count, average, minimum and maximum. Name a `key` to chart it per hour or per day.",
+        "Custom numeric metrics: revenue, tokens, sats, PRs, latency, or any counter you define, " <>
+          "summed from event attributes — each with total, count, average, minimum and maximum. " <>
+          "Name a `key` to chart it per hour or per day.",
         %{
           "key" => %{
             "type" => "string",

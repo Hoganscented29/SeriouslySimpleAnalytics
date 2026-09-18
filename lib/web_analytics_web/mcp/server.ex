@@ -51,9 +51,9 @@ defmodule WebAnalyticsWeb.MCP.Server do
       "websiteUrl" => base_url <> "/analytics-mcp-server",
       "icons" => [
         %{
-          "src" => base_url <> "/images/icon-512.png",
-          "mimeType" => "image/png",
-          "sizes" => ["512x512"]
+          "src" => base_url <> "/images/logo.svg",
+          "mimeType" => "image/svg+xml",
+          "sizes" => ["any"]
         }
       ]
     }

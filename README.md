@@ -57,6 +57,32 @@ separately. No new key, no new setup.
 Pageviews, engaged time, scroll depth, clicks, outbound clicks, forms and
 page-to-page flow — captured automatically, nothing to tag.
 
+## MCP server for AI agents
+
+SeriouslySimpleAnalytics also ships as a remote
+[MCP server](https://SeriouslySimpleAnalytics.com/analytics-mcp-server)
+(Streamable HTTP at `/mcp`), so Claude, Cursor, VS Code and any other
+MCP-speaking assistant can create an account, track events, and read
+analytics reports without leaving the chat. 27 tools cover the whole
+surface: `create_analytics_account`, `track_event`, `get_integration_guide`,
+traffic and page reports (`get_analytics_overview`, `get_traffic_timeseries`,
+`get_top_pages`, `get_traffic_sources`, `get_page_flow`), custom events and
+metrics (`get_events`, `get_metrics` — revenue, tokens, sats, whatever you
+count), per-user analytics (`list_users`, `get_user_activity`,
+`get_live_visitors`), and AI crawler traffic (`get_ai_crawler_traffic` —
+GPTBot, ClaudeBot, PerplexityBot, named and held out of your human numbers).
+
+Point your MCP client at:
+
+```
+https://SeriouslySimpleAnalytics.com/mcp
+```
+
+Same free account, same data as the dashboard and the ping API above — the
+MCP server is just another way in. Tracking needs no key; reading reports
+needs the account's API key, created on
+[Getting started](https://SeriouslySimpleAnalytics.com/getting-started).
+
 ## What you'll see
 
 | | |
