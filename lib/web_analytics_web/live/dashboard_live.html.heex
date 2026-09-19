@@ -2130,6 +2130,121 @@
       </div>
     </div>
 
+    <!-- ============================= COVERAGE ============================ -->
+    <div :if={@tab == "coverage"} class="space-y-6">
+      <% cov = @data[:tag_coverage] || %{} %>
+
+      <div class="text-sm text-base-content/60">
+        What the browser tag missed. The tag has to load and run before it can report, so
+        anything that never runs JavaScript is invisible to it — crawlers and AI agents by
+        nature, and real visitors when a script is blocked or a page was never tagged. These
+        pages are here because the server-side plug recorded them anyway.
+      </div>
+
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <.stat label="Pageviews recorded" value={number(cov[:pageviews])} />
+        <.stat
+          label="Seen by the tag"
+          value={percent(cov[:coverage])}
+          hint={"#{number(cov[:tagged])} of #{number(cov[:pageviews])}"}
+          tone={if (cov[:coverage] || 0) >= 90, do: "success", else: "neutral"}
+        />
+        <.stat
+          label="Missed — automated"
+          value={number(cov[:untagged_crawler])}
+          hint="Expected. This is why the plug exists."
+        />
+        <.stat
+          label="Missed — not automated"
+          value={number(cov[:untagged_human])}
+          hint={"#{percent(100 - (cov[:human_coverage] || 100))} of non-bot pageviews"}
+          tone={if (cov[:untagged_human] || 0) > 0, do: "warning", else: "success"}
+        />
+      </div>
+
+      <div
+        :if={(cov[:untagged_human] || 0) > 0}
+        class="rounded-box border border-warning/40 bg-warning/10 px-4 py-3 text-sm"
+      >
+        <span class="font-medium">{number(cov[:untagged_human])} pageviews</span>
+        came from something that was not automated and still never ran the tag. That is usually
+        a blocked script, a failed asset, or a page the snippet was never added to — worth
+        checking, because those visits would be missing entirely without the plug.
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-4">
+        <.bar_list
+          title="Pages the tag never saw"
+          rows={@data[:untagged_pages] || []}
+          empty="The tag saw everything"
+        />
+
+        <.bar_list
+          title="What was reading them"
+          rows={
+            Enum.map(@data[:untagged_clients] || [], fn row ->
+              %{name: row.name || "Not automated", count: row.count}
+            end)
+          }
+          empty="Nothing went unreported"
+        />
+      </div>
+
+      <div class="rounded-box bg-base-100 border border-base-300 overflow-x-auto">
+        <div class="px-4 py-3 border-b border-base-300 font-medium text-sm">
+          Untagged pages in full
+        </div>
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>Path</th>
+              <th class="text-right">Pageviews</th>
+              <th class="text-right">Automated</th>
+              <th class="text-right">Not automated</th>
+              <th class="text-right">Sessions</th>
+              <th class="text-right">Last seen</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr :for={page <- @data[:untagged_pages] || []}>
+              <td class="font-mono text-xs">{page.name}</td>
+              <td class="text-right tabular-nums">{number(page.count)}</td>
+              <td class="text-right tabular-nums text-base-content/60">{number(page.crawler)}</td>
+              <td class={[
+                "text-right tabular-nums",
+                page.human > 0 && "text-warning font-medium"
+              ]}>
+                {number(page.human)}
+              </td>
+              <td class="text-right tabular-nums">{number(page.sessions)}</td>
+              <td class="text-right text-base-content/60 whitespace-nowrap">
+                {page.last_seen && Calendar.strftime(page.last_seen, "%d %b %H:%M")}
+              </td>
+            </tr>
+            <tr :if={(@data[:untagged_pages] || []) == []}>
+              <td colspan="6" class="text-center py-8 text-base-content/50">
+                Nothing went unreported
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="rounded-box bg-base-100 border border-base-300 px-4 py-3 text-sm">
+        <span class="font-medium">Not seeing anything here?</span>
+        This tab only fills up once server-side recording is installed —
+        <.link
+          href="https://github.com/lbesecker195/Phoenix-Analytics"
+          class="link link-primary"
+          target="_blank"
+          rel="noopener"
+        >
+          the Phoenix plug
+        </.link>
+        reports the pages your tag cannot, on the same account and the same visits.
+      </div>
+    </div>
+
     <%!-- The instructions live on /getting-started now. An account with traffic
     scrolled past them on every visit, and an account with none had to scroll
     past every empty chart to reach the only thing it needed. --%>

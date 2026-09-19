@@ -57,6 +57,119 @@
       </div>
     </div>
 
+    <%!-- Reading reports is the one thing an account ID must never allow, so
+    it is the one thing here that needs a secret. --%>
+    <div
+      id="mcp-server"
+      class="rounded-box bg-base-100 border border-base-300 px-4 py-4 space-y-4"
+    >
+      <div>
+        <h2 class="text-2xl font-semibold tracking-tight">MCP Server</h2>
+        <p class="text-sm text-base-content/70 mt-1">
+          Connect Claude, Cursor, VS Code or any MCP client to this account at <code class="font-mono text-xs bg-base-200 rounded px-1">{base_url()}/mcp</code>.
+          Tracking events needs no key. Asking about your traffic, events, metrics and users
+          needs an API key — create one per client, and revoke it here when you stop using it.
+          <.link navigate={~p"/analytics-mcp-server"} class="link">Setup for each client</.link>
+        </p>
+      </div>
+
+      <div
+        :if={@new_token}
+        id="new-api-key"
+        class="rounded-box border-2 border-success/50 bg-success/10 p-4 space-y-3"
+      >
+        <div class="flex items-center gap-3 flex-wrap">
+          <span class="text-sm font-medium">Copy this key now — it will not be shown again.</span>
+          <span class="flex-1"></span>
+          <button phx-click="dismiss_token" class="btn btn-xs btn-ghost">I've stored it</button>
+        </div>
+        <div class="relative">
+          <pre
+            id="api-key-value"
+            class="bg-base-100 rounded p-3 pr-24 font-mono text-xs overflow-x-auto"
+          ><code>{@new_token}</code></pre>
+          <button
+            type="button"
+            data-copy="api-key-value"
+            class="btn btn-xs btn-primary absolute top-2 right-2"
+          >
+            Copy
+          </button>
+        </div>
+        <div class="text-xs text-base-content/60">
+          Or add the server to Claude Code in one line:
+        </div>
+        <div class="relative">
+          <pre
+            id="api-key-command"
+            class="bg-base-100 rounded p-3 pr-24 font-mono text-xs overflow-x-auto"
+          ><code>{claude_command(base_url(), @new_token)}</code></pre>
+          <button
+            type="button"
+            data-copy="api-key-command"
+            class="btn btn-xs btn-primary absolute top-2 right-2"
+          >
+            Copy
+          </button>
+        </div>
+      </div>
+
+      <form
+        id="create-api-key"
+        phx-submit="create_api_key"
+        class="flex flex-wrap items-center gap-2"
+      >
+        <input
+          type="text"
+          name="name"
+          maxlength="80"
+          placeholder="Name it after the client, e.g. Claude Code"
+          class="input input-sm input-bordered w-72"
+        />
+        <button type="submit" class="btn btn-sm btn-primary">Create API key</button>
+      </form>
+
+      <div :if={@api_keys != []} class="overflow-x-auto">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Key</th>
+              <th>Created</th>
+              <th>Last used</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr :for={key <- @api_keys} class={["hover", key.revoked_at && "opacity-50"]}>
+              <td class="text-sm">{key.name}</td>
+              <td class="font-mono text-xs">{key.prefix}…</td>
+              <td class="text-xs whitespace-nowrap">
+                {Calendar.strftime(key.inserted_at, "%Y-%m-%d")}
+              </td>
+              <td class="text-xs whitespace-nowrap">
+                {if key.last_used_at,
+                  do: Calendar.strftime(key.last_used_at, "%Y-%m-%d %H:%M"),
+                  else: "Never"}
+              </td>
+              <td class="text-right">
+                <span :if={key.revoked_at} class="text-xs">Revoked</span>
+                <button
+                  :if={is_nil(key.revoked_at)}
+                  phx-click="revoke_api_key"
+                  phx-value-id={key.id}
+                  data-confirm="Revoke this key? Anything using it stops being able to read reports."
+                  class="btn btn-xs btn-ghost text-error"
+                >
+                  Revoke
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <p class="text-xs text-base-content/50">
       The full contract an agent reads is at <a
         href={~p"/llms.txt"}

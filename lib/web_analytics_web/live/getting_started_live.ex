@@ -12,6 +12,7 @@ defmodule WebAnalyticsWeb.GettingStartedLive do
 
   import WebAnalyticsWeb.IntegrationComponents, only: [integration_chat: 1]
 
+  alias WebAnalytics.ApiKeys
   alias WebAnalytics.Sites
 
   @impl true
@@ -30,7 +31,42 @@ defmodule WebAnalyticsWeb.GettingStartedLive do
 
   @impl true
   def handle_params(params, _uri, socket) do
-    {:noreply, assign(socket, :site, resolve_site(socket.assigns.sites, params["site"]))}
+    site = resolve_site(socket.assigns.sites, params["site"])
+
+    {:noreply,
+     socket
+     |> assign(:site, site)
+     |> assign(:api_keys, ApiKeys.list(site))
+     # The one moment a key exists in readable form. Kept only in this socket,
+     # so navigating away or reloading is the end of it.
+     |> assign(:new_token, nil)}
+  end
+
+  @impl true
+  def handle_event("create_api_key", params, socket) do
+    case ApiKeys.create(socket.assigns.site, params["name"]) do
+      {:ok, token, _key} ->
+        {:noreply,
+         socket
+         |> assign(:new_token, token)
+         |> assign(:api_keys, ApiKeys.list(socket.assigns.site))}
+
+      {:error, :too_many} ->
+        {:noreply,
+         put_flash(socket, :error, "Revoke an unused key first — an account can have 20.")}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Could not create a key.")}
+    end
+  end
+
+  def handle_event("revoke_api_key", %{"id" => id}, socket) do
+    ApiKeys.revoke(socket.assigns.site, id)
+    {:noreply, assign(socket, :api_keys, ApiKeys.list(socket.assigns.site))}
+  end
+
+  def handle_event("dismiss_token", _params, socket) do
+    {:noreply, assign(socket, :new_token, nil)}
   end
 
   defp resolve_site(sites, key) do
@@ -41,6 +77,11 @@ defmodule WebAnalyticsWeb.GettingStartedLive do
 
   defp snippet(site, endpoint) do
     ~s|<script src="#{endpoint}/wa.js" data-site="#{site.key}" defer></script>|
+  end
+
+  defp claude_command(endpoint, token) do
+    "claude mcp add --transport http seriouslysimpleanalytics #{endpoint}/mcp " <>
+      "--header \"Authorization: Bearer #{token}\""
   end
 
   defp agent_prompt(site, endpoint) do

@@ -22,6 +22,31 @@ defmodule WebAnalyticsWeb.Router do
     plug WebAnalyticsWeb.Plugs.Cors
   end
 
+  # The MCP endpoint. Cross-origin and cookie-free like the event API, so a
+  # browser-based MCP client works; reading reports needs an API key sent
+  # explicitly in a header, which no page can borrow from a visitor.
+  pipeline :mcp do
+    plug WebAnalyticsWeb.Plugs.Cors,
+      methods: "POST, GET, DELETE, OPTIONS",
+      headers:
+        "content-type, accept, authorization, x-api-key, mcp-protocol-version, mcp-method, " <>
+          "mcp-name, mcp-session-id, last-event-id",
+      expose: "mcp-protocol-version, www-authenticate"
+  end
+
+  scope "/", WebAnalyticsWeb do
+    pipe_through :mcp
+
+    post "/mcp", MCPController, :handle
+    get "/mcp", MCPController, :stream
+    delete "/mcp", MCPController, :stream
+    match :options, "/mcp", MCPController, :options
+
+    # Proves to the MCP Registry that whoever publishes
+    # com.seriouslysimpleanalytics/* controls this domain.
+    get "/.well-known/mcp-registry-auth", MCPController, :registry_auth
+  end
+
   scope "/api/v1", WebAnalyticsWeb do
     pipe_through :public_api
 
@@ -59,6 +84,7 @@ defmodule WebAnalyticsWeb.Router do
 
     get "/", LandingController, :home
     get "/AI-Analytics-llms-txt", LandingController, :ai
+    get "/analytics-mcp-server", LandingController, :mcp
 
     # One page per AI crawler provider. Generated from the same registry that
     # holds the content, so a route can never point at a page that isn't written.

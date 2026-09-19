@@ -221,6 +221,33 @@ defmodule WebAnalyticsWeb.DashboardLiveTest do
     assert html =~ "/secret-corner"
   end
 
+  test "the coverage tab shows the pages the tag never reported", %{conn: conn} do
+    {:ok, _live, html} = live(conn, ~p"/dashboard?site=dash&range=30d&tab=coverage")
+
+    # Both of these were recorded without a viewport or a heartbeat, which is
+    # what a page reported by the server alone looks like.
+    assert html =~ "/secret-corner"
+    assert html =~ "/pricing"
+
+    assert html =~ "What the browser tag missed"
+  end
+
+  test "the coverage tab calls out misses that were not automated", %{conn: conn} do
+    # A crawler missing the tag is expected. A person missing it is a finding,
+    # and the tab has to say so rather than lump the two together.
+    {:ok, _live, html} = live(conn, ~p"/dashboard?site=dash&range=30d&tab=coverage")
+
+    assert html =~ "Missed — not automated"
+    assert html =~ "never ran the tag"
+  end
+
+  test "coverage counts crawlers even with the crawler filter on", %{conn: conn} do
+    {:ok, _live, html} =
+      live(conn, ~p"/dashboard?site=dash&range=30d&tab=coverage&crawlers=exclude")
+
+    assert html =~ "/secret-corner"
+  end
+
   test "flow can be grouped by path or by title", %{conn: conn} do
     {:ok, live, html} = live(conn, ~p"/dashboard?site=dash&range=30d&tab=flow")
 

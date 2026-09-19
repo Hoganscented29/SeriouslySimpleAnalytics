@@ -21,7 +21,7 @@ defmodule WebAnalyticsWeb.LandingHTML do
   def ai_path, do: @ai_path
 
   attr :current_scope, :map, default: nil
-  attr :active, :atom, default: :web, values: [:web, :ai]
+  attr :active, :atom, default: :web, values: [:web, :ai, :mcp]
 
   @doc """
   The header shared by both landing pages.
@@ -48,6 +48,12 @@ defmodule WebAnalyticsWeb.LandingHTML do
             class={["hover:text-primary", @active == :ai && "text-primary font-medium"]}
           >
             AI tool analytics
+          </a>
+          <a
+            href={~p"/analytics-mcp-server"}
+            class={["hover:text-primary", @active == :mcp && "text-primary font-medium"]}
+          >
+            MCP server
           </a>
           <a href={~p"/llms.txt"} class="hover:text-primary font-mono text-xs">llms.txt</a>
         </nav>
@@ -163,6 +169,7 @@ defmodule WebAnalyticsWeb.LandingHTML do
         <span class="text-base-content/30">·</span>
         <a href={~p"/"} class="link link-hover">Website analytics</a>
         <a href={ai_path()} class="link link-hover">AI tool analytics</a>
+        <a href={~p"/analytics-mcp-server"} class="link link-hover">MCP server</a>
         <.link navigate={~p"/dashboard"} class="link link-hover">Dashboard</.link>
         <a href={~p"/llms.txt"} class="link link-hover font-mono text-xs">llms.txt</a>
         <span class="flex-1" />
@@ -175,6 +182,41 @@ defmodule WebAnalyticsWeb.LandingHTML do
       </div>
     </footer>
     """
+  end
+
+  @doc "How to add the MCP server to the clients people actually use."
+  def mcp_clients(base_url) do
+    endpoint = base_url <> "/mcp"
+
+    [
+      {"Claude Code",
+       "claude mcp add --transport http seriouslysimpleanalytics #{endpoint} \\\n  --header \"Authorization: Bearer YOUR_API_KEY\""},
+      {"Cursor — ~/.cursor/mcp.json",
+       Jason.encode!(
+         %{
+           "mcpServers" => %{
+             "seriouslysimpleanalytics" => %{
+               "url" => endpoint,
+               "headers" => %{"Authorization" => "Bearer YOUR_API_KEY"}
+             }
+           }
+         },
+         pretty: true
+       )},
+      {"VS Code — .vscode/mcp.json",
+       Jason.encode!(
+         %{
+           "servers" => %{
+             "seriouslysimpleanalytics" => %{
+               "type" => "http",
+               "url" => endpoint,
+               "headers" => %{"Authorization" => "Bearer YOUR_API_KEY"}
+             }
+           }
+         },
+         pretty: true
+       )}
+    ]
   end
 
   @doc "The install snippet, for sites that also want browser tracking."

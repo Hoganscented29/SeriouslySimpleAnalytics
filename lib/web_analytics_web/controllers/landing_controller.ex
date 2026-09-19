@@ -40,6 +40,19 @@ defmodule WebAnalyticsWeb.LandingController do
     |> render(:ai)
   end
 
+  def mcp(conn, _params) do
+    conn
+    |> assign(:page_title, "Free MCP Server for AI Agent Analytics — SeriouslySimpleAnalytics")
+    |> assign(
+      :page_description,
+      "Free, open-source MCP server for web and AI agent analytics. Track events, pageviews " <>
+        "and per-user activity, and ask Claude, Cursor, VS Code or ChatGPT about your traffic."
+    )
+    |> assign(:base_url, base_url(conn))
+    |> assign(:tools, WebAnalyticsWeb.MCP.Tools.definitions())
+    |> render(:mcp)
+  end
+
   # The canonical host is written into priv/docs/llms.txt literally, so the file
   # reads correctly when browsed on GitHub. It is still rewritten per deployment
   # here: a self-hosted instance serving the canonical URL would be telling its
@@ -47,13 +60,16 @@ defmodule WebAnalyticsWeb.LandingController do
   @canonical_url "https://seriouslysimpleanalytics.com"
 
   def llms(conn, _params) do
-    body = String.replace(@llms, @canonical_url, base_url(conn))
+    body = llms_text(base_url(conn))
 
     conn
     |> put_resp_content_type("text/plain")
     |> put_resp_header("cache-control", "public, max-age=3600")
     |> send_resp(200, body)
   end
+
+  @doc "llms.txt with this deployment's URL in it. Also served as an MCP resource."
+  def llms_text(base_url), do: String.replace(@llms, @canonical_url, base_url)
 
   # Real numbers from this deployment's own account, or nil when self-tracking
   # is not configured. Nil hides the panel rather than filling it with zeros,
