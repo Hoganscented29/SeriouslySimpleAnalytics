@@ -2166,6 +2166,124 @@ defmodule WebAnalytics.Analytics do
     )
   end
 
+  # -- tag coverage --------------------------------------------------------
+  #
+  # What the browser tag missed, which is only answerable now that a server-side
+  # plug reports the same pageviews the tag does. Where both reported one, they
+  # merge into a single row; where only the server did, the row is missing
+  # everything a browser has to supply.
+  #
+  # Two markers, either of which settles it. The tag sends `window.innerHeight`
+  # on every pageview it opens, and it heartbeats afterwards; the plug sends
+  # neither, because a server has no viewport and does not stay on a page. So a
+  # pageview with no viewport height *and* no tick is one no tag ever reported.
+  #
+  # Either signal on its own would be wrong in a case that really happens: a
+  # visitor who leaves inside a second is gone before the first heartbeat, and a
+  # browser reporting no viewport height is unusual but not impossible.
+
+  # Crawlers are the subject here, not noise in front of it, so the usual
+  # exclusion is deliberately not applied. A report about what the tag missed
+  # that hid the largest thing it misses would be worse than no report.
+  defp coverage_scope(f) do
+    from(p in Pageview,
+      join: s in assoc(p, :session),
+      as: :session,
+      where: p.site_id == ^f.site_id,
+      where: p.entered_at >= ^f.from and p.entered_at < ^f.to
+    )
+    |> filter_joined_anomalies(f)
+    |> filter_joined_dwell(f)
+    |> filter_joined_origins(f)
+    |> filter_joined_sessions(f)
+    |> filter_joined_project(f)
+    |> filter_joined_host(f)
+    |> filter_joined_user(f)
+  end
+
+  @doc """
+  How much of this site's traffic the browser tag actually saw.
+
+  Splits what it missed into automated and everything else, because the two
+  mean different things. Crawlers missing the tag is expected and is the reason
+  server-side recording exists. People missing it is a finding: blocked
+  scripts, a failed asset, a page the tag was never added to.
+  """
+  def tag_coverage(f) do
+    totals =
+      Repo.one(
+        from [p, session: s] in coverage_scope(f),
+          select: %{
+            pageviews: count(p.id),
+            tagged: filter(count(p.id), not is_nil(p.viewport_h) or p.tick_count > 0),
+            untagged: filter(count(p.id), is_nil(p.viewport_h) and p.tick_count == 0),
+            untagged_crawler:
+              filter(count(p.id), is_nil(p.viewport_h) and p.tick_count == 0 and s.crawler),
+            untagged_human:
+              filter(count(p.id), is_nil(p.viewport_h) and p.tick_count == 0 and not s.crawler),
+            human_pageviews: filter(count(p.id), not s.crawler)
+          }
+      ) || %{}
+
+    totals
+    |> Map.put(:coverage, rate(Map.get(totals, :tagged, 0), Map.get(totals, :pageviews, 0)))
+    |> Map.put(
+      :human_coverage,
+      rate(
+        Map.get(totals, :human_pageviews, 0) - Map.get(totals, :untagged_human, 0),
+        Map.get(totals, :human_pageviews, 0)
+      )
+    )
+  end
+
+  @doc """
+  The pages the tag never reported, most-missed first.
+
+  Always grouped by path, never by title, because a title is one of the things
+  only the tag can supply — grouping these by title would return one unnamed
+  row holding everything.
+  """
+  def untagged_pages(f, limit \\ 25) do
+    Repo.all(
+      from [p, session: s] in coverage_scope(f),
+        where: is_nil(p.viewport_h) and p.tick_count == 0,
+        group_by: p.path,
+        order_by: [desc: count(p.id)],
+        limit: ^limit,
+        select: %{
+          name: p.path,
+          count: count(p.id),
+          crawler: filter(count(p.id), s.crawler),
+          human: filter(count(p.id), not s.crawler),
+          sessions: count(p.session_id, :distinct),
+          last_seen: max(p.entered_at)
+        }
+    )
+  end
+
+  @doc """
+  What was reading the pages the tag never saw, by user agent.
+
+  Answers the question the coverage number raises: if a tenth of this site is
+  invisible to the tag, who is that?
+  """
+  def untagged_clients(f, limit \\ 15) do
+    Repo.all(
+      from [p, session: s] in coverage_scope(f),
+        where: is_nil(p.viewport_h) and p.tick_count == 0,
+        group_by: [s.crawler_name, s.crawler_kind, s.crawler],
+        order_by: [desc: count(p.id)],
+        limit: ^limit,
+        select: %{
+          name: s.crawler_name,
+          kind: s.crawler_kind,
+          crawler: s.crawler,
+          count: count(p.id),
+          sessions: count(p.session_id, :distinct)
+        }
+    )
+  end
+
   # -- breakdowns ----------------------------------------------------------
 
   @doc "Top values of a session dimension, e.g. `:browser` or `:referrer_host`."
